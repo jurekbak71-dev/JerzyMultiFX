@@ -1,0 +1,14 @@
+[Unit]
+Description=Jerzy MultiFX local network control
+After=jerzy-multifx.service network.target
+Requires=jerzy-multifx.service
+[Service]
+User=jerzymultifx
+ExecStart=/usr/bin/python3 /opt/jerzy-multifx/rpi/web.py --host 0.0.0.0 --data /var/lib/jerzy-multifx --ui /opt/jerzy-multifx/ui
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/jerzy-multifx
+[Install]
+WantedBy=multi-user.target

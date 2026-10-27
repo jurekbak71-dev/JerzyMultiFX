@@ -1,0 +1,12 @@
+[Unit]
+Description=Jerzy MultiFX paired BLE control and BLE MIDI
+After=bluetooth.service jerzy-multifx.service
+Requires=bluetooth.service jerzy-multifx.service
+[Service]
+ExecStart=/usr/bin/python3 /opt/jerzy-multifx/rpi/ble.py
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+[Install]
+WantedBy=multi-user.target

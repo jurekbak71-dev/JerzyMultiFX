@@ -1,0 +1,11 @@
+# Wi-Fi i Bluetooth: dwa różne kanały
+
+**Wi-Fi:** przeglądarka telefonu/tabletu łączy się przez istniejącą lokalną sieć z adresem IP RPi, port 8097. Internet nie jest wymagany. Użyj tokenu wygenerowanego lokalnie. Avahi może udostępnić `hostname.local`; dostępność mDNS zależy od sieci. Ten etap nie instaluje automatycznie hotspotu AP i nie przestawia sieci użytkownika.
+
+**BLE GUI:** osobna usługa GATT `4a4d4658-7101-48a5-b81d-27aec3d64010`, charakterystyka `…4011`, szyfrowane uwierzytelnione read/write, powiadomienia. Polecenia JSON: `{"op":"set","id":8,"value":0.3}`, `{"op":"page","start":0}` (16 wartości, <=512 bajtów), `{"op":"ir","name":"NAZWA_LOKALNEGO_IR"}`, `load/save` z lokalną nazwą presetu. Działa niezależnie od HTTP/Wi-Fi, jeśli adapter i klient BLE są sprawne. Nazwy plików i operacje są ograniczone do bibliotek urządzenia.
+
+GUI offline znajduje się w paczce `ui/index.html` + `ui/metadata.js`; musi być **wcześniej zapisane na telefonie lub zapakowane w zgodnego klienta**. Sam serwer HTTP nie jest GUI Bluetooth. Strona zawiera klienta Web Bluetooth, ale dostęp do niego z lokalnych plików/offline zależy od przeglądarki i secure context. Safari iOS nie ma natywnego Web Bluetooth. Bluefy / dedykowany klient iOS są kandydatami do testu; **nie potwierdzono działania offline na iPhone/iPad**. Android Chrome również wymaga sprawdzenia secure context, lokalnej instalacji i uprawnień. Nie obiecujemy, że otwarcie pliku HTML wystarczy w każdej przeglądarce.
+
+**BLE MIDI:** niezależna standardowa usługa `03b80e5a-ede8-4b33-a751-6ce34ec4c700`, charakterystyka `7772e5db-3868-4112-a1a9-f2669d106bf3`. CC trafia do tego samego mapowania, Note On do ręcznego triggera AttackDecay, Program Change do lokalnych presetów. Usługa wymaga BlueZ, D-Bus i sprawdzonego adaptera LE. `install.sh --ble` instaluje zależności; przed startem sparuj i autoryzuj urządzenie przez standardowe narzędzia BlueZ. Nie ustawiamy globalnego automatycznego akceptowania parowań. Usługi GATT mają flagi szyfrowania/uwierzytelnienia.
+
+Testy automatyczne obejmują parser BLE-MIDI, rozmiary stron stanu, walidację poleceń i izolację od wątku audio. Test radia, reconnect i równoległego MIDI+GUI oraz Bluefy/iOS pozostaje AWAITING HARDWARE VALIDATION.

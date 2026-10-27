@@ -1,0 +1,6 @@
+Jerzy MultiFX: new integration code, copyright 2026, project contributors / Jerzy Audio.
+Derived native DSP: jurekbak71-dev projects, exact sources and commits in docs/source-manifest.json.
+Reel Echo and Oil Drum Echo retain AGPL-3.0; Big Muff retains GPL-3.0.
+Other original license statements and author-granted integration scope: see LICENSES.md and docs/SOURCE_AUDIT.md.
+Steinberg VST3 SDK 3.8.1: MIT license; original notices retained with corresponding sources.
+Reference schematics are research materials, excluded from product/source packages.

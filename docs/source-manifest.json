@@ -1,0 +1,91 @@
+[
+  {
+    "repository": "JerzySmallCloneChorus",
+    "commit": "0aa20a4f0584c674065bb191b45b73d97df5772d",
+    "files": [
+      "src/Dsp.h"
+    ],
+    "destination": "vendor/clone",
+    "license": "No standalone license in source checkout; integration requested by owner, redistribution requires confirmation of rights"
+  },
+  {
+    "repository": "JerzyAtomicClusterVST3",
+    "commit": "ae82eac1976dc703600fb78102bf2d8ae9bca2c6",
+    "files": [
+      "src/Dsp.h"
+    ],
+    "destination": "vendor/atomic",
+    "license": "No standalone license in source checkout; integration requested by owner, redistribution requires confirmation of rights"
+  },
+  {
+    "repository": "JerzyTapeDriveVST3",
+    "commit": "3ee7f10f69b9488f5cc10087be1a54df097ef789",
+    "files": [
+      "source/tapedrive_dsp.h",
+      "source/tapedrive_params.h"
+    ],
+    "destination": "vendor/tape",
+    "license": "No standalone license in source checkout; integration requested by owner, redistribution requires confirmation of rights"
+  },
+  {
+    "repository": "JerzyMXAnalogDelayVST3",
+    "commit": "aed456883fce4448afa9767852ff9eb82d147dca",
+    "files": [
+      "source/mxdelay_dsp.h",
+      "source/mxdelay_params.h",
+      "source/mxdelay_mechanics.h"
+    ],
+    "destination": "vendor/mx",
+    "license": "No standalone license in source checkout; integration requested by owner, redistribution requires confirmation of rights"
+  },
+  {
+    "repository": "JerzyMemoryDelay",
+    "commit": "3a3c4238463688cc6f5499b30abb6a09e4c1f68f",
+    "files": [
+      "source/dsp.h",
+      "source/parameters.h"
+    ],
+    "destination": "vendor/memory",
+    "license": "No standalone license in source checkout; integration requested by owner, redistribution requires confirmation of rights"
+  },
+  {
+    "repository": "JerzyAttackDecayVST3",
+    "commit": "b998a1467437311d3361b3dc934d785e025d4c40",
+    "files": [
+      "src/dsp/Engine.h"
+    ],
+    "destination": "vendor/attack",
+    "license": "No standalone license in source checkout; integration requested by owner, redistribution requires confirmation of rights"
+  },
+  {
+    "repository": "JerzyReelEchoVST3",
+    "commit": "b6d03eccfaadb931df81cb342f8f2a4af739203b",
+    "files": [
+      "Source/TapeEngine.h",
+      "Source/TapeEngine.cpp",
+      "Source/Parameters.h"
+    ],
+    "destination": "vendor/reel",
+    "license": "GNU AFFERO GENERAL PUBLIC LICENSE"
+  },
+  {
+    "repository": "JerzyOilDrumEcho",
+    "commit": "f50340031f73afe01378adcbc82611a52645bc31",
+    "files": [
+      "src/Engine.h",
+      "src/Parameters.h",
+      "src/Spring.h"
+    ],
+    "destination": "vendor/oil",
+    "license": "GNU AFFERO GENERAL PUBLIC LICENSE"
+  },
+  {
+    "repository": "JerzyBigMuffCollectionVST3",
+    "commit": "ce8ca2a848a57c6e6a91a596e3cc0016e7a22554",
+    "files": [
+      "Source/MuffDSP.h"
+    ],
+    "destination": "vendor/muff",
+    "license": "                    GNU GENERAL PUBLIC LICENSE"
+  }
+]

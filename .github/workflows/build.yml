@@ -1,0 +1,73 @@
+name: MultiFX binary builds and validation
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned Steinberg SDK
+        shell: pwsh
+        run: |
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$env:RUNNER_TEMP/vst3sdk"
+          git -C "$env:RUNNER_TEMP/vst3sdk" checkout --detach 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$env:RUNNER_TEMP/vst3sdk" submodule update --init --recursive
+      - name: Build native Windows x64
+        shell: pwsh
+        run: |
+          cmake -S . -B build -A x64 -DMULTIFX_VST3=ON -DVST3_SDK_ROOT="$env:RUNNER_TEMP/vst3sdk"
+          if ($LASTEXITCODE) { throw 'Configure failed' }
+          cmake --build build --config Release --parallel 3
+          if ($LASTEXITCODE) { throw 'Build failed' }
+      - name: DSP and real editor smoke test
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure --no-tests=error
+          if ($LASTEXITCODE) { throw 'DSP tests failed' }
+          $dll = Get-ChildItem build -Recurse -File -Filter JerzyMultiFX.vst3 | Select-Object -First 1
+          $test = Get-ChildItem build -Recurse -File -Filter editor_smoke.exe | Select-Object -First 1
+          & $test.FullName $dll.FullName "$pwd/build/editor.bmp"
+          if ($LASTEXITCODE) { throw 'GUI test failed' }
+      - name: Package actual VST3 bundle and verify validator
+        run: python scripts/package.py windows --build build --sdk "${{ runner.temp }}/vst3sdk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMultiFX-Windows-x64
+          path: dist/*
+          if-no-files-found: error
+  arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain and dummy JACK
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake ninja-build g++ pkg-config libjack-jackd2-dev jackd2
+      - name: Build native ARM64 and test shared DSP
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE=-O2
+          cmake --build build --parallel 3
+          ctest --test-dir build --output-on-failure --no-tests=error
+      - name: Core HTTP, BLE and LCD logic
+        run: |
+          mkdir -p .build
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          MULTIFX_BINARY="$PWD/build/jerzy-multifx" python3 tests/integration.py
+      - name: Actual JACK signal and MIDI
+        run: |
+          mkdir -p .build/native
+          ln -s "$PWD/build/jerzy-multifx" .build/native/jerzy-multifx
+          g++ -std=c++20 tests/JackProbe.cpp -o .build/native/jack_probe $(pkg-config --cflags --libs jack)
+          python3 tests/audio_integration.py
+      - name: Package real AArch64 binary
+        run: python3 scripts/package.py arm64 --build build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMultiFX-RPi-aarch64
+          path: dist/*
+          if-no-files-found: error
