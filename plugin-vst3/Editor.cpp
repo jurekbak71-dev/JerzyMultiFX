@@ -144,7 +144,8 @@ class Editor final : public Steinberg::CPluginView {
             std::string label;
             while (std::getline(choices, label, '|'))
                 SendMessageA(h, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
-            int choice = int(std::round(value(c.id) * p.steps));
+            int choice = int(
+                std::round(value(c.id) * (family ? 4 : std::count(p.choices.begin(), p.choices.end(), '|'))));
             if (family) {
                 const int bank = p.key == "delayA.type" ? 0 : 1;
                 choice = choice == 0   ? 0
@@ -388,7 +389,10 @@ class Editor final : public Steinberg::CPluginView {
                             change(enabled, 0);
                         }
                     } else
-                        change(id, double(choice) / std::max(1, layout().parameters[id].steps));
+                        change(id,
+                               double(choice) /
+                                   std::max(1, int(std::count(layout().parameters[id].choices.begin(),
+                                                              layout().parameters[id].choices.end(), '|'))));
                     scroll = 0;
                     rebuild();
                 }
@@ -543,6 +547,8 @@ class Editor final : public Steinberg::CPluginView {
                                       .6, 1.);
         Steinberg::ViewRect r(0, 0, int(W * fit), int(H * fit));
         setRect(r);
+        sx = float(W) / r.getWidth();
+        sy = float(H) / r.getHeight();
     }
     ~Editor() override {
         removed();

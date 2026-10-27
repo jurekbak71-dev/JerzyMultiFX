@@ -1,4 +1,5 @@
 #include "plugin-vst3/Plugin.h"
+#include "core/Presentation.h"
 #include "pluginterfaces/base/ipluginbase.h"
 #include <cstdio>
 #include <iostream>
@@ -135,6 +136,21 @@ int main(int argc, char **argv) try {
         // Choosing Brig from the single engine menu sets its original model and hides unrelated models.
         check(std::abs(c->getParamNormalized(algorithm) - .5) < 1e-6,
               "selected MX Brig model reaches controller");
+        // Original Oil enums expose choices even when the source marked them continuous.
+        family = GetDlgItem(child, 10000 + layout().delayType[0]);
+        SendMessage(family, CB_SETCURSEL, 12, 0);
+        SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + layout().delayType[0], CBN_SELCHANGE),
+                    reinterpret_cast<LPARAM>(family));
+        pump();
+        const int division = parameterId("delayA.oil.division");
+        HWND divisions = GetDlgItem(child, 10000 + division);
+        check(divisions && SendMessage(divisions, CB_GETCURSEL, 0, 0) == 3,
+              "Oil original quarter-note enum displayed");
+        SendMessage(divisions, CB_SETCURSEL, 2, 0);
+        SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + division, CBN_SELCHANGE),
+                    reinterpret_cast<LPARAM>(divisions));
+        check(std::abs(c->getParamNormalized(division) - 2. / 7) < 1e-6,
+              "Oil enum normalized by real choice count");
         if (argc >= 3)
             screenshot(child, argv[2]);
         check(view->removed() == kResultOk, "detach GUI");

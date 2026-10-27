@@ -91,6 +91,7 @@ jobs:
         run: |
           mkdir -p .build/native
           ln -s "$PWD/build/jerzy-multifx" .build/native/jerzy-multifx
+          ln -s "$PWD/build/jerzy-multifx-midi" .build/native/jerzy-multifx-midi
           g++ -std=c++20 tests/JackProbe.cpp -o .build/native/jack_probe $(pkg-config --cflags --libs jack)
           python3 tests/audio_integration.py
       - name: Package actual VST3 bundle and verify validator
