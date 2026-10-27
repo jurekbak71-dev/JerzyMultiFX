@@ -32,3 +32,8 @@
 - Natywne ARM64: build, DSP, Python, HTTP, JACK/MIDI oraz package PASS. Upload Artifacts FAIL: limit przechowywania konta wyczerpany (quota); nie usuwano cudzych danych ani nie zmieniano billing.
 - Windows: poprawiono kolejność Windows SDK/commdlg.h po formatowaniu; lokalny cross-build i walidator poprawionego bundle PASS. Ponowny natywny przebieg w toku.
 - Prywatny prerelease zostanie użyty jako alternatywa dla Artifacts po końcowej weryfikacji.
+
+## Naprawa natywnego Windows
+Przebieg dec5996 ujawnił konflikt CRT: projekt używał /MT, a SDK domyślnie /MD (LNK2038). Włączono wspierane SMTG_USE_STATIC_CRT=ON dla całego SDK; bez wyłączania kontroli linkera i bez zmian w repozytorium SDK. Ponowny build MSVC jest wymagany.
+
+Lokalnie obie rzeczywiste paczki zostały wygenerowane, sprawdzane są ich manifesty. Preview nie jest deklaracją pełnej gotowości sprzętowej.
