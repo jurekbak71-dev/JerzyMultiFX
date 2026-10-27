@@ -8,7 +8,7 @@ processes=[]
 def start(args,env,log):
     f=open(log,'w');p=subprocess.Popen(args,env=env,stdout=f,stderr=subprocess.STDOUT);f.close();processes.append(p);return p
 with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
-    data=Path(directory);env={**os.environ,'MULTIFX_CONTROL_PORT':'19817'}
+    data=Path(directory);env={**os.environ,'MULTIFX_CONTROL_PORT':'19817','MULTIFX_DATA':str(data)}
     try:
         core=os.environ.get('MULTIFX_BINARY',str(root/'.build/native/jerzy-multifx'))
         prefix=json.loads(os.environ.get('MULTIFX_RUNNER','[]'))
@@ -73,6 +73,32 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
             except urllib.error.HTTPError as e:assert e.code==400
         try:request('/api/load',{'name':'../outside'});raise AssertionError('Traversal')
         except urllib.error.HTTPError as e:assert e.code==400
+        def control(command):
+            with socket.create_connection(('127.0.0.1',19817),timeout=3) as sock:
+                sock.sendall((command+'\n').encode());sock.shutdown(socket.SHUT_WR)
+                return json.loads(sock.makefile().readline())
+        switches=[p for p in metadata['parameters'] if p['key'].endswith('.bypass') and p['id']<metadata['controlCount']]
+        for index,p in enumerate(switches):
+            cc=20+index
+            assert cc<128
+            request('/api/set',{'id':find('midi.learn'),'value':(p['id']+1)/metadata['controlCount']})
+            assert control(f'MIDI 176 {cc} 127')['ok']
+            assert request('/api/state')['values'][p['id']]==1,p['key']
+            assert control(f'MIDI 176 {cc} 0')['ok']
+            assert request('/api/state')['values'][p['id']]==0,p['key']
+        # Graceful restart is the same state restore path used at boot.
+        before=request('/api/state')['values']
+        processes[0].terminate();processes[0].wait(timeout=5)
+        assert (data/'last-state.jmfx').is_file()
+        start([*prefix,core,'--test-server','19817'],env,data/'core-restarted.log')
+        for _ in range(100):
+            try:
+                restored=request('/api/state')['values']
+                if len(restored)==len(before):break
+            except (OSError,urllib.error.HTTPError):pass
+            time.sleep(.05)
+        else:raise AssertionError('Restart failed')
+        assert restored==before,'last sound and MIDI maps survive a core restart'
         print('PASS actual core/HTTP: 924+ parameters, authentication, parameter update, preset persistence, stereo WAV44100 -> 48000 IR import/embedding, invalid ranges and traversal rejected')
     finally:
         for p in reversed(processes):

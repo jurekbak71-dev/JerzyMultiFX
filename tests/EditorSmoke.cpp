@@ -179,6 +179,9 @@ int main(int argc, char **argv) try {
         HWND divisions = GetDlgItem(child, 10000 + division);
         check(divisions && SendMessage(divisions, CB_GETCURSEL, 0, 0) == 3,
               "Oil original quarter-note enum displayed");
+        RECT divisionRect{};GetWindowRect(divisions,&divisionRect);
+        POINT divisionTop{divisionRect.left,divisionRect.top};ScreenToClient(child,&divisionTop);
+        check(divisionTop.y<300,"continuous-tagged Oil enums occupy the compact selector row, never a knob");
         SendMessage(divisions, CB_SETCURSEL, 2, 0);
         SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + division, CBN_SELCHANGE),
                     reinterpret_cast<LPARAM>(divisions));

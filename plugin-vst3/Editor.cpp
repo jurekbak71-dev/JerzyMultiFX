@@ -36,6 +36,10 @@ class Editor final : public Steinberg::CPluginView {
             return -1;
         return layout().processorBypass[view.section + 1];
     }
+    bool isToggle(int id) const {
+        const auto &p=layout().parameters[id];
+        return p.steps==1 || p.key=="atomic.smooth" || p.key=="atomic.flat";
+    }
     double value(int id) const {
         return id >= 0 ? controller->getParamNormalized(id) : 0;
     }
@@ -146,7 +150,7 @@ class Editor final : public Steinberg::CPluginView {
                 (p.key.starts_with("md.") || p.key == "delayA.type" || p.key == "delayB.type" ||
                  p.key.ends_with(".bypass") ||
                  (p.key.find(".mx.") != std::string::npos && p.key.find("_algo") == std::string::npos));
-            (common || p.steps > 0 || p.key == "atomic.stereo" ? compact : knobs).push_back(id);
+            (common || p.steps > 0 || !p.choices.empty() || isToggle(id) || p.key == "atomic.stereo" ? compact : knobs).push_back(id);
         }
         int y = 236;
         for (size_t i = 0; i < compact.size(); ++i) {
@@ -338,16 +342,16 @@ class Editor final : public Steinberg::CPluginView {
                 if (!p.choices.empty())
                     continue;
                 bevel(dc, c.x, y + 23, c.w, 29, RGB(67,71,67));
-                if (p.steps == 1) {
-                    const bool on=value(c.id)>=.5;
+                if (isToggle(c.id)) {
+                    const bool on=p.key.ends_with(".bypass") ? value(c.id)<.5 : value(c.id)>=.5;
                     disk(dc,c.x+16,y+38,7,on?RGB(105,220,96):RGB(48,50,43));
                     bevel(dc,c.x+35,y+27,12,21,RGB(28,29,26));
                     bevel(dc,c.x+33,y+(on?26:37),16,10,RGB(208,209,195));
                 }
                 text(dc, c.x+50, y + 28, c.w-54,
-                     p.steps == 1 ? (value(c.id) >= .5 ? "ON" : "OFF") : formatted(c.id).c_str(), 14,
+                     p.key.ends_with(".bypass") ? (value(c.id)>=.5 ? "BYPASS / OFF" : "EFFECT ON") : isToggle(c.id) ? (value(c.id) >= .5 ? "ON" : "OFF") : formatted(c.id).c_str(), 14,
                      RGB(238,225,192));
-                if (p.steps == 0) {
+                if (p.steps == 0 && !isToggle(c.id)) {
                     fill(dc, c.x, y + 51, c.w, 3, RGB(16, 27, 32));
                     fill(dc, c.x, y + 51, int(c.w * value(c.id)), 3, accent());
                 }
@@ -385,6 +389,7 @@ class Editor final : public Steinberg::CPluginView {
         }
         RestoreDC(dc, saved);
         const char *buttons[]{"LOAD IR WAV", "LOAD PRESET", "SAVE PRESET", "MASTER BYPASS"};
+        buttons[3]=value(layout().bypass)>=.5 ? "MASTER BYPASSED" : "MASTER ACTIVE";
         for (int i = 0; i < 4; ++i) {
             fill(dc, 28 + i * 250, 805, 238, 32, RGB(93,98,90));
             text(dc, 28 + i * 250, 811, 238, buttons[i], 14, RGB(239,227,195));
@@ -543,7 +548,7 @@ class Editor final : public Steinberg::CPluginView {
                 return 0;
             int id = hit(x, y);
             if (id >= 0) {
-                if (layout().parameters[id].steps == 1) {
+                if (isToggle(id)) {
                     change(id, value(id) >= .5 ? 0 : 1);
                     return 0;
                 }

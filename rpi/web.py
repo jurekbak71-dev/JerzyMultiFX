@@ -25,7 +25,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try: cookie.load(self.headers.get('Cookie',''))
         except Exception: return False
         session=cookie.get('multifx-session')
-        valid=hmac.compare_digest(token,self.server.token) or (session is not None and hmac.compare_digest(session.value,self.server.token))
+        valid=hmac.compare_digest(token.encode(),self.server.token.encode()) or (session is not None and hmac.compare_digest(session.value.encode(),self.server.token.encode()))
         origin=self.headers.get('Origin')
         return valid and self.headers.get('Sec-Fetch-Site') != 'cross-site' and (origin is None or origin in ('http://'+self.headers.get('Host',''),'https://'+self.headers.get('Host','')))
     def do_GET(self):
