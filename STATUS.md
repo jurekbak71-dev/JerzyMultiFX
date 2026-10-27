@@ -99,3 +99,19 @@ Starsze akapity opisują historyczny preview 1; jego ograniczenia 919 parametró
 Dodatkowe końcowe kontrole: poprawiono indeksowanie modeli MX wykryte przez test prawdziwego edytora. Pełny edytor DLL (trzy cykle otwarcia/zamknięcia, zmiany parametrów, MIDI Learn, kolejność, skalowanie, 14 modeli Chorus, wybór Brig z listy MD) — PASS. Poprawna struktura paczki VST3 i pełny walidator SDK pod Wine: **47/47 PASS**. Własne sprawdzenie obu architektur, manifestów SHA256, dołączonych źródeł i allowlisty prywatności — PASS. Samowystarczalny ZIP RPi zawiera trzy pliki, w tym skrypt dwukliku. Publikacja natywnych paczek CI pozostaje następnym etapem.
 
 CI ujawniło dwie różnice względem lokalnej konfiguracji: limit zagnieżdżeń kontekstów testu w Pythonie runnera (zastąpiono ExitStack) i brak dowiązania nowego programu MIDI w katalogu używanym przez test integracyjny (dodano). Nie usunięto ani nie pominięto testów. Dodatkowo edytor VST przelicza listy oryginalnych parametrów według liczby pozycji zamiast błędnego źródłowego znacznika integer; test wyboru podziału Oil chroni tę poprawkę. Początkowe skalowanie dostosowuje również listy do ekranu.
+
+## Preview 2 — faktycznie opublikowane paczki
+
+Źródłowy commit **ecf68e066e03ed97a9fe82bc6704a795721b6939**. Pełny run **SUCCESS** na obu platformach: https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40566730911 . Windows kompilowany natywnie przez MSVC x64; ARM64 natywnie na ubuntu-24.04-arm. Oba zadania publikowały bezpośrednio do tego samego prywatnego prerelease, bez przesyłania wyników przez Actions Artifacts. `contents: write` zadziałało; opcjonalne diagnostyczne Artifacts mają retencję 1 dzień i domyślnie są wyłączone.
+
+Release: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.2.ci.40566730911.1
+
+- Windows VST3: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/download/v0.1.0-preview.2.ci.40566730911.1/JerzyMultiFX-VST3-Windows-x64-v0.1.0-preview.2.zip — rozpakować i dwuklik `ZAINSTALUJ-VST3.cmd`.
+- Aktualizacja istniejącego bassambient: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/download/v0.1.0-preview.2.ci.40566730911.1/JerzyMultiFX-INSTALATOR.zip — rozpakować i dwuklik `ZAINSTALUJ-NA-RASPBERRY.cmd` na Windows; włączyć Raspberry i HeadRush, podawać hasło jerzy.
+- Oddzielny TAR.GZ ARM64, instrukcje, wykazy plików i SHA256 obu platform również są w Release.
+
+Natywne CI Windows: CTest DSP/sygnałów + walidator SDK, test rzeczywistego edytora oraz rzeczywistego sygnału DLL/IR/bypass/PDC bez GUI/Return, benchmark i składnia obu instalatorów — PASS. Natywne CI ARM64: CTest 2/2, Python 24 testy, HTTP/IR/presety, JACK dummy/audio/USB-CC/transport BLE-MIDI bez radia/zmiana bufora/Return routing, benchmark, prywatność paczek i osadzony instalator — PASS; w tym przebiegu JACK dummy 0 xrun.
+
+Po publikacji rzeczywiście pobrano oba archiwa binarne, ZIP instalatora i manifesty. Sprawdzono zewnętrzne/wewnętrzne SHA256, ELF64 AArch64 obu programów RPi, PE32+ x64 VST, źródłowy commit i zgodność pakietu ARM z payloadem samowystarczalnego instalatora — PASS. Weryfikacja dotyczy gotowych assetów, nie jedynie lokalnych plików. Dwa zastąpione runy 40566264195 i 40566463081 anulowano; nie usuwano wydań, assetów, artefaktów ani historii. Repozytoria źródłowe nie były edytowane.
+
+Preview 2 nie zostało zdalnie zainstalowane na fizycznym bassambient. Ocena brzmienia/ergonomii przez właściciela, FL Studio, pomiary HeadRush roundtrip i radia Bluetooth nadal wymagają odbioru sprzętowego. Latencja FFT Attack/Atomic pozostaje opisana w audycie; testy programowe nie stanowią obietnicy zerowego opóźnienia całego urządzenia.
