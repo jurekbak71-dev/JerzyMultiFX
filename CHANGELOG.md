@@ -1,3 +1,10 @@
+## 0.1.0-preview.3
+
+- Windows: studio rack with walnut cheeks, brushed steel/aluminium, ebonite knobs, toggle switches and independent IN/OUT peak VU needles; scrollable controls cannot cover the fixed effect switches.
+- RPi: panel opens automatically with a same-origin HttpOnly session; no key entry. Installer enables boot services and preserves the complete last sound/MIDI state across updates.
+- Explicit MIDI Learn for all web ON/OFF switches, sections, banks, blocks and master; Windows right-click Learn also covers block and master bypass.
+- Physical FL Studio/HeadRush validation remains pending.
+
 # Changelog
 
 ## 0.1.0-preview.2 — 2026-10-27

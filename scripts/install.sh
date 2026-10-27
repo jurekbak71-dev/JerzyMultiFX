@@ -39,4 +39,4 @@ systemctl daemon-reload
 if ((enable));then systemctl enable --now jerzy-multifx-jack.service jerzy-multifx.service jerzy-multifx-web.service;fi
 if ((ble));then systemctl enable jerzy-multifx-ble.service;echo 'BLE zainstalowane. Skonfiguruj parowanie BlueZ i uruchom usługę po sprawdzeniu adaptera.';fi
 echo "Zainstalowano. Backup: $backup. Dane użytkownika pozostają w /var/lib/jerzy-multifx."
-echo 'Token panelu: sudo cat /var/lib/jerzy-multifx/token (nie publikuj go).'
+echo 'Panel otwiera się automatycznie, bez wpisywania klucza.'

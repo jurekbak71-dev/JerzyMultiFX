@@ -109,7 +109,7 @@ def main():
     if previous_data:
         for directory in ('presets','ir'):
             if (previous_data/directory).is_dir():shutil.copytree(previous_data/directory,data/directory)
-        for name in ('token','midi-inputs-disabled.txt','audio-routing.txt'):
+        for name in ('token','midi-inputs-disabled.txt','audio-routing.txt','last-state.jmfx'):
             if (previous_data/name).is_file():shutil.copy2(previous_data/name,data/name)
     backup=run/'poprzednie-pliki-uslug';backup.mkdir(mode=0o700)
     for unit in NEW+[BRIDGE]:
@@ -185,13 +185,13 @@ def main():
         if changed:
             subprocess.run(['bash', str(rollback)], check=False)
         raise
-    if previous_data and (previous_data/'last-state.jmfx').is_file():
+    if previous_data and not (data/'last-state.jmfx').is_file() and (previous_data/'last-state.jmfx').is_file():
         try:
             if not rpc('KEEP_MIDI '+str(previous_data/'last-state.jmfx')).get('ok'):print('Poprzednie przypisania MIDI pozostają w kopii starej wersji; można nauczyć je ponownie w panelu.')
         except (OSError,ValueError):print('Poprzednie przypisania MIDI pozostają w kopii starej wersji.')
     print('\nGOTOWE. Na komputerze otwórz: http://bassambient.local:8097')
-    print('Wklej na stronie ten klucz dostępu (nie wysyłaj go innym):\n'+token)
-    print('Program uruchomiony od czystego brzmienia. Presety i poprzednia wersja zachowane.')
+    print('Panel otwiera się automatycznie — bez wpisywania klucza.')
+    print('Autostart włączony. Po restarcie Pi wraca ostatnie brzmienie i przypisania MIDI. Presety i poprzednia wersja zachowane.')
     print('Powrót do poprzedniej wersji:')
     print('bash '+str(rollback))
     print('Wersja próbna — może być słyszalne opóźnienie dźwięku.')

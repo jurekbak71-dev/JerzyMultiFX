@@ -1,3 +1,5 @@
+> Od preview 3 panel otwiera się automatycznie pod http://bassambient.local:8097 — nie wpisujesz klucza. Starsze instrukcje tokenu dotyczą preview 1/2. Po instalacji MultiFX startuje z Pi i odtwarza ostatnie brzmienie. MIDI Learn przy ON/OFF obejmuje także PREAMP, TAPE DRIVE, DRIVE i COMP. Dla przełączania użyj CC naprzemiennie 0/127. Panel jest przeznaczony dla zaufanej sieci lokalnej.
+
 # Instalacja Raspberry Pi ARM64
 
 Docelowy system tej paczki: Debian 13 / Raspberry Pi OS 64-bit z glibc >= 2.41, architektura `aarch64`. Nie jest to paczka ARM32 ani Windows. Typowy kandydat: Raspberry Pi 4/5; obciążenie i opóźnienie muszą być zmierzone na fizycznym urządzeniu. Testy QEMU nie potwierdzają czasu rzeczywistego.

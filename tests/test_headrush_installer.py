@@ -95,7 +95,7 @@ class UpgradeTransactionTests(unittest.TestCase):
                 else:module.main()
             self.assertEqual((old/'last-state.jmfx').read_bytes(),b'previous state must survive rollback')
             self.assertEqual((data/'presets/moj-bas.jmfx').read_bytes(),b'user preset must survive')
-            self.assertFalse((data/'last-state.jmfx').exists(),'new version starts clean without overwriting old sound')
+            self.assertEqual((data/'last-state.jmfx').read_bytes(),(old/'last-state.jmfx').read_bytes(),'update preserves the full sound and MIDI mappings for autostart')
             self.assertFalse(any('jerzy-jack.service' in list(c) for c in calls),'must not restart or replace existing JACK')
             if fail:
                 self.assertTrue(any(c[0]=='bash' and c[1].endswith('COFNIJ.sh') for c in calls))

@@ -83,6 +83,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p .build
+          node --test tests/PanelAuth.test.cjs
           python3 -m unittest discover -s tests -p 'test_*.py' -v
           MULTIFX_BINARY="$PWD/build/jerzy-multifx" python3 tests/integration.py
       - name: Actual JACK signal and MIDI

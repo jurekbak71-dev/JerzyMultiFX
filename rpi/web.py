@@ -3,11 +3,12 @@ import argparse, hashlib, hmac, http.server, json, os, secrets, urllib.parse
 from pathlib import Path
 from control import rpc
 import hardware
+from http.cookies import SimpleCookie
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Do not log authentication values or uploaded data.
-    def send(self, code, data, mime='application/json'):
+    def send(self, code, data, mime='application/json', session=False):
         if not isinstance(data, bytes): data=json.dumps(data,ensure_ascii=False).encode()
         self.send_response(code)
         self.send_header('Content-Type', mime)
@@ -15,15 +16,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'")
+        if session:
+            self.send_header('Set-Cookie', 'multifx-session='+self.server.token+'; Path=/; HttpOnly; SameSite=Strict')
         self.end_headers();self.wfile.write(data)
     def authorized(self):
         token=self.headers.get('Authorization','').removeprefix('Bearer ')
+        cookie=SimpleCookie()
+        try: cookie.load(self.headers.get('Cookie',''))
+        except Exception: return False
+        session=cookie.get('multifx-session')
+        valid=hmac.compare_digest(token,self.server.token) or (session is not None and hmac.compare_digest(session.value,self.server.token))
         origin=self.headers.get('Origin')
-        return hmac.compare_digest(token,self.server.token) and (origin is None or origin in ('http://'+self.headers.get('Host',''),'https://'+self.headers.get('Host','')))
+        return valid and self.headers.get('Sec-Fetch-Site') != 'cross-site' and (origin is None or origin in ('http://'+self.headers.get('Host',''),'https://'+self.headers.get('Host','')))
     def do_GET(self):
         try:
             if self.path in ('/','/index.html'):
-                return self.send(200,(self.server.ui/'index.html').read_bytes(),'text/html; charset=utf-8')
+                return self.send(200,(self.server.ui/'index.html').read_bytes(),'text/html; charset=utf-8',session=True)
             if self.path in ('/metadata.js','/app.js','/style.css'):
                 filename=self.path.removeprefix('/')
                 return self.send(200,(self.server.ui/filename).read_bytes(),'text/css; charset=utf-8' if filename.endswith('.css') else 'text/javascript; charset=utf-8')

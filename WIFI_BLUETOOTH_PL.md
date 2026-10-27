@@ -1,3 +1,5 @@
+> Od preview 3 panel otwiera się automatycznie pod http://bassambient.local:8097 — nie wpisujesz klucza. Starsze instrukcje tokenu dotyczą preview 1/2. Po instalacji MultiFX startuje z Pi i odtwarza ostatnie brzmienie. MIDI Learn przy ON/OFF obejmuje także PREAMP, TAPE DRIVE, DRIVE i COMP. Dla przełączania użyj CC naprzemiennie 0/127. Panel jest przeznaczony dla zaufanej sieci lokalnej.
+
 # Połączenie z bassambient / HeadRush
 
 Panel: **http://bassambient.local:8097**. Komputer lub telefon ma być w tej samej sieci domowej. Wklej klucz pokazany przez instalator. Nie trzeba internetu do obsługi panelu.

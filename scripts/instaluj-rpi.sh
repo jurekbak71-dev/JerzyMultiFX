@@ -59,7 +59,6 @@ echo; echo 'GOTOWE. Na Raspberry Pi otwórz w przeglądarce:'
 echo 'http://localhost:8097'
 ip=$(hostname -I | awk '{print $1}')
 [[ -z $ip ]] || echo "Na telefonie lub komputerze w tej samej sieci otwórz: http://$ip:8097"
-echo 'Na stronie wklej poniższy klucz dostępu (zachowaj go dla siebie):'
-sudo cat /var/lib/jerzy-multifx/token
+echo 'Panel otwiera się automatycznie, bez wpisywania klucza.'
 echo; echo 'Podłącz instrument do wejścia wybranej karty, a słuchawki/głośniki do jej wyjścia.'
 echo 'To wersja próbna: może występować słyszalne opóźnienie dźwięku.'

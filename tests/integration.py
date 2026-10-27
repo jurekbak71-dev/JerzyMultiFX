@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Actual core + HTTP functional requests; starts only test-owned processes."""
+import http.cookiejar
 import json,os,socket,subprocess,sys,tempfile,time,urllib.request,urllib.error,wave,struct
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
@@ -32,6 +33,17 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
         assert len(metadata['parameters'])>=924
         try:request('/api/state',auth=False);raise AssertionError('Unauthenticated access')
         except urllib.error.HTTPError as e:assert e.code==401
+        # A normal browser receives an HttpOnly session with the page, no pasted key.
+        browser=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        page=browser.open('http://127.0.0.1:18097/')
+        cookie=page.headers['Set-Cookie']
+        assert 'HttpOnly' in cookie and 'SameSite=Strict' in cookie
+        assert b'id="token"' not in page.read()
+        assert len(json.load(browser.open('http://127.0.0.1:18097/api/metadata'))['parameters'])>=924
+        for headers in ({'Origin':'http://evil.invalid'},{'Sec-Fetch-Site':'cross-site'}):
+            req=urllib.request.Request('http://127.0.0.1:18097/api/state',headers=headers)
+            try:browser.open(req);raise AssertionError('Cross-origin cookie access')
+            except urllib.error.HTTPError as e:assert e.code==401
         parameter=next(p['id'] for p in metadata['parameters'] if p['key']=='drive.gain')
         assert request('/api/set',{'id':parameter,'value':.73})['ok']
         assert abs(request('/api/state')['values'][parameter]-.73)<1e-5

@@ -115,3 +115,15 @@ Natywne CI Windows: CTest DSP/sygnałów + walidator SDK, test rzeczywistego edy
 Po publikacji rzeczywiście pobrano oba archiwa binarne, ZIP instalatora i manifesty. Sprawdzono zewnętrzne/wewnętrzne SHA256, ELF64 AArch64 obu programów RPi, PE32+ x64 VST, źródłowy commit i zgodność pakietu ARM z payloadem samowystarczalnego instalatora — PASS. Weryfikacja dotyczy gotowych assetów, nie jedynie lokalnych plików. Dwa zastąpione runy 40566264195 i 40566463081 anulowano; nie usuwano wydań, assetów, artefaktów ani historii. Repozytoria źródłowe nie były edytowane.
 
 Preview 2 nie zostało zdalnie zainstalowane na fizycznym bassambient. Ocena brzmienia/ergonomii przez właściciela, FL Studio, pomiary HeadRush roundtrip i radia Bluetooth nadal wymagają odbioru sprzętowego. Latencja FFT Attack/Atomic pozostaje opisana w audycie; testy programowe nie stanowią obietnicy zerowego opóźnienia całego urządzenia.
+
+## Preview 3 — GUI i obsługa bez klucza
+
+Zmiany: drewniane boki, stal/aluminium/ebonit, przestrzenne gałki, hebelki i lampki. Wskaźniki IN/OUT korzystają z rzeczywistych szczytów silnika i mają niezależną bezwładność; 0 VU odpowiada -18 dBFS, to skala peak, nie certyfikowany pomiar RMS. Przewijane regulatory i natywne listy nie wchodzą w stały pas TRIGGER/bypass/opisów. Oryginalny układ Chorus 3×2, Atomic 2×2 i Attack cztery pomocnicze + cztery główne regulatory zachowano na podstawie źródłowych edytorów (SHA w source-manifest).
+
+Panel RPi otwiera się automatycznie, bez klucza. Wejście na stronę ustawia sesyjne cookie HttpOnly/SameSite=Strict; frontend łączy się i ponawia próbę podczas startu audio. Oznacza to dostęp do sterowania dla urządzeń, które mogą otworzyć panel w lokalnej sieci. Pozostawiono sprawdzanie Origin/Sec-Fetch-Site i uwierzytelnienie Bearer dla klientów API. Nie zmieniano sieci ani widoczności repozytorium.
+
+MIDI Learn jest jawnie dostępne przy wszystkich webowych przełącznikach ON/OFF, również PREAMP, TAPE DRIVE, DRIVE, COMP, osobnych sekcjach, bankach, blokach oraz master bypass. W VST służy do tego prawy przycisk na regulatorze/przełączniku, także na blokach i master. Kontroler powinien wysyłać naprzemiennie CC 0/127 dla trwałego OFF/ON. Mapy zapisują się w stanie.
+
+Instalator HeadRush włącza user services i linger, kopiuje cały last-state.jmfx (zamiast resetować brzmienie) oraz zachowuje backup/rollback. Silnik odczytuje ostatnie brzmienie przy starcie. Autostart systemowego wariantu RPi pozostaje przez istniejące systemd enable. Nie wykonano instalacji ani restartu fizycznego Pi.
+
+Wykonano lokalnie: CTest DSP/sygnałów 2/2, Python 24 testy, HTTP/core z rzeczywistym cookie bez podawania klucza i odmową żądań cross-origin, Node 3 testy automatycznego otwarcia/ponawiania/MIDI Learn — PASS. Cross-build Windows x64 — PASS przed końcowym rozszerzeniem testów edytora; pełne natywne CI i publikacja tej wersji jeszcze oczekują na wykonanie. Dotychczasowe wydania są zachowane. Repozytoria źródłowe nie są modyfikowane.

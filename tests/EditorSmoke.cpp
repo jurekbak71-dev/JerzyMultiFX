@@ -1,6 +1,7 @@
 #include "plugin-vst3/Plugin.h"
 #include "core/Presentation.h"
 #include "pluginterfaces/base/ipluginbase.h"
+#include "public.sdk/source/vst/hosting/hostclasses.h"
 #include <cstdio>
 #include <iostream>
 #include <stdexcept>
@@ -59,6 +60,12 @@ static void screenshot(HWND h, const char *path) {
     DeleteDC(memory);
     ReleaseDC(h, dc);
 }
+static unsigned long long meterPixels(HWND h, int x) {
+    RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW);
+    HDC dc=GetDC(h);unsigned long long hash=1469598103934665603ULL;
+    for(int y=28;y<66;++y)for(int xx=x+10;xx<x+180;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
+    ReleaseDC(h,dc);return hash;
+}
 int main(int argc, char **argv) try {
     check(argc >= 2, "usage: editor_smoke plugin.vst3 [screenshot.bmp]");
     for (int cycle = 0; cycle < 3; ++cycle) {
@@ -87,6 +94,24 @@ int main(int argc, char **argv) try {
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
         check(child, "editor child window");
+        // Exercise the real DLL's meter notification and independent needle rendering.
+        IConnectionPoint *meters=nullptr;
+        check(c->queryInterface(IConnectionPoint::iid,reinterpret_cast<void **>(&meters))==kResultOk,"meter connection");
+        const auto inSilent=meterPixels(child,850),outSilent=meterPixels(child,1054);
+        auto *message=new HostMessage;message->setMessageID("meters");
+        message->getAttributes()->setFloat("in",.5);message->getAttributes()->setFloat("out",0);
+        check(meters->notify(message)==kResultOk,"input meter notification");
+        for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
+        check(meterPixels(child,850)!=inSilent,"IN needle follows input");
+        check(meterPixels(child,1054)==outSilent,"OUT remains at silence independently");
+        message->getAttributes()->setFloat("out",.2);meters->notify(message);
+        for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
+        check(meterPixels(child,1054)!=outSilent,"OUT needle follows output");
+        message->release();meters->release();
+        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(100,135));
+        check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().blockBypass[0]+1)/layout().controlCount)<1e-6,"block bypass MIDI Learn");
+        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(900,820));
+        check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
         int gain = layout().preamp + 1;
         SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(210, 366));
         SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(210, 316));
@@ -116,11 +141,19 @@ int main(int argc, char **argv) try {
                 model = int(i);
         HWND modelList = GetDlgItem(child, 10000 + model);
         check(modelList && SendMessage(modelList, CB_GETCOUNT, 0, 0) == 14, "original Chorus model dropdown");
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
         click(child, 290, 195);
         pump(); // Attack page.
         check(GetDlgItem(child, 10000 + model) == nullptr, "Chorus controls hidden on Attack page");
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-attack.bmp").c_str());
+        const int attack=parameterId("attack.bypass");
+        click(child,1080,735);
+        check(c->getParamNormalized(attack)==0,"dedicated Attack footswitch");
+        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(1080,735));
+        check(std::abs(c->getParamNormalized(layout().midiLearn)-double(attack+1)/layout().controlCount)<1e-6,"Attack switch MIDI Learn");
         click(child, 520, 195);
         pump(); // Atomic page.
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
         click(child, 90, 95);
         pump(); // Reordered MD block is now first.
         HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
