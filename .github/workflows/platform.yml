@@ -50,8 +50,14 @@ jobs:
           if ($LASTEXITCODE) { throw 'DSP tests failed' }
           $dll = Get-ChildItem build -Recurse -File -Filter JerzyMultiFX.vst3 | Select-Object -First 1
           $test = Get-ChildItem build -Recurse -File -Filter editor_smoke.exe | Select-Object -First 1
-          & $test.FullName $dll.FullName "$pwd/build/editor.bmp"
-          if ($LASTEXITCODE) { throw 'GUI test failed' }
+          $editorOutput = & $test.FullName $dll.FullName "$pwd/build/editor.bmp" 2>&1
+          $editorExit = $LASTEXITCODE
+          $editorOutput | Write-Output
+          if ($editorExit) {
+            $diagnostic = ($editorOutput | ForEach-Object { "$_" }) -join ' | '
+            Write-Output "::error::Real editor test: $diagnostic"
+            throw 'GUI test failed'
+          }
           $signal = Get-ChildItem build -Recurse -File -Filter plugin_signal.exe | Select-Object -First 1
           & $signal.FullName $dll.FullName "$pwd/build/ir-signal-test.wav"
           if ($LASTEXITCODE) { throw 'Actual VST3 audio and latency regression failed' }

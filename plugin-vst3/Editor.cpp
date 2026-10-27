@@ -228,9 +228,9 @@ class Editor final : public Steinberg::CPluginView {
             }
         return key;
     }
-    void paint() {
-        PAINTSTRUCT ps;
-        auto target = BeginPaint(window, &ps);
+    void paint(HDC supplied = nullptr) {
+        PAINTSTRUCT ps{};
+        auto target = supplied ? supplied : BeginPaint(window, &ps);
         RECT client;
         GetClientRect(window, &client);
         sx = float(W) / std::max(1L, client.right);
@@ -400,7 +400,7 @@ class Editor final : public Steinberg::CPluginView {
         SelectObject(dc, old);
         DeleteObject(bmp);
         DeleteDC(dc);
-        EndPaint(window, &ps);
+        if (!supplied) EndPaint(window, &ps);
     }
     int hit(int x, int y) const {
         for (auto &c : controls)
@@ -425,6 +425,9 @@ class Editor final : public Steinberg::CPluginView {
     LRESULT message(UINT msg, WPARAM w, LPARAM lp) {
         int x = int(GET_X_LPARAM(lp) * sx), y = int(GET_Y_LPARAM(lp) * sy);
         switch (msg) {
+        case WM_PRINTCLIENT:
+            paint(reinterpret_cast<HDC>(w));
+            return 0;
         case WM_PAINT:
             paint();
             return 0;

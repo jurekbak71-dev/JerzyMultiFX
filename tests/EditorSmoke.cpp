@@ -35,7 +35,7 @@ static void screenshot(HWND h, const char *path) {
     HBITMAP bmp = CreateCompatibleBitmap(dc, w, height);
     auto previous = SelectObject(memory, bmp);
     RedrawWindow(h, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-    check(BitBlt(memory, 0, 0, w, height, dc, 0, 0, SRCCOPY) != 0, "capture editor");
+    SendMessage(h, WM_PRINT, reinterpret_cast<WPARAM>(memory), PRF_CLIENT | PRF_CHILDREN);
     SelectObject(memory, previous);
     BITMAPINFO info{};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -62,9 +62,12 @@ static void screenshot(HWND h, const char *path) {
 }
 static unsigned long long meterPixels(HWND h, int x) {
     RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW);
-    HDC dc=GetDC(h);unsigned long long hash=1469598103934665603ULL;
+    HDC screen=GetDC(h),dc=CreateCompatibleDC(screen);
+    auto bitmap=CreateCompatibleBitmap(screen,1280,850);auto old=SelectObject(dc,bitmap);
+    SendMessage(h,WM_PRINTCLIENT,reinterpret_cast<WPARAM>(dc),PRF_CLIENT);
+    unsigned long long hash=1469598103934665603ULL;
     for(int y=28;y<66;++y)for(int xx=x+10;xx<x+180;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
-    ReleaseDC(h,dc);return hash;
+    SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);ReleaseDC(h,screen);return hash;
 }
 int main(int argc, char **argv) try {
     check(argc >= 2, "usage: editor_smoke plugin.vst3 [screenshot.bmp]");
