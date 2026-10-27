@@ -267,7 +267,6 @@ class Editor final : public Steinberg::CPluginView {
                  int(i) == view.section ? RGB(15, 20, 24) : RGB(225, 225, 216));
         }
         if (view.block == 2 && view.advanced) {
-            text(dc, 540, 218, 350, view.mxSlot == 0 ? "MX ENGINE A" : "MX ENGINE B", 15, RGB(232,221,190));
             fill(dc, 900, 177, 160, 36, RGB(42, 57, 66));
             text(dc, 900, 184, 160, "MX A / B", 15, RGB(232,221,190));
         }
@@ -278,6 +277,8 @@ class Editor final : public Steinberg::CPluginView {
         for(int y=230;y<791;y+=3)
             line(dc,21,y,1259,y,RGB(151,156,151));
         bevel(dc, 24, 674, 1232, 112, RGB(53,57,54));
+        if (view.block == 2 && view.advanced && !globalSettings)
+            text(dc,40,700,400,view.mxSlot == 0 ? "MX ENGINE A" : "MX ENGINE B",24,RGB(232,221,190));
         for (int x : {30,1248}) for(int y : {238,778}) {
             disk(dc,x,y,5,RGB(198,199,184));
             line(dc,x-3,y,x+3,y,RGB(50,51,46));
