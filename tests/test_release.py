@@ -65,4 +65,47 @@ class GithubArchiveTests(unittest.TestCase):
         self.assertNotIn('JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip',names)
         self.assertNotIn('docs/REQUIREMENTS_PL.md',names)
         self.assertFalse(any(n.startswith('references/') for n in names))
+
+class PublicationTransactionTests(unittest.TestCase):
+    def fixture(self,root):
+        (root/'dist').mkdir()
+        for name in release.asset_names('arm64',release.VERSION):
+            p=root/'dist'/name if name.startswith('JerzyMultiFX-') else root/name
+            p.write_bytes(b'isolated publisher fixture')
+    def run_publication(self,collision=False):
+        import subprocess
+        with tempfile.TemporaryDirectory() as name:
+            root=Path(name);self.fixture(root);calls=[];gets=0
+            def mock_gh(*args,**kwargs):
+                nonlocal gets
+                calls.append(args)
+                result=lambda code,data='',error='':subprocess.CompletedProcess(args,code,json.dumps(data) if not isinstance(data,str) else data,error)
+                if args==('api','repos/owner/repo'):return result(0,{'private':True})
+                if '--method' in args:
+                    payload=json.loads(kwargs['input']);self.assertTrue(payload['prerelease']);self.assertFalse(payload['draft'])
+                    self.assertEqual(payload['target_commitish'],'a'*40)
+                    return result(1,error='HTTP 422: release already exists (other platform won race)')
+                if args[0]=='release':return result(0)
+                gets+=1
+                if gets==1 and not collision:return result(1,error='HTTP 404')
+                assets=[]
+                if collision:assets=[{'name':release.asset_names('arm64',release.VERSION)[0]}]
+                elif gets>=3:
+                    for file in (root/'.build/release-upload/arm64').iterdir():assets.append({'name':file.name,'size':file.stat().st_size,'digest':'sha256:'+__import__('hashlib').sha256(file.read_bytes()).hexdigest()})
+                return result(0,{'prerelease':True,'draft':False,'assets':assets,'html_url':'https://github.com/owner/repo/releases/tag/test'})
+            env={'GITHUB_REPOSITORY':'owner/repo','GITHUB_SHA':'a'*40,'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1','GITHUB_STEP_SUMMARY':''}
+            with patch.object(release,'ROOT',root),patch.object(release,'gh',mock_gh),patch.dict(os.environ,env),patch.object(sys,'argv',['publish_release.py','--platform','arm64']),patch('sys.stdout',io.StringIO()):
+                if collision:
+                    with self.assertRaisesRegex(RuntimeError,'Refusing to overwrite'):release.main()
+                else:release.main()
+            return calls
+    def test_parallel_release_creation_race_recovers_and_verifies_upload(self):
+        calls=self.run_publication()
+        upload=next(c for c in calls if c[:2]==('release','upload'))
+        self.assertNotIn('--clobber',upload)
+        self.assertTrue(all('dist/*' not in item for item in upload))
+    def test_existing_asset_is_never_replaced_or_deleted(self):
+        calls=self.run_publication(collision=True)
+        self.assertFalse(any(c[0]=='release' for c in calls))
+
 if __name__=='__main__':unittest.main()

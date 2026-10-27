@@ -1,52 +1,47 @@
 # Jerzy MultiFX — status
 
-**0.1.0-preview.1 — IMPLEMENTATION IN PROGRESS, nie stable.**
+**0.1.0-preview.1 — preview; walidacja sprzętowa nadal wymagana.**
 
-## Wykonano
-- Rozpakowano 26 referencji. Przejrzano TS808, DS-2, COMP i LCD; DM-2 używany wyłącznie jako referencja delay.
-- Wspólna biblioteka DSP C++20: pięć przestawialnych bloków, oryginalne silniki i pełne parametry, A/B delay, FDN reverb, partycjonowana konwolucja.
-- Pierwsza kompilacja rzeczywistego VST3 PE32+ Windows x64 oraz ELF ARM64 zakończona.
-- Pierwsze testy natywne i ARM64/QEMU przeszły: IR tożsamościowy, latencja128, stereo44.1/48/96kHz, bufory32–1024.
-- Edytor Windows GDI, automatyzacja, MIDI Learn, stan z CRC i osadzonym IR; host RPi JACK, panel HTTP z tokenem, BLE GATT/MIDI i logika LCD w implementacji.
+## Rzeczywiste paczki i publikacja — 27.10.2026
 
-## Dalsze potwierdzone wyniki
-- 47/47 kontroli walidatora Windows VST3 na poprawnym bundle pod Wine.
-- Rzeczywisty edytor DLL: attach, regulator, bypass, MIDI Learn, reorder, resize, screenshot, close — PASS.
-- Host JACK dummy: sygnał audio, reakcja gain, MIDI Learn CC74 — PASS; 0 xrunów w ostatnim krótkim przebiegu.
-- HTTP/control natywnie i ARM64/QEMU: auth, 918 parametrów w pierwszym przebiegu, zapis/odczyt, stereo IR44100→48000 i walidacja danych — PASS. Dodano następnie osobny Factory Program (919 parametrów) i trwały autostart stanu; testy natywne, HTTP i ARM64 DSP ponownie PASS. VST3 z Factory Programs ponownie 47/47 PASS.
-- Cztery testy logiki BLE/LCD — PASS; żadnej deklaracji testu radia ani fizycznego LCD.
+- Gotowy prerelease: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.1.ci.40539397637.1
+- Zielony przebieg obu platform: https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40539397637
+- Źródło binariów: commit `94950a3b94c237b77c3e29244b0986265b4a8b69`, gałąź `codex/multifx-initial-preview`; zmiany nie są jeszcze scalone do main.
+- Windows: rzeczywisty VST3 PE32+ x64 z natywnego MSVC, ZIP 1855161 bajtów. ARM64: rzeczywisty ELF AArch64 z natywnego runnera, TAR.GZ 871333 bajty.
+- Oba pliki pobrano ponownie z Release: zewnętrzne i wewnętrzne SHA256, architektury, wykazy plików, źródła i wykluczenie prywatnych materiałów — PASS.
+- Release zawiera instrukcje instalacji, wykazy plików i osobne manifesty SHA256 dla obu platform. Repozytorium pozostaje prywatne.
 
-## W toku
-- Rozszerzenie testów RT/stanu/routingu/GUI i uruchomienie walidatora VST3 pod Wine.
-- Testy integracyjne hosta, panelu, usług, BLE i LCD bez sprzętu.
-- Paczki, sumy kontrolne, kompletny kod źródłowy i polskie instrukcje.
+## Migracja Actions → Releases
 
-## Ograniczenia
-- Fizyczny RPi/interfejs audio, FL Studio, BLE/Bluefy/iOS, LCD: **AWAITING HARDWARE VALIDATION**.
-- Brak opublikowanego GitHub Release/Actions; nie podajemy fikcyjnych linków.
-- Kod źródłowy innych repozytoriów nie jest modyfikowany; kopie i ich SHA w docs/source-manifest.json.
-- Ilustracje referencyjne nie będą redystrybuowane w paczkach. Niektóre oryginalne źródła nie mają jawnej licencji — publiczna dystrybucja wymaga uporządkowania praw autora.
+Każdy job zachowuje kompilację i testy, a następnie bezpośrednio publikuje swoją paczkę. Nie ma transferu binariów między zadaniami przez Actions Artifacts. Numer bazowy pochodzi z VERSION; tag rozwojowy zawiera run ID i attempt, zawsze jako prerelease.
 
-## GitHub CI — pierwszy przebieg
-- Run https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40534505660
-- Natywne ARM64: build, DSP, Python, HTTP, JACK/MIDI oraz package PASS. Upload Artifacts FAIL: limit przechowywania konta wyczerpany (quota); nie usuwano cudzych danych ani nie zmieniano billing.
-- Windows: poprawiono kolejność Windows SDK/commdlg.h po formatowaniu; lokalny cross-build i walidator poprawionego bundle PASS. Ponowny natywny przebieg w toku.
-- Prywatny prerelease zostanie użyty jako alternatywa dla Artifacts po końcowej weryfikacji.
+Publikacja ma `contents: write`; PR tylko `contents: read`, bez publikacji. Skuteczne utworzenie i przesłanie plików przez standardowy GITHUB_TOKEN potwierdzono w rzeczywistym CI. Pomocnicza diagnostyka jest domyślnie wyłączona, opcjonalna i ma retencję 1 dzień.
 
-## Naprawa natywnego Windows
-Przebieg dec5996 ujawnił konflikt CRT: projekt używał /MT, a SDK domyślnie /MD (LNK2038). Włączono wspierane SMTG_USE_STATIC_CRT=ON dla całego SDK; bez wyłączania kontroli linkera i bez zmian w repozytorium SDK. Ponowny build MSVC jest wymagany.
+Jawne listy plików oraz `.gitattributes export-ignore` wykluczają prywatne prompty, referencje, konfiguracje, klucze, logi, cache i pliki pośrednie. Pakiety zawierają odpowiadające źródła produktu i niezbędną część SDK, bez zbędnych narzędzi. Przetestowano też faktyczne archiwum źródeł generowane przez GitHub po wprowadzeniu wykluczeń. Nie usunięto istniejących wydań, artefaktów ani historii; publisher odmawia nadpisywania assetów. Szczegóły: [RELEASE_PIPELINE_PL.md](docs/RELEASE_PIPELINE_PL.md).
 
-Lokalnie obie rzeczywiste paczki zostały wygenerowane, sprawdzane są ich manifesty. Preview nie jest deklaracją pełnej gotowości sprzętowej.
+## Wykonane sprawdzenia
 
-## Dodatkowa regresja impulsowa
-Test całego łańcucha ujawnił, że oryginalny AttackDecay opóźnia o2064 próbki, a Atomic o2048. Skorygowano PDC na4240 próbek (z IR128), wyrównano bypass bloku modulacji i master dry. Test impulsowy rzeczywistej drogi PASS; nie deklarujemy już niskiej latencji tego preview na żywo. Znormalizowano również sumę sprzężeń Shimmer, aby nie zwiększać normy pętli, oraz wygładzono gain CPD.
+- Natywne CI Windows: build MSVC, CTest z pełnym walidatorem VST3 (47/47), rzeczywisty test edytora obejmujący trzy cykle create/close/unload, ponowna walidacja gotowego bundle podczas pakowania — PASS.
+- Natywne CI ARM64: build, CTest DSP/stanu/RT, testy Python, HTTP/control i rzeczywisty sygnał JACK dummy z MIDI Learn — PASS. To nie jest test fizycznego interfejsu audio.
+- Lokalne testy Python: 14/14 PASS, w tym wyścig tworzenia Release, odmowa nadpisania i filtrowanie prywatnych danych. Dwa dodatkowe testy transakcji dodano po opublikowanym buildzie; CI źródłowego SHA wykonywało 12 testów Python.
+- actionlint obu workflow — PASS.
+- Lokalne Windows/Wine: walidator 47/47 i edytor — PASS; ARM64/QEMU DSP i HTTP — PASS.
+- Panel w Chromium: logowanie, pięć bloków, zmiana parametrów, przeciąganie kolejności i widok 844×390 — PASS.
+- Minimalne źródła z paczki rozpakowano i ponownie zbudowano do Windows VST3 — PASS.
 
-## Migracja Actions → Releases (na żądanie właściciela)
-- Binarne paczki będą wysyłane bezpośrednio z jobów build/test do prywatnego prerelease, bez transferu Artifacts.
-- Pull requesty: tylko contents:read; dedykowane publikacje zaufanych push: contents:write.
-- Pomocnicza diagnostyka opcjonalna, retencja1 dzień; domyślnie wyłączona.
-- Jawna allowlista produktu/źródeł wyklucza prywatne prompty, referencje, cache, logi, konfiguracje i pliki pośrednie. Nie usunięto żadnego wcześniejszego wydania/artefaktu.
-- actionlint PASS; 11 testów Python PASS (w tym tagi, wykaz plików, privacy i brak delete/clobber). Weryfikacja rzeczywistej publikacji CI w toku.
+## Zakres implementacji
 
-## Natywny MSVC: fałszywy błąd parsera MSBuild
-47/47 testów walidatora przeszło, lecz SDK uruchamiał go jako POST_BUILD w MSBuild. Diagnostyka celowo odrzucanych, niewspieranych sample rate była interpretowana przez MSBuild jako błąd mimo kodu wyjścia0. Ten sam pełny walidator zarejestrowano w CTest; nadal wymagany jest kod0 i zero niezaliczonych testów, a pakowanie ponownie weryfikuje gotowy bundle. Nie zmieniano SDK ani asercji. Dodano także trzy cykle tworzenia/zamykania/wyładowania GUI i wyrejestrowanie klasy okna.
+Rozpakowano 26 referencji; materiały służą analizie i nie są redystrybuowane. Wspólny core C++20 zawiera pięć przestawialnych bloków, źródłowe silniki DSP, A/B delay, FDN reverb i konwolucję IR. Stan z CRC obejmuje osadzone IR i mapy CC; 919 parametrów. Windows ma edytor GDI, automatyzację i MIDI Learn; RPi ma host JACK, panel HTTP z tokenem, BLE GATT/MIDI, logikę LCD oraz skrypty instalacji/rollback.
+
+Repozytoria źródłowe nie są modyfikowane; pochodzenie kopii i SHA opisuje docs/source-manifest.json.
+
+## Naprawione regresje
+
+- Ujednolicono statyczny CRT SDK/projektu dla MSVC.
+- Pełny walidator przeniesiono z POST_BUILD do CTest: MSBuild błędnie interpretował jego diagnostykę odrzucanych sample rate jako błąd mimo kodu 0. Zachowano asercje i wszystkie kontrole; SDK nie zmieniano.
+- Impuls całego łańcucha ujawnił opóźnienia AttackDecay 2064 + Atomic 2048 + IR 128. PDC i bypass wyrównano do **4240 próbek (88,3 ms przy 48 kHz)**; test rzeczywistego impulsu PASS.
+- Znormalizowano sprzężenie Shimmer i wygładzono gain CPD.
+
+## Niewykonane testy i ograniczenia preview
+
+Fizyczny Raspberry Pi/USB audio, FL Studio, radio BLE/Bluefy/iOS oraz LCD: **AWAITING HARDWARE VALIDATION**. Nie deklarujemy stabilności sprzętowej ani małej latencji do gry na żywo. Brakuje kreatora ALSA/AP w panelu i zewnętrznego wejścia Return/sidechain AttackDecay. Niektóre źródła mają nierozstrzygnięte noty licencyjne; publiczna dystrybucja wymaga ich uporządkowania. Obecne wydanie pozostaje prywatne.
