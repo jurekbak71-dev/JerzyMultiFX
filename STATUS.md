@@ -13,7 +13,7 @@
 - 47/47 kontroli walidatora Windows VST3 na poprawnym bundle pod Wine.
 - Rzeczywisty edytor DLL: attach, regulator, bypass, MIDI Learn, reorder, resize, screenshot, close — PASS.
 - Host JACK dummy: sygnał audio, reakcja gain, MIDI Learn CC74 — PASS; 0 xrunów w ostatnim krótkim przebiegu.
-- HTTP/control natywnie i ARM64/QEMU: auth, 918 parametrów w pierwszym przebiegu, zapis/odczyt, stereo IR44100→48000 i walidacja danych — PASS. Dodano następnie osobny Factory Program (919 parametrów) i trwały autostart stanu; ponowna walidacja w toku.
+- HTTP/control natywnie i ARM64/QEMU: auth, 918 parametrów w pierwszym przebiegu, zapis/odczyt, stereo IR44100→48000 i walidacja danych — PASS. Dodano następnie osobny Factory Program (919 parametrów) i trwały autostart stanu; testy natywne, HTTP i ARM64 DSP ponownie PASS. VST3 z Factory Programs ponownie 47/47 PASS.
 - Cztery testy logiki BLE/LCD — PASS; żadnej deklaracji testu radia ani fizycznego LCD.
 
 ## W toku
@@ -26,3 +26,9 @@
 - Brak opublikowanego GitHub Release/Actions; nie podajemy fikcyjnych linków.
 - Kod źródłowy innych repozytoriów nie jest modyfikowany; kopie i ich SHA w docs/source-manifest.json.
 - Ilustracje referencyjne nie będą redystrybuowane w paczkach. Niektóre oryginalne źródła nie mają jawnej licencji — publiczna dystrybucja wymaga uporządkowania praw autora.
+
+## GitHub CI — pierwszy przebieg
+- Run https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40534505660
+- Natywne ARM64: build, DSP, Python, HTTP, JACK/MIDI oraz package PASS. Upload Artifacts FAIL: limit przechowywania konta wyczerpany (quota); nie usuwano cudzych danych ani nie zmieniano billing.
+- Windows: poprawiono kolejność Windows SDK/commdlg.h po formatowaniu; lokalny cross-build i walidator poprawionego bundle PASS. Ponowny natywny przebieg w toku.
+- Prywatny prerelease zostanie użyty jako alternatywa dla Artifacts po końcowej weryfikacji.

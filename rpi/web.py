@@ -26,6 +26,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if self.path == '/metadata.js':
                 return self.send(200,(self.server.ui/'metadata.js').read_bytes(),'text/javascript; charset=utf-8')
             if not self.authorized(): return self.send(401,{'error':'Token required'})
+            if self.path == '/api/source':
+                source=self.server.ui.parent/'source.tar.gz'
+                if not source.exists(): return self.send(404,{'error':'Source archive is included in binary packages'})
+                return self.send(200,source.read_bytes(),'application/gzip')
             if self.path == '/api/state': return self.send(200,rpc('STATE'))
             if self.path == '/api/metadata': return self.send(200,rpc('METADATA'))
             return self.send(404,{'error':'Unknown resource'})

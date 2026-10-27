@@ -4,9 +4,10 @@
 #define NOMINMAX
 #endif
 #include "public.sdk/source/common/pluginview.h"
+#include <windows.h>
+
 #include <commdlg.h>
 #include <cstdio>
-#include <windows.h>
 #include <windowsx.h>
 namespace multifx {
 class Editor final : public Steinberg::CPluginView {
