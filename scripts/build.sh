@@ -12,14 +12,16 @@ case "$platform" in
  *) echo 'Usage: bash scripts/build.sh native|windows|arm64';exit 2;;
 esac
 if [[ $platform == windows ]];then
- sdk=${VST3_SDK_ROOT:-/workspace/.setup/dependencies/vst3sdk}
+ sdk=${VST3_SDK_ROOT:-$root/dependencies/vst3sdk}
+ if [[ ! -f $sdk/CMakeLists.txt && -f /workspace/.setup/dependencies/vst3sdk/CMakeLists.txt ]];then sdk=/workspace/.setup/dependencies/vst3sdk;fi
  if [[ ! -f $sdk/CMakeLists.txt ]];then
   sdk="$root/.build/dependencies/vst3sdk"
   git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$sdk"
   git -C "$sdk" checkout --detach 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
   git -C "$sdk" submodule update --init --recursive
  fi
- [[ $(git -C "$sdk" rev-parse HEAD) == 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96 ]] || { echo 'SDK revision mismatch';exit 1; }
+ if [[ -d $sdk/.git || -f $sdk/.git ]];then revision=$(git -C "$sdk" rev-parse HEAD);else revision=$(cat "$sdk/REVISION");fi
+ [[ $revision == 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96 ]] || { echo 'SDK revision mismatch';exit 1; }
  args+=(-DVST3_SDK_ROOT="$sdk")
 fi
 cmake -S . -B "$build" "${args[@]}"

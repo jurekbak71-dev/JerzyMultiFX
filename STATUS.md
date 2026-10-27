@@ -40,3 +40,10 @@ Lokalnie obie rzeczywiste paczki zostały wygenerowane, sprawdzane są ich manif
 
 ## Dodatkowa regresja impulsowa
 Test całego łańcucha ujawnił, że oryginalny AttackDecay opóźnia o2064 próbki, a Atomic o2048. Skorygowano PDC na4240 próbek (z IR128), wyrównano bypass bloku modulacji i master dry. Test impulsowy rzeczywistej drogi PASS; nie deklarujemy już niskiej latencji tego preview na żywo. Znormalizowano również sumę sprzężeń Shimmer, aby nie zwiększać normy pętli, oraz wygładzono gain CPD.
+
+## Migracja Actions → Releases (na żądanie właściciela)
+- Binarne paczki będą wysyłane bezpośrednio z jobów build/test do prywatnego prerelease, bez transferu Artifacts.
+- Pull requesty: tylko contents:read; dedykowane publikacje zaufanych push: contents:write.
+- Pomocnicza diagnostyka opcjonalna, retencja1 dzień; domyślnie wyłączona.
+- Jawna allowlista produktu/źródeł wyklucza prywatne prompty, referencje, cache, logi, konfiguracje i pliki pośrednie. Nie usunięto żadnego wcześniejszego wydania/artefaktu.
+- actionlint PASS; 11 testów Python PASS (w tym tagi, wykaz plików, privacy i brak delete/clobber). Weryfikacja rzeczywistej publikacji CI w toku.

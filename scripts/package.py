@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Create actual binary packages, corresponding source and SHA-256 manifests."""
-import argparse,hashlib,json,os,shutil,struct,subprocess,tarfile,zipfile
+"""Package an explicit product/source allowlist; never sweep workspace logs or private inputs."""
+import argparse,hashlib,io,json,os,re,shutil,struct,subprocess,tarfile,zipfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-VERSION='0.1.0-preview.1'
+VERSION=(ROOT/'VERSION').read_text().strip()
+SDK_REVISION='3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96'
+PRIVATE_NAMES={'REQUIREMENTS_PL.md','JERZY_MULTIFX_PROMPT_DO_CODEXA.md','Wklejony tekst.txt','JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip','token'}
+CACHE_PARTS={'.git','.build','build','dist','__pycache__','node_modules','.cache','references','attachments'}
+RUNTIME_SCRIPTS=('install.sh','uninstall.sh','rollback.sh','diagnostics.sh')
+RUNTIME_RPI=('control.py','web.py','ble.py','lcd.py','lcd_service.py','jerzy-multifx.service','jerzy-multifx-web.service','jerzy-multifx-jack.service','jerzy-multifx-ble.service')
+RUNTIME_UI=('index.html','metadata.js')
 
 def architecture(path,expected):
     b=Path(path).read_bytes()
@@ -15,33 +21,49 @@ def architecture(path,expected):
     else:
         assert b[:5]==b'\x7fELF\x02' and struct.unpack_from('<H',b,18)[0]==183,'Not ELF64 AArch64'
 
+def source_filter(member):
+    path=Path(member.name)
+    if any(part in CACHE_PARTS for part in path.parts) or path.name in PRIVATE_NAMES:return None
+    if path.name.startswith('.env') or path.suffix.lower() in {'.pyc','.log','.obj','.o','.a','.lib','.dll','.exe','.pdb','.pem','.key','.zip'}:return None
+    if member.issym() or member.islnk():raise ValueError('Source archive must contain files, not filesystem links')
+    member.uid=member.gid=0;member.uname=member.gname='root'
+    return member
+
 def sources(destination,sdk=None):
-    allowed=('core','effects','vendor','plugin-vst3','rpi','ui','tests','scripts','cmake','docs','.github')
+    roots=('core','effects','vendor','plugin-vst3','rpi','ui','tests','scripts','cmake','docs','.github')
+    files=('CMakeLists.txt','VERSION','LICENSE','NOTICE','.gitignore','.clang-format','README_PL.md','INSTALACJA_VST3_PL.md','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md','LICENSES.md','CHANGELOG.md','STATUS.md')
+    tracked_result=subprocess.run(['git','-C',str(ROOT),'ls-files','-z'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    tracked=set(tracked_result.stdout.decode().split('\0')) if tracked_result.returncode==0 else None
+    def product_filter(member):
+        rel=Path(member.name).relative_to('JerzyMultiFX').as_posix()
+        if member.isfile() and tracked is not None and rel not in tracked:return None
+        return source_filter(member)
     with tarfile.open(destination,'w:gz') as archive:
-        for item in sorted(ROOT.iterdir()):
-            if item.name in allowed or item.suffix=='.md' or item.name in ('CMakeLists.txt','LICENSE','NOTICE','.gitignore','.clang-format'):
-                archive.add(item,arcname='JerzyMultiFX/'+item.name,filter=lambda m:None if '/__pycache__/' in m.name or m.name.endswith('.pyc') else m)
+        for name in (*roots,*files):
+            item=ROOT/name
+            if item.exists():archive.add(item,arcname='JerzyMultiFX/'+name,filter=product_filter)
         if sdk:
             sdk=Path(sdk)
-            for item in sorted(sdk.iterdir()):
-                if item.name not in ('.git','doc','vstgui4','tutorials'):
-                    archive.add(item,arcname='JerzyMultiFX/dependencies/vst3sdk/'+item.name,filter=lambda m:None if '/.git' in m.name else m)
+            sdk_paths=['CMakeLists.txt','base','cmake','pluginterfaces','public.sdk/source','public.sdk/samples/vst-hosting/CMakeLists.txt','public.sdk/samples/vst-hosting/validator','public.sdk/samples/vst-utilities/CMakeLists.txt','public.sdk/samples/vst-utilities/moduleinfotool']
+            sdk_paths += [p.name for p in sdk.glob('LICENSE*') if p.is_file()]
+            for name in sdk_paths:
+                archive.add(sdk/name,arcname='JerzyMultiFX/dependencies/vst3sdk/'+name,filter=source_filter)
+            revision=(SDK_REVISION+'\n').encode();info=tarfile.TarInfo('JerzyMultiFX/dependencies/vst3sdk/REVISION');info.size=len(revision);archive.addfile(info,io.BytesIO(revision))
 
 def sums(directory):
-    lines=[]
-    for path in sorted(directory.rglob('*')):
-        if path.is_file() and path.name!='SHA256SUMS':
-            lines.append(hashlib.sha256(path.read_bytes()).hexdigest()+'  '+path.relative_to(directory).as_posix())
-    (directory/'SHA256SUMS').write_text('\n'.join(lines)+'\n')
+    rows=[]
+    for f in sorted(directory.rglob('*')):
+        if f.is_file() and f.name!='SHA256SUMS':rows.append(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.relative_to(directory).as_posix())
+    (directory/'SHA256SUMS').write_text('\n'.join(rows)+'\n')
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('platform',choices=['windows','arm64']);p.add_argument('--build',type=Path,required=True);p.add_argument('--sdk',type=Path);p.add_argument('--out',type=Path,default=ROOT/'dist');a=p.parse_args()
-    a.out.mkdir(exist_ok=True,parents=True)
+    assert re.fullmatch(r'\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?',VERSION),'Invalid VERSION'
+    a.build=a.build.resolve();a.out.mkdir(exist_ok=True,parents=True)
     label='VST3-Windows-x64' if a.platform=='windows' else 'RPi-aarch64'
     stage=ROOT/'.build'/('package-'+a.platform)
-    if stage.exists():shutil.rmtree(stage) # Only package.py-owned generated staging directory.
-    stage.mkdir(parents=True)
-    reports=stage/'test-reports';reports.mkdir()
+    if stage.exists():shutil.rmtree(stage) # Only this script's generated staging directory.
+    stage.mkdir(parents=True);validation={'architecture':a.platform,'hardware':'AWAITING HARDWARE VALIDATION'}
     if a.platform=='windows':
         candidates=sorted(x for x in a.build.rglob('JerzyMultiFX.vst3') if x.is_file())
         assert candidates,'No compiled VST3 binary'
@@ -49,22 +71,28 @@ def main():
         bundle=stage/'Jerzy MultiFX.vst3';destination=bundle/'Contents/x86_64-win/Jerzy MultiFX.vst3';destination.parent.mkdir(parents=True);shutil.copy2(dll,destination)
         (bundle/'Contents/Resources').mkdir()
         validator=next(a.build.rglob('validator.exe'))
-        command=[str(validator),str(bundle.resolve())] if os.name=='nt' else [str(ROOT/'scripts/wine-run.sh'),str(validator),'Z:'+str(bundle.resolve()).replace('/','\\')]
+        command=[str(validator),str(bundle)] if os.name=='nt' else [str(ROOT/'scripts/wine-run.sh'),str(validator),'Z:'+str(bundle).replace('/','\\')]
         result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-        (reports/'vst3-validator.log').write_bytes(result.stdout)
-        assert result.returncode==0 and b'0 tests failed' in result.stdout,'VST3 validation failed'
+        (ROOT/'.build/package-validator.log').write_bytes(result.stdout) # Private intermediate, never auto-published.
+        matches=re.findall(rb'Result:\s*(\d+) tests passed, (\d+) tests failed',result.stdout)
+        assert result.returncode==0 and matches and int(matches[-1][1])==0,'VST3 validation failed; see private .build/package-validator.log'
+        validation['vst3_validator']={'passed':int(matches[-1][0]),'failed':0,'runner':'native Windows' if os.name=='nt' else 'Wine'}
         shutil.copy(ROOT/'INSTALACJA_VST3_PL.md',stage)
     else:
         binary=a.build/'jerzy-multifx';architecture(binary,'arm64')
         (stage/'bin').mkdir();shutil.copy2(binary,stage/'bin/jerzy-multifx')
-        for name in ('rpi','ui','scripts'):shutil.copytree(ROOT/name,stage/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+        (stage/'rpi').mkdir();(stage/'ui').mkdir()
+        for name in RUNTIME_RPI:shutil.copy2(ROOT/'rpi'/name,stage/'rpi'/name)
+        for name in RUNTIME_UI:shutil.copy2(ROOT/'ui'/name,stage/'ui'/name)
+        (stage/'scripts').mkdir()
+        for name in RUNTIME_SCRIPTS:shutil.copy2(ROOT/'scripts'/name,stage/'scripts'/name)
         for name in ('INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md'):shutil.copy(ROOT/name,stage)
     for name in ('README_PL.md','LICENSE','NOTICE','LICENSES.md','STATUS.md','CHANGELOG.md'):shutil.copy(ROOT/name,stage)
-    for path in (ROOT/'.build').glob('*.log'):
-        if any(k in path.name for k in ('tests','integration','validator','gui')):shutil.copy(path,reports)
-    try:commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
-    except subprocess.CalledProcessError:commit='uncommitted'
-    (stage/'BUILD-INFO.json').write_text(json.dumps({'version':VERSION,'platform':label,'commit':commit,'hardware':'AWAITING HARDWARE VALIDATION','distribution':'private preview; see LICENSES.md'},indent=2))
+    commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
+    info={'version':VERSION,'platform':label,'commit':commit,'hardware':'AWAITING HARDWARE VALIDATION','distribution':'private preview; see LICENSES.md'}
+    if os.environ.get('GITHUB_RUN_ID'):info['actions_run']=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+    (stage/'BUILD-INFO.json').write_text(json.dumps(info,indent=2)+'\n')
+    (stage/'VALIDATION.json').write_text(json.dumps(validation,indent=2)+'\n')
     sources(stage/'source.tar.gz',a.sdk if a.platform=='windows' else None)
     sums(stage)
     name=f'JerzyMultiFX-{label}-v{VERSION}'
@@ -75,10 +103,9 @@ def main():
                 if f.is_file():z.write(f,name+'/'+f.relative_to(stage).as_posix())
     else:
         output=a.out/(name+'.tar.gz')
-        with tarfile.open(output,'w:gz') as t:t.add(stage,arcname=name)
-    print(output)
-    hashes=[]
-    for f in sorted(a.out.iterdir()):
-        if f.is_file() and f.name!='SHA256SUMS':hashes.append(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name)
-    (a.out/'SHA256SUMS').write_text('\n'.join(hashes)+'\n')
+        with tarfile.open(output,'w:gz') as t:t.add(stage,arcname=name,filter=lambda m:normalize(m))
+    sums(a.out);print(output)
+
+def normalize(member):
+    member.uid=member.gid=0;member.uname=member.gname='root';return member
 if __name__=='__main__':main()

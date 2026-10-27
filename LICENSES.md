@@ -9,3 +9,5 @@ Steinberg VST3 SDK 3.8.1 (SHA3cdf9ca…): MIT, noty SDK i modułów w `dependenc
 Adaptery C ABI i wzorzec JACK/probe wywodzą się z JerzyAudioPlatform; lista SHA i plików znajduje się w docs/SOURCE_AUDIT.md. Kod źródłowy repozytoriów referencyjnych pozostał niezmieniony.
 
 Schematy TS808/DS-1/DS-2/COMP/DM-2 są materiałami badawczymi. Posiadanie pliku nie oznacza prawa do redystrybucji ilustracji; zostały wykluczone z archiwów produktu i odpowiadających źródeł.
+
+Lokalny cross-build używa MinGW-w64 oraz GCC/libstdc++/libgcc i odpowiednich wyjątków bibliotek wykonawczych; są to standardowe elementy toolchaina/System Libraries. Paczka nie zawiera Wine, QEMU ani narzędzi deweloperskich chmury. Wine/QEMU służyły wyłącznie do walidacji i nie są backendem audio produktu.
