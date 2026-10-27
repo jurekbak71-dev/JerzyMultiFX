@@ -37,3 +37,6 @@
 Przebieg dec5996 ujawnił konflikt CRT: projekt używał /MT, a SDK domyślnie /MD (LNK2038). Włączono wspierane SMTG_USE_STATIC_CRT=ON dla całego SDK; bez wyłączania kontroli linkera i bez zmian w repozytorium SDK. Ponowny build MSVC jest wymagany.
 
 Lokalnie obie rzeczywiste paczki zostały wygenerowane, sprawdzane są ich manifesty. Preview nie jest deklaracją pełnej gotowości sprzętowej.
+
+## Dodatkowa regresja impulsowa
+Test całego łańcucha ujawnił, że oryginalny AttackDecay opóźnia o2064 próbki, a Atomic o2048. Skorygowano PDC na4240 próbek (z IR128), wyrównano bypass bloku modulacji i master dry. Test impulsowy rzeczywistej drogi PASS; nie deklarujemy już niskiej latencji tego preview na żywo. Znormalizowano również sumę sprzężeń Shimmer, aby nie zwiększać normy pętli, oraz wygładzono gain CPD.

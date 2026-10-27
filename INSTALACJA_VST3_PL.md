@@ -12,6 +12,6 @@
 
 Renderer jest programowy GDI, bez akceleracji GPU. Sprawdź działanie w nowej instancji, skalę GUI 100% i ustawienia skalowania wrappera FL, następnie 80/125/150/200%. Zapisz log i wersję FL. Nie zmieniaj ID wtyczki, by obejść problem. Test Wine/Xvfb sprawdził rzeczywisty DLL, okno i interakcje; nie zastępuje fizycznego Windows/FL Studio.
 
-Sample rate: 44,1/48/96 kHz w podstawowym zestawie testów, mono/stereo; wejście VST3 64-bit jest przeliczane do wspólnego silnika float32. Deklarowana latencja: 128 próbek. Limiter jest sample-peak, ceiling -1 dBFS; nie jest to miernik ani limiter true-peak. W skrajnych ustawieniach innych bloków kontroluj poziom wyjściowy.
+Sample rate: 44,1/48/96 kHz w podstawowym zestawie testów, mono/stereo; wejście VST3 64-bit jest przeliczane do wspólnego silnika float32. Deklarowana latencja całego łańcucha: 4240 próbki (2064 z AttackDecay + 2048 z Atomic + 128 konwolucji), około 88,3 ms przy 48 kHz. To preview nie jest potwierdzonym rozwiązaniem low-latency do gry na żywo. Limiter jest sample-peak, ceiling -1 dBFS; nie jest to miernik ani limiter true-peak. W skrajnych ustawieniach innych bloków kontroluj poziom wyjściowy.
 
 Odinstalowanie: zamknij DAW i przenieś tylko folder `Jerzy MultiFX.vst3` do backupu. Nie usuwaj projektów, IR ani presetów użytkownika.

@@ -205,8 +205,8 @@ struct Host {
         if (cmd == "STATE") {
             auto s = state();
             std::ostringstream out;
-            out << "{\"ok\":true,\"sampleRate\":" << sr
-                << ",\"latencySamples\":128,\"xruns\":" << xruns.load()
+            out << "{\"ok\":true,\"sampleRate\":" << sr << ",\"latencySamples\":" << multifx::Engine::latency
+                << ",\"xruns\":" << xruns.load()
                 << ",\"cpu\":" << (jack.client ? jack.cpu_load(jack.client) : 0)
                 << ",\"in\":" << engine.inputPeak.load() << ",\"out\":" << engine.outputPeak.load()
                 << ",\"gr\":" << engine.gainReduction.load() << ",\"ir\":" << quote(project.irName)

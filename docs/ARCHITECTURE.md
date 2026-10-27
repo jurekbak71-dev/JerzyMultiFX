@@ -2,7 +2,7 @@
 
 `multifx_dsp` nie linkuje GUI, JACK, ALSA ani VST3. Adaptery JA z JerzyAudioPlatform służą do natywnego wywoływania kopii oryginalnych DSP. Wszystkie instancje/bufory są przygotowywane poza callbackiem. Dwa zestawy instancji silników delay zachowują niezależny stan A/B. Nie są to hostowane wtyczki ani most VST→RPi.
 
-Pięć bloków: Analog, Modulation, MD, Reverb, IR. Kolejność reprezentuje indeks jednej ze 120 permutacji. Zmiany porządku/dyskretnych ustawień są przygotowywane podczas zejścia do opóźnionej ścieżki suchej; DSP pracuje nadal, po przełączeniu następuje powrót do wet. Wewnętrzna kolejność CPD→Tape→Drive→Comp jest stała. Bypass ma wygładzanie i stałą deklarowaną latencję IR.
+Pięć bloków: Analog, Modulation, MD, Reverb, IR. Kolejność reprezentuje indeks jednej ze 120 permutacji. Zmiany porządku/dyskretnych ustawień są przygotowywane podczas zejścia do opóźnionej ścieżki suchej; DSP pracuje nadal, po przełączeniu następuje powrót do wet. Wewnętrzna kolejność CPD→Tape→Drive→Comp jest stała. Bypass ma wygładzanie i stałą całkowitą latencję 4240 próbek, również przy bypassie bloku modulacji. Oryginalny AttackDecay wnosi 2064 próbki, Atomic 2048, a IR 128.
 
 Konwolucja: partition128 / FFT256, do128 partycji, dwa kanały. Trzy banki niezmiennych widm, atomowa publikacja i ochrona odczytywanego/starego banku. Producent jest jeden, poza audio. Podmiana wykorzystuje crossfade128 próbek. Bufor historii i FFT są stałe. Maksymalny IR16384 próbek jest limitem zasobów, nie ukrytą obietnicą długich reverb IR. Resampling odbywa się przy imporcie/przywracaniu stanu, nie w audio.
 

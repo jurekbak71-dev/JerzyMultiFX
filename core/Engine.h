@@ -1,4 +1,5 @@
 #pragma once
+#include "Latency.h"
 #include "Model.h"
 #include <atomic>
 #include <memory>
@@ -18,6 +19,6 @@ class Engine {
                  double bpm = 120, double beat = 0, bool playing = false, const JAMidi *midi = nullptr,
                  unsigned midiCount = 0) noexcept;
     bool loadIR(const float *l, const float *r, int frames);
-    static constexpr int latency = 128;
+    static constexpr int latency = chainLatency;
 };
 } // namespace multifx

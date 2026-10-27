@@ -8,6 +8,7 @@ struct Analog {
     std::array<float, 2> dc{}, tone{}, last{}, aa{};
     muff::Engine fuzz;
     float env = 0, gain = 1, gr = 0, inPeak = 0, outPeak = 0;
+    float preGain = 1, preOut = 1, slew = .002f;
     void prepare(double rate) {
         sr = rate;
         dc = {};
@@ -15,6 +16,8 @@ struct Analog {
         last = {};
         aa = {};
         fuzz.prepare(sr * 4);
+        preGain = preOut = 1;
+        slew = float(1 - std::exp(-1 / (sr * .01)));
         env = 0;
         gain = 1;
     }
@@ -22,9 +25,11 @@ struct Analog {
         const int p = layout().preamp;
         int model = int(plain(p, s.values[p]));
         float g = db(plain(p + 1, s.values[p + 1])), out = db(plain(p + 2, s.values[p + 2]));
+        preGain += slew * (g - preGain);
+        preOut += slew * (out - preOut);
         float *x[]{&l, &r};
         for (int c = 0; c < 2; ++c) {
-            float v = *x[c] * g;
+            float v = *x[c] * preGain;
             if (model == 1)
                 v = std::tanh(v * 1.3f) / 1.3f;
             else if (model == 2) {
@@ -32,7 +37,7 @@ struct Analog {
                 dc[c] += .001f * (y - dc[c]);
                 v = y - dc[c];
             }
-            *x[c] = v * out;
+            *x[c] = v * preOut;
         }
     }
     void drive(float &l, float &r, const State &s) {
@@ -224,8 +229,10 @@ struct Reverb {
                 std::min(.985f, float(std::exp(-6.907755 * lines[i].size() * .65 / (sr * decay))));
             float diffuse = s.values[p + 7];
             float feed = (orth * diffuse + v[(i + 3) % 8] * (1 - diffuse)) * feedback;
-            if (mode >= 3)
-                feed += shifted * plain(p + 12, s.values[p + 12]) * .15f;
+            if (mode >= 3) {
+                float amount = plain(p + 12, s.values[p + 12]) * .15f;
+                feed = (feed + shifted * amount) / (1 + amount);
+            }
             lines[i][pos[i]] = std::clamp((in[i % 2]) * .25f + feed, -8.f, 8.f);
             pos[i] = (pos[i] + 1) % lines[i].size();
         }

@@ -1,4 +1,5 @@
 #include "core/Engine.h"
+#include "core/Presets.h"
 #include "core/Project.h"
 #include <chrono>
 #include <cmath>
@@ -103,6 +104,23 @@ int main() {
                 }
         }
         e->prepare(48000);
+        multifx::State cleanState;
+        multifx::selectFactory(cleanState, 0);
+        l.fill(0);
+        r.fill(0);
+        for (int block = 0; block < 12; ++block)
+            e->process(l.data(), r.data(), a.data(), b.data(), 1024, cleanState);
+        for (int offset = 0; offset < 8192; offset += 1024) {
+            l.fill(0);
+            r.fill(0);
+            if (offset == 0)
+                l[0] = r[0] = .25f;
+            e->process(l.data(), r.data(), a.data(), b.data(), 1024, cleanState);
+            for (int i = 0; i < 1024; ++i)
+                require(std::abs(a[i] - ((offset + i) == multifx::Engine::latency ? .25f : 0)) < .0002,
+                        "Actual chain latency matches host PDC");
+        }
+        e->prepare(48000);
         for (int j = 0; j < 180; ++j) {
             state.values[lay.order] = float(j % 120) / 119;
             state.values[lay.delayType[0]] = float(j % 5) / 4;
@@ -138,7 +156,7 @@ int main() {
         }
         require(std::abs(a.back() - .125f) < .0001, "Bypass preserves audio");
         require(allocations.load() == 0, "Zero allocations on audio thread");
-        std::cout << "PASS: partitioned convolution, latency128, " << lay.parameters.size()
+        std::cout << "PASS: partitioned convolution, IR latency128 / chain4240, " << lay.parameters.size()
                   << " stable parameters, complete MIDI/IR state+CRC, 120 orders, mono-compatible stereo "
                      "44.1/48/96kHz, blocks32..1024, active engine/routing switches, bypass, zero RT "
                      "allocations. Processed "

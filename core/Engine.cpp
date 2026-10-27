@@ -45,7 +45,9 @@ struct Engine::Impl {
     Convolver ir;
     std::array<Digital, 2> digital;
     std::array<std::array<float, 1024>, 2> work{}, dry{}, a{}, b{}, saved{};
-    std::array<std::array<float, 128>, 2> masterDry{};
+    std::array<std::array<float, chainLatency>, 2> masterDry{};
+    std::array<std::array<float, modulationLatency>, 2> modulationDry{};
+    int modulationDryPos = 0;
     int dryPos = 0;
     State smooth;
     std::array<int, 5> order{0, 1, 2, 3, 4};
@@ -100,6 +102,8 @@ void Engine::prepare(double rate, int block) {
     p.graphFade = 1;
     p.master = 0;
     p.masterDry = {};
+    p.modulationDry = {};
+    p.modulationDryPos = 0;
     p.dryPos = 0;
 }
 bool Engine::loadIR(const float *l, const float *r, int frames) {
@@ -184,6 +188,18 @@ void Engine::process(const float *left, const float *right, float *outL, float *
                     r[i] = v[1];
                 }
             }
+            // The original AttackDecay delays dry and wet by 2064 samples.
+            // Match the whole modulation-block bypass to that delay at every order.
+            if (block == 1) {
+                for (int i = 0; i < n; ++i) {
+                    for (int c = 0; c < 2; ++c) {
+                        float dry = p.modulationDry[c][p.modulationDryPos];
+                        p.modulationDry[c][p.modulationDryPos] = p.b[c][i];
+                        p.b[c][i] = dry;
+                    }
+                    p.modulationDryPos = (p.modulationDryPos + 1) % modulationLatency;
+                }
+            }
             // IR always contributes the declared fixed latency, including bypass.
             if (block != 4) {
                 float bypass = s.values[lay.blockBypass[block]];
@@ -209,7 +225,7 @@ void Engine::process(const float *left, const float *right, float *outL, float *
                 (c ? outR : outL)[start + i] = x;
                 outPeak = std::max(outPeak, std::abs(x));
             }
-            p.dryPos = (p.dryPos + 1) % 128;
+            p.dryPos = (p.dryPos + 1) % chainLatency;
         }
         if (p.switching && p.graphFade == 0) {
             p.rank = rank;

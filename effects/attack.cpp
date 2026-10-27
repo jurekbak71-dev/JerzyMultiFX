@@ -1,8 +1,10 @@
+#include "core/Latency.h"
 #include "core/jerzy_module.h"
 #include "vendor/attack/Engine.h"
 #include <memory>
 namespace {
 using P = mf_attack::Parameters;
+static_assert(mf_attack::Engine::latency == multifx::attackLatency);
 constexpr float P::*floats[] = {&P::attack,   &P::decay, &P::blend, &P::volume, &P::sens,
                                 &P::harmonix, &P::tone,  &P::hvol,  &P::hblend, &P::rblend};
 constexpr bool P::*bools[] = {&P::poly,           &P::fuzz,           &P::compMono, &P::compPoly,
@@ -65,8 +67,9 @@ extern "C" const JAModule *module_attack() {
         P("triggerMode", "Trigger Auto/Manual/MIDI", 0)
 #undef P
     };
-    static const JAModule m{sizeof(JAModule), JA_ABI,  "attack", "Attack Decay",
-                            "0.1.0",          0,       23,       p,
-                            create,           destroy, process,  [](void *) -> uint32_t {return 0; }};
+    static const JAModule m{
+        sizeof(JAModule), JA_ABI,  "attack", "Attack Decay",
+        "0.1.0",          0,       23,       p,
+        create,           destroy, process,  [](void *) -> uint32_t {return multifx::attackLatency; }};
     return &m;
 }
