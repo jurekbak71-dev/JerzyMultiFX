@@ -8,6 +8,8 @@ Numer bazowy pochodzi z `VERSION`. Przykład tagu: `v0.1.0-preview.1.ci.40500000
 
 Każde wydanie ma instrukcje Windows/RPi oraz wykaz oczekiwanych plików. Rzeczywiście przesłane nazwy, rozmiary i SHA256 znajdują się w `FILES-Windows-x64.json` / `FILES-RPi-aarch64.json` i osobnych manifestach sum. Rozdzielone nazwy nie kolidują między zadaniami. Paczki zawierają odpowiadające źródła, ale nie prompt użytkownika, archiwum referencyjne, ilustracje, .git, .env, tokeny, logi, cache, .obj/.o/.pdb ani narzędzia chmury. Runtime RPi ma jawną listę wymaganych skryptów; źródła zawierają tylko śledzone pliki produktu i niezbędną część przypiętego SDK.
 
+`.gitattributes export-ignore` wyklucza również materiały/prompt użytkownika z automatycznych archiwów źródeł generowanych przez GitHub dla nowych tagów; historia repozytorium nie jest usuwana ani przepisywana.
+
 Publisher odmawia nadpisania istniejących assetów i nie usuwa tagów, wydań ani wcześniejszych artefaktów. Ponowne uruchomienie całego workflow tworzy nowy tag attempt, zachowując wcześniejsze wyniki. Gdy próba zostanie przerwana podczas uploadu, należy uruchomić nową próbę zamiast kasować istniejące pliki. Ten preview pozostaje prywatny z uwagi na jawnie opisane nierozstrzygnięte noty licencyjne; workflow nie zmienia widoczności repozytorium.
 
 Pomocnicze Artifacts są **domyślnie wyłączone**, niezależne od paczek. Opcjonalny `workflow_dispatch → upload_diagnostics` przesyła wyłącznie sanitizowane podsumowanie (platforma i status), z `retention-days: 1`. Błąd tej pomocniczej operacji nie unieważnia już przesłanych Releases ani testów. Pełne logi pozostają standardowymi logami przebiegu Actions, bez kopiowania ich do produktów.

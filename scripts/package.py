@@ -31,7 +31,7 @@ def source_filter(member):
 
 def sources(destination,sdk=None):
     roots=('core','effects','vendor','plugin-vst3','rpi','ui','tests','scripts','cmake','docs','.github')
-    files=('CMakeLists.txt','VERSION','LICENSE','NOTICE','.gitignore','.clang-format','README_PL.md','INSTALACJA_VST3_PL.md','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md','LICENSES.md','CHANGELOG.md','STATUS.md')
+    files=('CMakeLists.txt','VERSION','LICENSE','NOTICE','.gitignore','.gitattributes','.clang-format','README_PL.md','INSTALACJA_VST3_PL.md','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md','LICENSES.md','CHANGELOG.md','STATUS.md')
     tracked_result=subprocess.run(['git','-C',str(ROOT),'ls-files','-z'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     tracked=set(tracked_result.stdout.decode().split('\0')) if tracked_result.returncode==0 else None
     def product_filter(member):

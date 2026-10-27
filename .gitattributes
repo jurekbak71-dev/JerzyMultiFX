@@ -1,0 +1,12 @@
+# GitHub's automatically generated source archives must also exclude private inputs.
+/JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip export-ignore
+/docs/REQUIREMENTS_PL.md export-ignore
+/references/ export-ignore
+/attachments/ export-ignore
+/.build/ export-ignore
+/dist/ export-ignore
+**/.env export-ignore
+**/.env.* export-ignore
+**/token export-ignore
+**/*.key export-ignore
+**/*.pem export-ignore

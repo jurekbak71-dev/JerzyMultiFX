@@ -38,7 +38,6 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("'--clobber'",source)
         self.assertNotIn("'delete'",source)
         self.assertIn("'prerelease':True",source)
-if __name__=='__main__':unittest.main()
 
 class PrivacyFixtureTests(unittest.TestCase):
     def test_private_values_never_enter_source_archive(self):
@@ -55,3 +54,15 @@ class PrivacyFixtureTests(unittest.TestCase):
             for marker in (b'PRIVATE_PROMPT_MARKER',b'PRIVATE_TOKEN_MARKER',b'PRIVATE_ENV_MARKER'):
                 self.assertNotIn(marker,payload)
             self.assertIn(b'public product source',payload)
+
+class GithubArchiveTests(unittest.TestCase):
+    def test_generated_repository_archive_excludes_private_references(self):
+        import subprocess
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run(['git','-C',str(root),'archive','--worktree-attributes','HEAD'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        if result.returncode:self.skipTest('Git source metadata not present')
+        with tarfile.open(fileobj=io.BytesIO(result.stdout)) as t:names=t.getnames()
+        self.assertNotIn('JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip',names)
+        self.assertNotIn('docs/REQUIREMENTS_PL.md',names)
+        self.assertFalse(any(n.startswith('references/') for n in names))
+if __name__=='__main__':unittest.main()
