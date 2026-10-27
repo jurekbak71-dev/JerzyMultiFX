@@ -1,12 +1,11 @@
 name: Publish simple HeadRush installer
 on:
-  push:
-    branches: ['codex/**']
-    paths:
-      - '.github/workflows/installer.yml'
-      - 'scripts/aktualizuj-headrush.py'
-      - 'scripts/make_headrush_installer.py'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing prerelease tag for the current project VERSION
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -15,7 +14,7 @@ jobs:
     permissions:
       contents: write
     env:
-      RELEASE_TAG: v0.1.0-preview.1.ci.40539397637.1
+      RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,10 +26,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p .build/installer-input
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir .build/installer-input --pattern 'JerzyMultiFX-RPi-aarch64-v0.1.0-preview.1.tar.gz' --pattern SHA256SUMS-RPi-aarch64
+          [[ "$RELEASE_TAG" =~ ^v[0-9][A-Za-z0-9_.-]+$ ]]
+          version=$(cat VERSION)
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir .build/installer-input --pattern "JerzyMultiFX-RPi-aarch64-v${version}.tar.gz" --pattern SHA256SUMS-RPi-aarch64
       - name: Build self-contained installer without private files
         run: |
-          python3 scripts/make_headrush_installer.py --package .build/installer-input/JerzyMultiFX-RPi-aarch64-v0.1.0-preview.1.tar.gz --checksums .build/installer-input/SHA256SUMS-RPi-aarch64
+          version=$(cat VERSION)
+          python3 scripts/make_headrush_installer.py --package ".build/installer-input/JerzyMultiFX-RPi-aarch64-v${version}.tar.gz" --checksums .build/installer-input/SHA256SUMS-RPi-aarch64
       - name: Publish directly without Artifacts or replacement
         env:
           GH_TOKEN: ${{ github.token }}

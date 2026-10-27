@@ -52,6 +52,20 @@ jobs:
           $test = Get-ChildItem build -Recurse -File -Filter editor_smoke.exe | Select-Object -First 1
           & $test.FullName $dll.FullName "$pwd/build/editor.bmp"
           if ($LASTEXITCODE) { throw 'GUI test failed' }
+          $signal = Get-ChildItem build -Recurse -File -Filter plugin_signal.exe | Select-Object -First 1
+          & $signal.FullName $dll.FullName "$pwd/build/ir-signal-test.wav"
+          if ($LASTEXITCODE) { throw 'Actual VST3 audio and latency regression failed' }
+          $bench = Get-ChildItem build -Recurse -File -Filter dsp_benchmark.exe | Select-Object -First 1
+          & $bench.FullName "$pwd/build/performance.json"
+          if ($LASTEXITCODE) { throw 'DSP benchmark failed' }
+          $parseErrors = $null
+          $parseTokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$pwd/scripts/install-vst3.ps1", [ref]$parseTokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count) { throw 'Windows installer syntax error' }
+          cmd /c scripts\install-vst3.cmd --help
+          if ($LASTEXITCODE) { throw 'VST installer command syntax error' }
+          cmd /c scripts\install-from-windows.cmd --help
+          if ($LASTEXITCODE) { throw 'RPi installer command syntax error' }
       - name: Toolchain and dummy JACK
         if: inputs.platform == 'arm64'
         shell: bash
@@ -63,6 +77,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE=-O2
           cmake --build build --parallel 3
           ctest --test-dir build --output-on-failure --no-tests=error
+          build/dsp_benchmark build/performance.json
       - name: Core HTTP, BLE and LCD logic
         if: inputs.platform == 'arm64'
         shell: bash
@@ -85,7 +100,10 @@ jobs:
       - name: Package real AArch64 binary
         if: inputs.platform == 'arm64'
         shell: bash
-        run: python3 scripts/package.py arm64 --build build
+        run: |
+          python3 scripts/package.py arm64 --build build
+          version=$(cat VERSION)
+          python3 scripts/make_headrush_installer.py --package "dist/JerzyMultiFX-RPi-aarch64-v${version}.tar.gz" --checksums dist/SHA256SUMS
       - name: Verify packages and privacy allowlist
         shell: bash
         run: python scripts/verify_packages.py

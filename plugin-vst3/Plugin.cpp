@@ -1,5 +1,6 @@
 #include "Plugin.h"
 #include "base/source/fstreamer.h"
+#include "core/Presentation.h"
 #include "core/Presets.h"
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/vst/ivstevents.h"
@@ -39,15 +40,20 @@ tresult PLUGIN_API Processor::initialize(FUnknown *host) {
     if (r != kResultOk)
         return r;
     addAudioInput(STR16("Audio Input"), SpeakerArr::kStereo);
+    addAudioInput(STR16("Return / Sidechain"), SpeakerArr::kStereo, kAux, 0);
     addAudioOutput(STR16("Audio Output"), SpeakerArr::kStereo);
     addEventInput(STR16("MIDI Control"), 1);
     return kResultOk;
 }
 tresult PLUGIN_API Processor::setBusArrangements(SpeakerArrangement *in, int32 ni, SpeakerArrangement *out,
                                                  int32 no) {
-    if (ni != 1 || no != 1 || !in || !out || !(in[0] == SpeakerArr::kMono || in[0] == SpeakerArr::kStereo) ||
-        in[0] != out[0])
+    if ((ni != 1 && ni != 2) || no != 1 || !in || !out ||
+        !(in[0] == SpeakerArr::kMono || in[0] == SpeakerArr::kStereo) || in[0] != out[0])
         return kResultFalse;
+    if (ni == 2 && in[1] != SpeakerArr::kEmpty && in[1] != SpeakerArr::kMono && in[1] != SpeakerArr::kStereo)
+        return kResultFalse;
+    if (ni == 2)
+        getAudioInput(1)->setArrangement(in[1]);
     getAudioInput(0)->setArrangement(in[0]);
     getAudioOutput(0)->setArrangement(out[0]);
     return kResultOk;
@@ -82,6 +88,11 @@ tresult PLUGIN_API Processor::setActive(TBool active) {
             engine.prepare(processSetup.sampleRate, processSetup.maxSamplesPerBlock);
             std::lock_guard lock(assetMutex);
             if (!restoreIR())
+                return kResultFalse;
+            State initial;
+            for (size_t i = 0; i < layout().parameters.size(); ++i)
+                initial.values[i] = values[i].load();
+            if (!engine.prepareState(initial))
                 return kResultFalse;
         } catch (...) {
             return kResultFalse;
@@ -130,6 +141,7 @@ tresult PLUGIN_API Processor::notify(IMessage *message) {
         a->setFloat("in", engine.inputPeak.load());
         a->setFloat("out", engine.outputPeak.load());
         a->setFloat("gr", engine.gainReduction.load());
+        a->setInt("latency", engine.currentLatency());
         auto result = sendMessage(reply);
         reply->release();
         return result;
@@ -167,6 +179,14 @@ tresult PLUGIN_API Processor::notify(IMessage *message) {
         if (!engine.loadIR(p.irL.data(), p.irR.data(), int(p.irL.size())))
             return kResultFalse;
         assets = std::move(p);
+        values[layout().ir].store(1);
+        values[layout().blockBypass[4]].store(0);
+        auto *reply = allocateMessage();
+        if (reply) {
+            reply->setMessageID("irLoaded");
+            sendMessage(reply);
+            reply->release();
+        }
         return kResultOk;
     }
     return AudioEffect::notify(message);
@@ -179,6 +199,8 @@ tresult PLUGIN_API Processor::process(ProcessData &data) {
     for (int i = 0; i < count; ++i)
         s.values[i] = values[i].load(std::memory_order_relaxed);
     std::array<int32, 2048> points{};
+    std::array<JAMidi, 128> controllerEvents{};
+    unsigned controllerCount = 0;
     int queues =
         data.inputParameterChanges ? std::min(2048, data.inputParameterChanges->getParameterCount()) : 0;
     auto apply = [&](int at) {
@@ -194,7 +216,9 @@ tresult PLUGIN_API Processor::process(ProcessData &data) {
                 float value = clean(float(v));
                 if (id == layout().factoryProgram) {
                     selectFactory(s, int(std::round(value * 7)));
-                    for (int k = 0; k < layout().midiLearn; ++k) {
+                    for (int k = 0; k < count; ++k) {
+                        if (k >= layout().midiLearn && k <= layout().factoryProgram)
+                            continue;
                         values[k].store(s.values[k]);
                         if (data.outputParameterChanges) {
                             int32 qindex = 0;
@@ -209,6 +233,11 @@ tresult PLUGIN_API Processor::process(ProcessData &data) {
 
                 if (id >= 3000 && id < 3128) {
                     int cc = id - 3000;
+                    if (controllerCount < controllerEvents.size())
+                        controllerEvents[controllerCount++] = {
+                            uint32_t(std::max(0, offset)),
+                            3,
+                            {176, uint8_t(cc), uint8_t(std::round(value * 127))}};
                     int target = int(plain(layout().midiLearn, s.values[layout().midiLearn]));
                     if (target >= 0) {
                         int map = layout().midiMap + cc;
@@ -225,9 +254,14 @@ tresult PLUGIN_API Processor::process(ProcessData &data) {
                         }
                     }
                     int mapped = int(plain(layout().midiMap + cc, s.values[layout().midiMap + cc]));
-                    if (mapped >= 0)
+                    if (mapped >= 0) {
                         id = mapped;
-                    else
+                        if (data.outputParameterChanges && id < count) {
+                            int32 index = 0, point = 0;
+                            if (auto *out = data.outputParameterChanges->addParameterData(id, index))
+                                out->addPoint(at, value, point);
+                        }
+                    } else
                         id = -1;
                 }
                 if (id >= 0 && id < count) {
@@ -269,6 +303,11 @@ tresult PLUGIN_API Processor::process(ProcessData &data) {
         int n = end - start;
         std::array<JAMidi, 128> midi{};
         unsigned nm = 0;
+        for (unsigned k = 0; k < controllerCount && nm < midi.size(); ++k)
+            if (controllerEvents[k].frame >= unsigned(start) && controllerEvents[k].frame < unsigned(end)) {
+                midi[nm] = controllerEvents[k];
+                midi[nm++].frame -= unsigned(start);
+            }
         if (data.inputEvents)
             for (int k = 0; k < data.inputEvents->getEventCount() && nm < midi.size(); ++k) {
                 Event e{};
@@ -293,8 +332,25 @@ tresult PLUGIN_API Processor::process(ProcessData &data) {
                 }
                 scratch[c][i] = x;
             }
+        auto *ret =
+            data.numInputs > 1 && data.inputs && getAudioInput(1)->isActive() ? &data.inputs[1] : nullptr;
+        const bool hasReturn = ret && ret->numChannels > 0;
+        if (hasReturn)
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < n; ++i) {
+                    const int ch = std::min(c, ret->numChannels - 1);
+                    float v = 0;
+                    if (data.symbolicSampleSize == kSample32 && ret->channelBuffers32 &&
+                        ret->channelBuffers32[ch])
+                        v = ret->channelBuffers32[ch][start + i];
+                    if (data.symbolicSampleSize == kSample64 && ret->channelBuffers64 &&
+                        ret->channelBuffers64[ch])
+                        v = float(ret->channelBuffers64[ch][start + i]);
+                    scratch[4 + c][i] = v;
+                }
         engine.process(scratch[0].data(), scratch[1].data(), scratch[2].data(), scratch[3].data(), n, s, bpm,
-                       beat + start * bpm / (60 * processSetup.sampleRate), playing, midi.data(), nm);
+                       beat + start * bpm / (60 * processSetup.sampleRate), playing, midi.data(), nm,
+                       hasReturn ? scratch[4].data() : nullptr, hasReturn ? scratch[5].data() : nullptr);
         for (int c = 0; c < out.numChannels; ++c)
             for (int i = 0; i < n; ++i) {
                 if (data.symbolicSampleSize == kSample32) {
@@ -345,7 +401,16 @@ tresult PLUGIN_API Controller::initialize(FUnknown *host) {
         parameters.addParameter(name, nullptr, 0, 0, ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly,
                                 3000 + cc);
     }
+    meterTimer = Timer::create(this, 100);
     return kResultOk;
+}
+tresult PLUGIN_API Controller::terminate() {
+    if (meterTimer) {
+        meterTimer->stop();
+        meterTimer->release();
+        meterTimer = nullptr;
+    }
+    return EditControllerEx1::terminate();
 }
 tresult PLUGIN_API Controller::queryInterface(const char *iid, void **obj) {
     QUERY_INTERFACE(iid, obj, IMidiMapping::iid, IMidiMapping)
@@ -375,28 +440,12 @@ IPlugView *PLUGIN_API Controller::createView(FIDString type) {
 tresult PLUGIN_API Controller::getParamStringByValue(ParamID id, ParamValue v, String128 text) {
     if (id >= layout().parameters.size())
         return EditControllerEx1::getParamStringByValue(id, v, text);
-    auto &p = layout().parameters[id];
-    char buf[160];
-    if (!p.choices.empty() && p.steps > 0) {
-        size_t begin = 0;
-        int index = int(std::round(v * p.steps));
-        for (int j = 0; j < index; ++j) {
-            auto k = p.choices.find('|', begin);
-            if (k == std::string::npos)
-                break;
-            begin = k + 1;
-        }
-        auto end = p.choices.find('|', begin);
-        auto name = p.choices.substr(begin, end == std::string::npos ? end : end - begin);
-        snprintf(buf, sizeof(buf), "%s", name.c_str());
-    } else
-        snprintf(buf, sizeof(buf), "%.9g %s", plain(int(id), float(v)), p.unit.c_str());
-    auto wide = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.from_bytes(buf);
-    std::fill_n(text, 128, 0);
-    for (size_t k = 0; k < std::min(size_t(127), wide.size()); ++k)
-        text[k] = TChar(wide[k]);
-    return kResultTrue;
+    const auto display =
+        parameterText(int(id), float(v), getParamNormalized(parameterId("attack.poly")) >= .5);
+    UString(text, 128).fromAscii(display.c_str());
+    return kResultOk;
 }
+
 tresult PLUGIN_API Controller::getParamValueByString(ParamID id, TChar *input, ParamValue &value) {
     if (!input)
         return kResultFalse;
@@ -406,24 +455,59 @@ tresult PLUGIN_API Controller::getParamValueByString(ParamID id, TChar *input, P
     for (int i = 0; i < 127 && input[i]; ++i)
         text[i] = char(input[i]);
     auto &definition = layout().parameters[id];
-    if (!definition.choices.empty() && definition.steps > 0) {
+    if (!definition.choices.empty()) {
         std::istringstream choices(definition.choices);
         std::string label;
         int i = 0;
         while (std::getline(choices, label, '|')) {
             if (label == text) {
-                value = double(i) / definition.steps;
+                value =
+                    double(i) /
+                    std::max(1, int(std::count(definition.choices.begin(), definition.choices.end(), '|')));
                 return kResultTrue;
             }
             ++i;
         }
+    }
+    if (!strcmp(text, "OFF") && (definition.key == "attack.attack" || definition.key == "attack.decay")) {
+        value = definition.key == "attack.attack" ? 0 : 1;
+        return kResultTrue;
     }
     char *end;
     double n = strtod(text, &end);
     if (end == text || !std::isfinite(n))
         return kResultFalse;
     auto &p = layout().parameters[id];
-    value = clean(float((n - p.minimum) / (p.maximum - p.minimum)));
+    const auto &key = p.key;
+    double normalized = (n - p.minimum) / (p.maximum - p.minimum);
+    if (key == "clone.rate")
+        normalized = std::log(std::max(n, .05) / .05) / std::log(160.);
+    else if (key == "clone.level")
+        normalized = (n + 12) / 24;
+    else if (key == "atomic.volume")
+        normalized = std::pow(10., n / 20) / 2;
+    else if (key == "atomic.atoms")
+        normalized = std::log(std::max(n, 1.)) / std::log(64.);
+    else if (key == "atomic.speed")
+        normalized = std::log(std::max(n, .001) / 2000) / std::log(1. / 750.);
+    else if (key == "attack.volume")
+        normalized = (n + 26) / 39;
+    else if (key == "attack.hvol")
+        normalized = (n + 24) / 36;
+    else if (key == "attack.attack" || key == "attack.decay")
+        normalized = std::log(std::max(n, 4.) / 4) /
+                     std::log(getParamNormalized(parameterId("attack.poly")) >= .5 ? 1000. : 2000.);
+    else if (key.find(".mx.") != std::string::npos && key.ends_with("_time"))
+        normalized = std::log(std::max(n, 1.)) / std::log(2500.);
+    else if (key.find(".mx.") != std::string::npos && key.ends_with(".inputTrim"))
+        normalized = (n + 18) / 36;
+    else if (key.find(".mx.") != std::string::npos && key.ends_with(".outputTrim"))
+        normalized = (n + 18) / 30;
+    else if (key.find(".memory.") != std::string::npos && key.ends_with(".delay"))
+        normalized = (n - 20) / 530;
+    else if (p.minimum == 0 && p.maximum == 1 && std::strchr(text, '%'))
+        normalized = n / 100;
+    value = clean(float(normalized));
     return kResultTrue;
 }
 void Controller::requestMeters() {
@@ -443,6 +527,20 @@ tresult PLUGIN_API Controller::notify(IMessage *message) {
         meterIn.store(float(a));
         meterOut.store(float(b));
         meterGR.store(float(c));
+        int64 latency = 0;
+        message->getAttributes()->getInt("latency", latency);
+        if (meterLatency.exchange(int(latency)) != latency && componentHandler)
+            componentHandler->restartComponent(kLatencyChanged);
+        return kResultOk;
+    }
+    if (message && message->getMessageID() && !strcmp(message->getMessageID(), "irLoaded")) {
+        for (auto [id, v] : {std::pair<int, double>{layout().ir, 1}, {layout().blockBypass[4], 0}}) {
+            beginEdit(id);
+            setParamNormalized(id, v);
+            performEdit(id, v);
+            endEdit(id);
+        }
+        fileStatus = "IR loaded / active";
         return kResultOk;
     }
     return EditControllerEx1::notify(message);
@@ -464,7 +562,8 @@ void Controller::loadFile(const char *path, const char *kind) {
         return;
     m->setMessageID(kind);
     m->getAttributes()->setBinary("path", path, uint32(strlen(path)));
-    sendMessage(m);
+    auto result = sendMessage(m);
+    fileStatus = result == kResultOk ? "File loaded" : "File operation failed: check WAV format / length";
     m->release();
 }
 } // namespace multifx
@@ -478,9 +577,9 @@ bool DeinitModule() {
 }
 BEGIN_FACTORY_DEF("Jerzy Audio", "https://github.com/jurekbak71-dev/JerzyMultiFX", "")
 DEF_CLASS2(INLINE_UID_FROM_FUID(multifx::processorId), PClassInfo::kManyInstances, kVstAudioEffectClass,
-           "Jerzy MultiFX", Vst::kDistributable, "Fx|Delay|Reverb|Distortion", "0.1.0", kVstVersionString,
-           multifx::Processor::create)
+           "Jerzy MultiFX", Vst::kDistributable, "Fx|Delay|Reverb|Distortion", MULTIFX_VERSION,
+           kVstVersionString, multifx::Processor::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(multifx::controllerId), PClassInfo::kManyInstances,
-           kVstComponentControllerClass, "Jerzy MultiFX Controller", 0, "", "0.1.0", kVstVersionString,
-           multifx::Controller::create)
+           kVstComponentControllerClass, "Jerzy MultiFX Controller", 0, "", MULTIFX_VERSION,
+           kVstVersionString, multifx::Controller::create)
 END_FACTORY

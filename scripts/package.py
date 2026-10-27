@@ -8,8 +8,8 @@ SDK_REVISION='3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96'
 PRIVATE_NAMES={'REQUIREMENTS_PL.md','JERZY_MULTIFX_PROMPT_DO_CODEXA.md','Wklejony tekst.txt','JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip','token'}
 CACHE_PARTS={'.git','.build','build','dist','__pycache__','node_modules','.cache','references','attachments'}
 RUNTIME_SCRIPTS=('install.sh','uninstall.sh','rollback.sh','diagnostics.sh')
-RUNTIME_RPI=('control.py','web.py','ble.py','lcd.py','lcd_service.py','jerzy-multifx.service','jerzy-multifx-web.service','jerzy-multifx-jack.service','jerzy-multifx-ble.service')
-RUNTIME_UI=('index.html','metadata.js')
+RUNTIME_RPI=('control.py','hardware.py','bluetooth_relay.py','web.py','ble.py','lcd.py','lcd_service.py','jerzy-multifx.service','jerzy-multifx-web.service','jerzy-multifx-jack.service','jerzy-multifx-ble.service')
+RUNTIME_UI=('index.html','metadata.js','app.js','style.css')
 
 def architecture(path,expected):
     b=Path(path).read_bytes()
@@ -64,6 +64,7 @@ def main():
     stage=ROOT/'.build'/('package-'+a.platform)
     if stage.exists():shutil.rmtree(stage) # Only this script's generated staging directory.
     stage.mkdir(parents=True);validation={'architecture':a.platform,'hardware':'AWAITING HARDWARE VALIDATION'}
+    if (a.build/'performance.json').is_file():validation['dsp_benchmark']=json.loads((a.build/'performance.json').read_text())
     if a.platform=='windows':
         candidates=sorted(x for x in a.build.rglob('JerzyMultiFX.vst3') if x.is_file())
         assert candidates,'No compiled VST3 binary'
@@ -78,9 +79,12 @@ def main():
         assert result.returncode==0 and matches and int(matches[-1][1])==0,'VST3 validation failed; see private .build/package-validator.log'
         validation['vst3_validator']={'passed':int(matches[-1][0]),'failed':0,'runner':'native Windows' if os.name=='nt' else 'Wine'}
         shutil.copy(ROOT/'INSTALACJA_VST3_PL.md',stage)
+        shutil.copy2(ROOT/'scripts/install-vst3.cmd',stage/'ZAINSTALUJ-VST3.cmd')
+        shutil.copy2(ROOT/'scripts/install-vst3.ps1',stage/'ZAINSTALUJ-VST3.ps1')
     else:
         binary=a.build/'jerzy-multifx';architecture(binary,'arm64')
         (stage/'bin').mkdir();shutil.copy2(binary,stage/'bin/jerzy-multifx')
+        bridge=a.build/'jerzy-multifx-midi';architecture(bridge,'arm64');shutil.copy2(bridge,stage/'bin/jerzy-multifx-midi')
         (stage/'rpi').mkdir();(stage/'ui').mkdir()
         for name in RUNTIME_RPI:shutil.copy2(ROOT/'rpi'/name,stage/'rpi'/name)
         for name in RUNTIME_UI:shutil.copy2(ROOT/'ui'/name,stage/'ui'/name)

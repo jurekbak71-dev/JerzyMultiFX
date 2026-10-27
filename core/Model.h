@@ -24,6 +24,11 @@ struct Layout {
     std::array<std::array<Group, 4>, 2> delays;
     int order, bypass, blockBypass[5], preamp, drive, compressor, delayMode, delayType[2], digital[2], reverb,
         ir, midiLearn, midiMap, controlCount, factoryProgram;
+    int cpdBypass, slotBypass[2], masterGain, outputLimiter, fuzzModel, fuzzVolume, attackTrigger,
+        attackExpression, attackExpressionEnabled;
+    std::array<std::array<int, 3>, 8> attackExpressionMap{};
+    std::array<int, 4> processorBypass{};
+    std::array<std::array<int, 2>, 2> mxAlgorithms{};
     int add(std::string key, std::string name, float value = 0, float lo = 0, float hi = 1, int steps = 0,
             std::string choices = "", std::string unit = "") {
         int i = int(parameters.size());
@@ -93,6 +98,10 @@ struct Layout {
             delays[s][1] = module(prefix + ".memory", module_memory());
             delays[s][2] = module(prefix + ".reel", module_reel());
             delays[s][3] = module(prefix + ".oil", module_oil());
+            for (size_t id = 0; id < parameters.size(); ++id)
+                for (int slot = 0; slot < 2; ++slot)
+                    if (parameters[id].key == prefix + ".mx.slot" + std::to_string(slot) + "_algorithm")
+                        mxAlgorithms[s][slot] = int(id);
         }
         add("md.crossfade", "MD A/B Crossfade", .5);
         reverb = int(parameters.size());
@@ -121,6 +130,108 @@ struct Layout {
                 float(controlCount - 1), controlCount);
         factoryProgram = add("factory.program", "Factory Program", 0, 0, 7, 7,
                              "Clean|Warm Tape|TS808|Green Russian Fuzz|Chorus|Digital Echo|Plate|Shimmer");
+        // Append only: existing automation/state IDs and CC normalization remain stable.
+        cpdBypass = add("cpd.bypass", "PREAMP Bypass", 0, 0, 1, 1);
+        slotBypass[0] = add("delayA.bypass", "DELAY A Bypass", 0, 0, 1, 1);
+        slotBypass[1] = add("delayB.bypass", "DELAY B Bypass", 0, 0, 1, 1);
+        masterGain = add("master.output", "Output", 60.f / 66.f, -60, 6, 0, "", "dB");
+        outputLimiter = add("master.limiter", "Output protection", 1, 0, 1, 1);
+        fuzzModel = add(
+            "fuzz.model", "FUZZ Circuit", 4.f / 19, 0, 19, 19,
+            "Legacy Triangle|Legacy Ram's Head|Legacy Op-Amp|Legacy Civil War|Legacy Green Russian|Legacy "
+            "NYC|V1 66#5|Triangle 66#8|Triangle 66#6|Triangle 66#11|Jordan Creator 6000|V1 67#1|Ace Tone "
+            "FM-3 Distortion|Ace Tone FM-3 Boost|Triangle 72#1|Triangle 72#2 PNP|Elk / Electro Sound "
+            "Sustainar|Sekova Model 2015|Ram's Head 73#18|Colorsound Supa ToneBender");
+        fuzzVolume = add("fuzz.volume", "FUZZ Volume", .5);
+        attackTrigger = add("attack.trigger", "Manual trigger", 0, 0, 1, 1);
+        attackExpression = add("attack.expression", "Expression / CC11", 1);
+        attackExpressionEnabled = add("attack.expressionEnabled", "Enable expression", 0, 0, 1, 1);
+        const char *targets[]{"Volume",      "Blend",    "Attack", "Decay",
+                              "Sensitivity", "Harmonix", "Tone",   "Harmonix Volume"};
+        for (int j = 0; j < 8; ++j) {
+            const std::string key = "attack.expr" + std::to_string(j) + ".";
+            attackExpressionMap[j][0] =
+                add(key + "on", std::string(targets[j]) + " expression", j == 0 ? 1 : 0, 0, 1, 1);
+            attackExpressionMap[j][1] = add(key + "heel", std::string(targets[j]) + " heel", 0);
+            attackExpressionMap[j][2] = add(key + "toe", std::string(targets[j]) + " toe", 1);
+        }
+        // Version-2 states use a fixed MIDI address span; appended controls keep their IDs.
+        controlCount = maxParameters;
+        parameters[midiLearn].maximum = maxParameters - 1;
+        parameters[midiLearn].steps = maxParameters;
+        for (int cc = 0; cc < 128; ++cc) {
+            parameters[midiMap + cc].maximum = maxParameters - 1;
+            parameters[midiMap + cc].steps = maxParameters;
+        }
+
+        for (int j = 0; j < 4; ++j) {
+            processorBypass[j] = -1;
+            for (unsigned k = 0; k < processors[j].api->parameter_count; ++k)
+                if (std::string(processors[j].api->parameters[k].id) == "bypass")
+                    processorBypass[j] = processors[j].start + int(k);
+        }
+        if (processorBypass[0] >= 0)
+            parameters[processorBypass[0]].initial = 1;
+        auto annotate = [&](const std::string &key, const std::string &choices) {
+            for (auto &d : parameters)
+                if (d.key == key) {
+                    d.choices = choices;
+                    d.steps = int(std::count(choices.begin(), choices.end(), '|'));
+                }
+        };
+        annotate(
+            "clone.model",
+            "Small Clone|Clone Theory SAD|Clone Theory MN|Electric Mistress V2|Electric Mistress V3|Electric "
+            "Mistress V4|Electric Mistress V5|Electric Mistress V6|Deluxe Mistress V1|Deluxe Mistress "
+            "V2|Deluxe Mistress V3|Deluxe Mistress V4|Deluxe Mistress V5|Stereo Mistress Inspired");
+        annotate("clone.division", "4 bars|2 bars|1 bar|1/2 D|1/2|1/2 T|1/4 D|1/4|1/4 T|1/8 D|1/8|1/8 T|1/16 "
+                                   "D|1/16|1/16 T|1/32|1/32 T|1/64");
+        annotate("atomic.motion", "Cluster|Arpeggio|Random harmonic");
+        annotate("atomic.division", "1/16|1/8|1/4|1/2|1 bar");
+        annotate("attack.attackShape", "Linear|Parabolic|S-Curve");
+        annotate("attack.decayShape", "Linear|Parabolic|S-Curve");
+        annotate("attack.triggerMode", "Auto|Manual|MIDI");
+        for (auto &d : parameters) {
+            if (d.key.ends_with(".bypass") || d.key == "clone.filter" || d.key == "clone.sync" ||
+                d.key == "atomic.sync" || d.key == "atomic.tapEnabled" || d.key == "attack.poly" ||
+                d.key == "attack.fuzz" || d.key == "attack.compMono" || d.key == "attack.compPoly" ||
+                d.key == "attack.continuousMono" || d.key == "attack.continuousPoly" ||
+                d.key == "attack.useReturn" || d.key == "attack.returnBypass" ||
+                d.key == "attack.fuzzOnReturn")
+                d.steps = 1;
+        }
+        for (const std::string slot : {"delayA", "delayB"}) {
+            annotate(slot + ".memory.model",
+                     "EH7500 / SAD|Issue A / SAD|Squelch / SAD|Deluxe / MN|Boy / BL|Toy / BL");
+            annotate(slot + ".memory.division",
+                     "1/1|1/1 D|1/1 T|1/2|1/2 D|1/2 T|1/4|1/4 D|1/4 T|1/8|1/8 D|1/8 T|1/16|1/16 D|1/16 "
+                     "T|1/32|1/32 D|1/32 T|1/64|1/64 D|1/64 T");
+            annotate(slot + ".mx.routing", "Series|Parallel|Split L/R");
+            annotate(slot + ".mx.machineCondition", "Serviced|Used|Worn|Damaged");
+            for (int fx = 0; fx < 4; ++fx) {
+                annotate(slot + ".mx.fx" + std::to_string(fx) + "_type",
+                         "Off|Chorus|Flanger|LoFi|Overdrive|Granular");
+                annotate(slot + ".mx.fx" + std::to_string(fx) + "_route", "Input / Pre|Wet only");
+            }
+            for (int j = 0; j < 2; ++j) {
+                const auto pre = slot + ".mx.slot" + std::to_string(j) + "_";
+                annotate(pre + "algorithm",
+                         "Volante|El Capistan|Olivera|EC-1|Brig|Deco|DIG|Space Echo 202|DM-101");
+                annotate(pre + "division", "1/1|1/2 D|1/2|1/4 D|1/4|1/8 D|1/8|1/4 T|1/16|1/8 T");
+                annotate(pre + "algo4_0", "3205|3005|MULTI");
+                annotate(pre + "algo1_7", "FIXED|MULTI|SINGLE");
+                annotate(pre + "algo5_3", "SUM|INVERT|BOUNCE");
+                annotate(pre + "algo6_0", "24/96|ADM|12 BIT");
+                annotate(pre + "algo8_0", "CLASSIC|VINTAGE|MODERN|MULTI-HEAD|NON-LINEAR|AMBIENCE|REFLECT|"
+                                          "DOUBLING+DELAY|WIDE|DUAL MOD|PAN|PATTERN");
+                annotate(pre + "enable", "Off|On");
+                if (j == 1)
+                    for (auto &d : parameters)
+                        if (d.key == pre + "enable")
+                            d.initial = 0;
+                annotate(pre + "sync", "Free|Sync");
+            }
+        }
     }
 };
 inline const Layout &layout() {

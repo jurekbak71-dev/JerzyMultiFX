@@ -17,8 +17,14 @@ class Engine {
     void prepare(double rate, int maxBlock = 1024);
     void process(const float *l, const float *r, float *ol, float *or_, int frames, const State &,
                  double bpm = 120, double beat = 0, bool playing = false, const JAMidi *midi = nullptr,
-                 unsigned midiCount = 0) noexcept;
+                 unsigned midiCount = 0, const float *returnL = nullptr,
+                 const float *returnR = nullptr) noexcept;
     bool loadIR(const float *l, const float *r, int frames);
-    static constexpr int latency = chainLatency;
+    static constexpr int latency = chainLatency; // Maximum, for buffers only.
+    static int latencyFor(const State &);
+    int currentLatency() const;
+    bool prepareState(const State &); // Control thread only: warm active resources before starting audio.
+    bool delaysReady() const;
+    std::atomic<uint64_t> clips{0};
 };
 } // namespace multifx

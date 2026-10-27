@@ -4,7 +4,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define JA_ABI 1u
+#define JA_ABI 2u
 #define JA_MAX_PARAMETERS 1024u
 typedef struct {
     const char *id, *label, *unit, *choices;
@@ -24,6 +24,8 @@ typedef struct {
     const float *parameters;
     const JAMidi *midi;
     uint32_t midi_count;
+    const float *return_input[2];
+    const float *control_parameters;
 } JAProcess;
 typedef struct {
     uint32_t size, abi;

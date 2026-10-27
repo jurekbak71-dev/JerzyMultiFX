@@ -3,7 +3,10 @@ import hashlib,io,json,struct,tarfile,zipfile
 from pathlib import Path,PurePosixPath
 from package import architecture,VERSION,PRIVATE_NAMES,CACHE_PARTS
 root=Path(__file__).resolve().parents[1]
-for package in sorted((root/'dist').glob('JerzyMultiFX-*')):
+packages=[root/'dist'/name for name in (f'JerzyMultiFX-VST3-Windows-x64-v{VERSION}.zip',f'JerzyMultiFX-RPi-aarch64-v{VERSION}.tar.gz')]
+assert any(p.exists() for p in packages),'No current product packages'
+for package in packages:
+    if not package.exists():continue
     files={}
     if package.suffix=='.zip':
         with zipfile.ZipFile(package) as z:

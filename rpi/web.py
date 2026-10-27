@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import argparse, hashlib, hmac, http.server, json, os, secrets
+import argparse, hashlib, hmac, http.server, json, os, secrets, urllib.parse
 from pathlib import Path
 from control import rpc
+import hardware
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
@@ -23,6 +24,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if self.path in ('/','/index.html'):
                 return self.send(200,(self.server.ui/'index.html').read_bytes(),'text/html; charset=utf-8')
+            if self.path in ('/metadata.js','/app.js','/style.css'):
+                filename=self.path.removeprefix('/')
+                return self.send(200,(self.server.ui/filename).read_bytes(),'text/css; charset=utf-8' if filename.endswith('.css') else 'text/javascript; charset=utf-8')
             if self.path == '/metadata.js':
                 return self.send(200,(self.server.ui/'metadata.js').read_bytes(),'text/javascript; charset=utf-8')
             if not self.authorized(): return self.send(401,{'error':'Token required'})
@@ -30,6 +34,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 source=self.server.ui.parent/'source.tar.gz'
                 if not source.exists(): return self.send(404,{'error':'Source archive is included in binary packages'})
                 return self.send(200,source.read_bytes(),'application/gzip')
+            if self.path == '/api/presets':
+                directory=self.server.data/'presets'
+                names=sorted(p.stem for p in directory.glob('*.jmfx') if p.is_file() and not p.is_symlink() and 1<=len(p.stem)<=64 and all(c.isalnum() or c in ' -_' for c in p.stem))
+                return self.send(200,{'ok':True,'presets':names})
+            if self.path == '/api/hardware': return self.send(200,hardware.status(self.server.data))
             if self.path == '/api/state': return self.send(200,rpc('STATE'))
             if self.path == '/api/metadata': return self.send(200,rpc('METADATA'))
             return self.send(404,{'error':'Unknown resource'})
@@ -49,19 +58,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not path.exists(): path.write_bytes(body)
                 result=rpc('IR '+str(path))
                 if not result.get('ok'): path.unlink(missing_ok=True)
+                else:
+                    name=Path(urllib.parse.unquote(self.headers.get('X-IR-Name',''))).name
+                    if name and len(name)<=128 and all(ord(c)>=32 for c in name):rpc('IRNAME '+name)
                 return self.send(200 if result.get('ok') else 422,result)
             p=json.loads(body)
+            if self.path == '/api/hardware': return self.send(200,hardware.action(p))
+            if self.path == '/api/view':
+                fields=[p.get(k,0) for k in ('block','section','mxSlot','advanced')]
+                if any(type(v) is not int for v in fields):raise ValueError('View')
+                return self.send(200,rpc('VIEW '+' '.join(map(str,fields))))
             if self.path == '/api/set':
                 i,v=p['id'],p['value']
                 if type(i) is not int or not isinstance(v,(float,int)) or not 0<=v<=1: raise ValueError('Parameter')
                 return self.send(200,rpc(f'SET {i} {v}'))
             if self.path in ('/api/save','/api/load'):
                 name=p['name']
-                if not isinstance(name,str) or not name or len(name)>64 or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_' for c in name): raise ValueError('Preset name')
+                if not isinstance(name,str) or not name or len(name)>64 or any(not(c.isalnum() or c in ' -_') for c in name) or name!=name.strip(): raise ValueError('Preset name')
                 path=self.server.data/'presets'/(name+'.jmfx');path.parent.mkdir(parents=True,exist_ok=True)
                 return self.send(200,rpc(('SAVE ' if self.path=='/api/save' else 'LOAD ')+str(path)))
             return self.send(404,{'error':'Unknown operation'})
-        except (ValueError,KeyError,TypeError,OSError): return self.send(400,{'error':'Invalid request or unavailable core'})
+        except (ValueError,KeyError,TypeError,OSError) as e: return self.send(400,{'error':str(e) or 'Invalid request or unavailable core'})
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--host',default='127.0.0.1');p.add_argument('--port',type=int,default=8097);p.add_argument('--data',type=Path,required=True);p.add_argument('--ui',type=Path,default=Path(__file__).resolve().parents[1]/'ui');a=p.parse_args()

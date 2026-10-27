@@ -1,52 +1,25 @@
-JERZY MULTIFX — NAJPROSTSZA INSTALACJA NA RASPBERRY PI
+JERZY MULTIFX — INSTALACJA NA TWOIM RASPBERRY PI
 
-Potrzebujesz:
-- Raspberry Pi z Raspberry Pi OS 64-bit Trixie i dostępem do internetu.
-- Karty dźwiękowej USB z wejściem i wyjściem. Samo wyjście słuchawkowe nie wystarczy.
-- Na czas instalacji: ekranu, klawiatury i myszy podłączonych do Raspberry Pi.
+1. Włącz Raspberry Pi i HeadRush Core. Ścisz głośniki.
+   Komputer Windows musi być w tej samej sieci domowej.
+2. Pobierz JerzyMultiFX-INSTALATOR.zip. Rozpakuj CAŁY ZIP do folderu.
+3. W rozpakowanym folderze kliknij dwa razy ZAINSTALUJ-NA-RASPBERRY.cmd.
+   Podawaj hasło użytkownika jerzy, gdy zapyta. Przy wpisywaniu hasła
+   nie widać znaków — to normalne. Poczekaj na napis GOTOWE.
 
-Nie wgrywaj ZIP na kartę pamięci jako obrazu systemu.
-Jeśli system masz już zainstalowany, nie kasuj go.
+Panel otworzy się w przeglądarce: http://bassambient.local:8097
+Wklej klucz dostępu pokazany przez instalator, jeśli panel o niego poprosi.
+Nie wysyłaj tego klucza innym osobom.
 
-1. Pobierz plik JerzyMultiFX-RPi-PROSTA-INSTALACJA.zip na Raspberry Pi.
-   Możesz też pobrać na komputer i przenieść plik pendrivem.
+Instalator przeznaczony jest dla istniejącego bassambient, użytkownika jerzy,
+systemu Debian 13 ARM64 i działającego HeadRush Core / JACK.
+Zachowuje Wi-Fi, ustawienia karty dźwiękowej i zapisane presety.
+Uruchamia nową wersję od czystego brzmienia. Poprzedni program i jego stan
+zostają na karcie; instalator pokazuje komendę pozwalającą do niego wrócić.
+Dodaje obsługę kontrolerów USB MIDI, jeśli jej brakuje; potrzebny jest internet.
+Nie formatuje karty pamięci i nie uruchamia drugiego serwera dźwięku.
 
-2. Kliknij ZIP prawym przyciskiem myszy i wybierz „Rozpakuj tutaj”
-   (po angielsku: „Extract Here”). Otwórz folder JerzyMultiFX-RPi-INSTALACJA.
+Jeśli coś się nie uda, zrób zdjęcie komunikatu. Zasłoń klucz dostępu.
+Nie formatuj karty ani nie instaluj systemu od nowa.
 
-3. W pustym miejscu tego folderu kliknij prawym przyciskiem myszy
-   i wybierz „Otwórz w terminalu” / „Open in Terminal”.
-
-4. Wklej poniższą linijkę i naciśnij Enter:
-
-   bash instaluj-rpi.sh
-
-5. Wykonuj polecenia na ekranie. Gdy zapyta o hasło, wpisz hasło użytkownika
-   Raspberry Pi i naciśnij Enter. Podczas wpisywania nie widać znaków — to normalne.
-   Wybierz numer swojej karty dźwiękowej. Poczekaj na napis GOTOWE.
-
-6. Na Raspberry Pi otwórz przeglądarkę i wpisz:
-
-   http://localhost:8097
-
-   Instalator wyświetli klucz dostępu. Skopiuj go i wklej na stronie.
-   Nie przesyłaj tego klucza innym osobom.
-   Instalator poda też adres do otwarcia na telefonie w tej samej sieci Wi-Fi.
-
-7. Instrument podłącz do wejścia wybranej karty dźwiękowej,
-   a słuchawki lub głośniki do jej wyjścia. Zacznij od małej głośności.
-   Program będzie uruchamiał się sam po ponownym włączeniu Raspberry Pi.
-
-JEŚLI SIĘ NIE UDA
-Zrób zdjęcie komunikatu i prześlij je w rozmowie. Zasłoń klucz dostępu.
-Nie formatuj karty pamięci i nie instaluj wszystkiego od nowa.
-Jeśli pojawi się informacja o niewłaściwym systemie, instalator zatrzyma się.
-Nie potrafi sam zmienić starszego systemu na Trixie.
-
-CO ZMIENIA INSTALATOR
-Dodaje program, potrzebne składniki systemowe i automatyczne uruchamianie.
-Przed zastąpieniem poprzedniej instalacji MultiFX robi jej kopię zapasową.
-Nie formatuje dysków ani kart pamięci. Nie konfiguruje Bluetooth.
-
-To wersja próbna. Może być słyszalne opóźnienie między zagraniem a dźwiękiem.
-Nie została jeszcze sprawdzona na fizycznym Raspberry Pi i Twojej karcie audio.
+To wersja próbna. Nowa aktualizacja nadal wymaga odsłuchu na Twoim sprzęcie.

@@ -34,14 +34,15 @@ def main():
     target = a.output/'JerzyMultiFX-INSTALATOR.zip'
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('JerzyMultiFX-AKTUALIZUJ.py', script)
-        z.writestr('PRZECZYTAJ-MNIE.txt', 'Instalator dla bassambient, użytkownik jerzy, HeadRush Core.\nZachowuje sieć i dotychczasowy JACK. Stary program można przywrócić.\nPo skopiowaniu pliku na Raspberry Pi uruchom bez sudo:\npython3 ~/JerzyMultiFX-AKTUALIZUJ.py\nNie został jeszcze przetestowany na fizycznym Raspberry Pi.\n')
+        z.writestr('ZAINSTALUJ-NA-RASPBERRY.cmd',(root/'scripts/install-from-windows.cmd').read_bytes())
+        z.writestr('PRZECZYTAJ-MNIE.txt', 'ROZPAKUJ CALY ZIP. Na Windows kliknij dwa razy ZAINSTALUJ-NA-RASPBERRY.cmd.\nWlacz HeadRush i scisz glosniki. Podawaj haslo jerzy, gdy zapyta.\nInstalator dla bassambient, użytkownik jerzy, HeadRush Core.\nZachowuje sieć i dotychczasowy JACK. Stary program można przywrócić.\nPo skopiowaniu pliku na Raspberry Pi uruchom bez sudo:\npython3 ~/JerzyMultiFX-AKTUALIZUJ.py\nNie został jeszcze przetestowany na fizycznym Raspberry Pi.\n')
     with zipfile.ZipFile(target) as z:
         assert z.testzip() is None
-        assert z.namelist() == ['JerzyMultiFX-AKTUALIZUJ.py', 'PRZECZYTAJ-MNIE.txt']
+        assert z.namelist() == ['JerzyMultiFX-AKTUALIZUJ.py', 'ZAINSTALUJ-NA-RASPBERRY.cmd', 'PRZECZYTAJ-MNIE.txt']
         assert z.read('JerzyMultiFX-AKTUALIZUJ.py').decode() == script
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
     (a.output/'SHA256SUMS-INSTALATOR').write_text(digest+'  '+target.name+'\n')
-    (a.output/'FILES-INSTALATOR.json').write_text(json.dumps({'binary_source': info, 'files': [{'name':target.name,'bytes':target.stat().st_size,'sha256':digest}], 'contents':['JerzyMultiFX-AKTUALIZUJ.py','PRZECZYTAJ-MNIE.txt']}, indent=2)+'\n')
+    (a.output/'FILES-INSTALATOR.json').write_text(json.dumps({'binary_source': info, 'files': [{'name':target.name,'bytes':target.stat().st_size,'sha256':digest}], 'contents':['JerzyMultiFX-AKTUALIZUJ.py','ZAINSTALUJ-NA-RASPBERRY.cmd','PRZECZYTAJ-MNIE.txt']}, indent=2)+'\n')
     print('Verified self-contained AArch64 installer:', target.name)
 
 if __name__ == '__main__': main()

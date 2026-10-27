@@ -30,6 +30,21 @@ with tempfile.TemporaryDirectory(prefix='multifx-audio-') as tmp:
   rpc(f'SET {learn} {(gain+1)/metadata["controlCount"]}')
   midi=probe(True);state=rpc('STATE');assert state['values'][gain]>.99,'USB MIDI CC Learn'
   assert state['sampleRate']==48000 and midi['rms']>.001 and midi['peak']>.001
+  assert rpc('BUFFER 256')['ok'];assert rpc('STATE')['bufferSamples']==256
+  assert rpc('BUFFER 128')['ok'];assert rpc('STATE')['bufferSamples']==128
+  bridge=Path(tmp)/'midi.sock';start([str(root/'.build/native/jerzy-multifx-midi'),str(bridge),str(Path(tmp)/'midi-status.json')],'midi-bridge')
+  for _ in range(100):
+   if bridge.exists() and any(p['name'].startswith('JerzyBluetoothMIDI') and p['connected'] for p in rpc('PORTS')['ports']):break
+   time.sleep(.025)
+  else:raise RuntimeError('Native Bluetooth MIDI bridge did not connect')
+  with socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM) as incoming:incoming.sendto(bytes([176,74,64]),str(bridge))
+  for _ in range(100):
+   if abs(rpc('STATE')['values'][gain]-64/127)<1e-4:break
+   time.sleep(.01)
+  else:raise RuntimeError('BLE transport -> native JACK bridge -> actual mapped DSP parameter failed')
+  ports=rpc('AUDIOPORTS');assert len(ports['inputs'])>=2 and len(ports['outputs'])>=2
+  assert rpc('AUDIOSET 4 '+ports['inputs'][0])['ok'];assert rpc('AUDIOSET 4 ')['ok']
+
   print('PASS real JACK audio signal + gain response + USB-MIDI CC74 learn; baseline/louder:',baseline,louder,'xruns',state['xruns'])
  except BaseException:
   for p in Path(tmp).glob('*.log'):print(p.name,p.read_text()[-2500:])

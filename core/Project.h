@@ -34,7 +34,7 @@ inline void u32(std::vector<uint8_t> &b, uint32_t x) {
 inline std::vector<uint8_t> encode(const Project &p) {
     std::vector<uint8_t> b;
     u32(b, 0x31464d4a);
-    u32(b, 1);
+    u32(b, 2);
     const auto &l = layout();
     u32(b, uint32_t(l.parameters.size()));
     for (size_t i = 0; i < l.parameters.size(); ++i) {
@@ -66,7 +66,10 @@ inline bool decode(const std::vector<uint8_t> &b, Project &result) {
             x |= uint32_t(b[pos++]) << (i * 8);
         return x;
     };
-    if (read() != 0x31464d4a || read() != 1)
+    if (read() != 0x31464d4a)
+        return false;
+    const auto version = read();
+    if (version != 1 && version != 2)
         return false;
     auto count = read();
     if (count > maxParameters)
@@ -81,6 +84,12 @@ inline bool decode(const std::vector<uint8_t> &b, Project &result) {
         for (size_t k = 0; k < l.parameters.size(); ++k)
             if (keyHash(l.parameters[k].key) == hash)
                 p.state.values[k] = value;
+    }
+    if (version == 1) {
+        p.state.values[l.midiLearn] = std::round(p.state.values[l.midiLearn] * l.midiLearn) / l.controlCount;
+        for (int cc = 0; cc < 128; ++cc)
+            p.state.values[l.midiMap + cc] =
+                std::round(p.state.values[l.midiMap + cc] * l.midiLearn) / l.controlCount;
     }
     auto frames = read();
     p.irRate = read();
@@ -185,7 +194,7 @@ inline bool loadWave(const std::string &path, double rate, Project &project) {
                    bb = std::min(a + 1, size_t(sourceFrames - 1));
             (c ? next.irR : next.irL)[i] = source[c][a] + (source[c][bb] - source[c][a]) * float(x - a);
         }
-    next.irName = path;
+    next.irName = path.substr(path.find_last_of("/\\") + 1);
     next.irRate = rate;
     project = std::move(next);
     return true;

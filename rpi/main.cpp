@@ -1,4 +1,5 @@
 #include "core/Engine.h"
+#include "core/Presentation.h"
 #include "core/Presets.h"
 #include "core/Project.h"
 #include <chrono>
@@ -6,6 +7,7 @@
 #include <dlfcn.h>
 #include <iostream>
 #include <netinet/in.h>
+#include <set>
 #include <sstream>
 #include <sys/socket.h>
 #include <thread>
@@ -28,7 +30,11 @@ std::string quote(const std::string &x) {
 struct Jack {
     void *library = nullptr;
     void *client = nullptr;
-    void *ports[5]{};
+    void *ports[7]{};
+    std::atomic<bool> returnConnected{false};
+    std::array<std::string, 6> routing{}, previousRouting{};
+    std::set<std::string> disabledMidi;
+    std::atomic<bool> serverLost{false};
     using Frames = uint32_t;
     void *(*client_open)(const char *, unsigned, unsigned *, ...) = nullptr;
     int (*client_close)(void *) = nullptr;
@@ -43,7 +49,11 @@ struct Jack {
     const char *(*port_name)(const void *) = nullptr;
     const char **(*get_ports)(void *, const char *, const char *, unsigned) = nullptr;
     int (*connect)(void *, const char *, const char *) = nullptr;
+    int (*disconnect)(void *, const char *, const char *) = nullptr;
+    int (*set_buffer_size)(void *, Frames) = nullptr;
+    void (*on_shutdown)(void *, void (*)(void *), void *) = nullptr;
     int (*port_connected_to)(const void *, const char *) = nullptr;
+    int (*port_connected)(const void *) = nullptr;
     void (*free_)(void *) = nullptr;
     float (*cpu_load)(void *) = nullptr;
     uint32_t (*midi_get_event_count)(void *) = nullptr;
@@ -76,22 +86,35 @@ struct Jack {
         LOAD(port_name);
         LOAD(get_ports);
         LOAD(connect);
+        LOAD(disconnect);
+        LOAD(set_buffer_size);
+        LOAD(on_shutdown);
         LOAD(port_connected_to);
+        LOAD(port_connected);
         symbol(free_, "jack_free");
         LOAD(cpu_load);
         LOAD(midi_get_event_count);
         LOAD(midi_event_get);
 #undef LOAD
         unsigned status = 0;
-        client = client_open("JerzyMultiFX", 1u, &status);
+        client = client_open("JerzyMultiFX", 3u, &status);
         if (!client)
             throw std::runtime_error(
                 "JACK unavailable: select/start a device in the audio configuration first");
+        on_shutdown(
+            client,
+            [](void *opaque) {
+                static_cast<Jack *>(opaque)->serverLost.store(true);
+                running.store(false);
+            },
+            this);
         ports[0] = port_register(client, "input_L", "32 bit float mono audio", 1, 0);
         ports[1] = port_register(client, "input_R", "32 bit float mono audio", 1, 0);
         ports[2] = port_register(client, "output_L", "32 bit float mono audio", 2, 0);
         ports[3] = port_register(client, "output_R", "32 bit float mono audio", 2, 0);
         ports[4] = port_register(client, "midi_control", "8 bit raw midi", 1, 0);
+        ports[5] = port_register(client, "return_L", "32 bit float mono audio", 1, 0);
+        ports[6] = port_register(client, "return_R", "32 bit float mono audio", 1, 0);
         for (void *p : ports)
             if (!p)
                 throw std::runtime_error("JACK port registration");
@@ -100,20 +123,47 @@ struct Jack {
         for (unsigned direction : {1u, 2u}) {
             auto names = get_ports(client, nullptr, "32 bit float mono audio", direction | 4u);
             if (names) {
-                for (int c = 0; c < 2 && names[c]; ++c) {
-                    if (direction == 2) {
-                        if (!port_connected_to(ports[c], names[c]))
-                            connect(client, names[c], port_name(ports[c]));
-                    } else if (!port_connected_to(ports[c + 2], names[c]))
-                        connect(client, port_name(ports[c + 2]), names[c]);
+                int count = 0;
+                while (names[count])
+                    ++count;
+                for (int channel = 0; channel < 2; ++channel) {
+                    const int setting = direction == 2 ? channel : channel + 2;
+                    const int port = setting;
+                    std::string target =
+                        routing[setting].empty() ? (channel < count ? names[channel] : "") : routing[setting];
+                    if (previousRouting[setting] != target && !previousRouting[setting].empty() &&
+                        port_connected_to(ports[port], previousRouting[setting].c_str())) {
+                        if (direction == 2)
+                            disconnect(client, previousRouting[setting].c_str(), port_name(ports[port]));
+                        else
+                            disconnect(client, port_name(ports[port]), previousRouting[setting].c_str());
+                    }
+                    previousRouting[setting] = target;
+                    if (!target.empty() && !port_connected_to(ports[port], target.c_str())) {
+                        if (direction == 2)
+                            connect(client, target.c_str(), port_name(ports[port]));
+                        else
+                            connect(client, port_name(ports[port]), target.c_str());
+                    }
                 }
                 free_(const_cast<char **>(names));
             }
         }
+        for (int channel = 0; channel < 2; ++channel) {
+            const int setting = 4 + channel, port = 5 + channel;
+            const auto &target = routing[setting];
+            if (previousRouting[setting] != target && !previousRouting[setting].empty() &&
+                port_connected_to(ports[port], previousRouting[setting].c_str()))
+                disconnect(client, previousRouting[setting].c_str(), port_name(ports[port]));
+            previousRouting[setting] = target;
+            if (!target.empty() && !port_connected_to(ports[port], target.c_str()))
+                connect(client, target.c_str(), port_name(ports[port]));
+        }
+        returnConnected.store(port_connected(ports[5]) > 0 || port_connected(ports[6]) > 0);
         auto midi = get_ports(client, nullptr, "8 bit raw midi", 2);
         if (midi) {
             for (int i = 0; midi[i]; ++i)
-                if (!port_connected_to(ports[4], midi[i]))
+                if (!disabledMidi.contains(midi[i]) && !port_connected_to(ports[4], midi[i]))
                     connect(client, midi[i], port_name(ports[4]));
             free_(const_cast<char **>(midi));
         }
@@ -165,11 +215,20 @@ struct Host {
         auto &lay = multifx::layout();
         for (uint32_t i = 0; i < h.jack.midi_get_event_count(buffer) && nm < 128; ++i) {
             Jack::MidiEvent e{};
-            if (!h.jack.midi_event_get(&e, buffer, i) && e.size >= 2 && e.size <= 3) {
-                midi[nm++] = {e.time, 3, {e.buffer[0], e.buffer[1], uint8_t(e.size == 3 ? e.buffer[2] : 0)}};
-                if ((e.buffer[0] & 240) == 192)
-                    h.program.store(e.buffer[1]);
-                if ((e.buffer[0] & 240) == 176) {
+            if (!h.jack.midi_event_get(&e, buffer, i) && e.size >= 1 && e.size <= 3) {
+                midi[nm++] = {e.time,
+                              uint32_t(e.size),
+                              {e.buffer[0], uint8_t(e.size > 1 ? e.buffer[1] : 0),
+                               uint8_t(e.size == 3 ? e.buffer[2] : 0)}};
+                if ((e.buffer[0] & 240) == 192 && e.size > 1) {
+                    if (e.buffer[1] < 8) {
+                        multifx::selectFactory(s, e.buffer[1]);
+                        h.setState(s);
+                        h.dirty.store(true);
+                    } else
+                        h.program.store(e.buffer[1]);
+                }
+                if ((e.buffer[0] & 240) == 176 && e.size == 3) {
                     int cc = e.buffer[1],
                         target = int(multifx::plain(lay.midiLearn, s.values[lay.midiLearn]));
                     if (target >= 0) {
@@ -191,7 +250,12 @@ struct Host {
              r = static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[1], n));
         auto ol = static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[2], n)),
              orr = static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[3], n));
-        h.engine.process(l, r, ol, orr, int(n), s, h.bpm.load(), 0, false, midi.data(), nm);
+        h.engine.process(
+            l, r, ol, orr, int(n), s, h.bpm.load(), 0, false, midi.data(), nm,
+            h.jack.returnConnected.load() ? static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[5], n))
+                                          : nullptr,
+            h.jack.returnConnected.load() ? static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[6], n))
+                                          : nullptr);
         return 0;
     }
     static int xrun(void *p) {
@@ -202,13 +266,156 @@ struct Host {
         std::istringstream in(line);
         std::string cmd;
         in >> cmd;
+        if (cmd == "VIEW") {
+            multifx::PanelSelection selection;
+            int advanced = 0;
+            if (!(in >> selection.block >> selection.section >> selection.mxSlot >> advanced) ||
+                selection.block < 0 || selection.block > 4 || selection.section < 0 ||
+                selection.section > 3 || selection.mxSlot < 0 || selection.mxSlot > 1)
+                return "{\"ok\":false}";
+            selection.advanced = advanced != 0;
+            auto ids = multifx::panelParameters(selection, state());
+            std::ostringstream out;
+            out << "{\"ok\":true,\"ids\":[";
+            for (size_t k = 0; k < ids.size(); ++k) {
+                if (k)
+                    out << ',';
+                out << ids[k];
+            }
+            out << "]}";
+            return out.str();
+        }
+        if (cmd == "AUDIOPORTS") {
+            std::ostringstream out;
+            out << "{\"ok\":true";
+            for (unsigned direction : {2u, 1u}) {
+                out << (direction == 2 ? ",\"inputs\":[" : ",\"outputs\":[");
+                if (jack.client) {
+                    auto names =
+                        jack.get_ports(jack.client, nullptr, "32 bit float mono audio", direction | 4u);
+                    if (names) {
+                        for (int i = 0; names[i]; ++i) {
+                            if (i)
+                                out << ',';
+                            out << quote(names[i]);
+                        }
+                        jack.free_(const_cast<char **>(names));
+                    }
+                }
+                out << ']';
+            }
+            out << ",\"routing\":[";
+            for (int i = 0; i < 6; ++i) {
+                if (i)
+                    out << ',';
+                out << quote(jack.routing[i]);
+            }
+            out << "]}";
+            return out.str();
+        }
+        if (cmd == "AUDIOSET") {
+            int index = -1;
+            if (!(in >> index) || index < 0 || index > 5 || !jack.client)
+                return "{\"ok\":false}";
+            std::string name;
+            std::getline(in, name);
+            if (!name.empty())
+                name.erase(0, 1);
+            bool found = name.empty();
+            auto names = jack.get_ports(jack.client, nullptr, "32 bit float mono audio",
+                                        (index < 2 || index > 3) ? 6u : 5u);
+            if (names) {
+                for (int i = 0; names[i]; ++i)
+                    if (name == names[i])
+                        found = true;
+                jack.free_(const_cast<char **>(names));
+            }
+            if (!found)
+                return "{\"ok\":false}";
+            jack.routing[index] = name;
+            jack.connectPorts();
+            if (const char *data = std::getenv("MULTIFX_DATA")) {
+                std::ofstream file(std::string(data) + "/audio-routing.txt");
+                for (const auto &port : jack.routing)
+                    file << port << '\n';
+            }
+            return "{\"ok\":true}";
+        }
+        if (cmd == "PORTS") {
+            std::ostringstream out;
+            out << "{\"ok\":true,\"ports\":[";
+            if (jack.client) {
+                auto names = jack.get_ports(jack.client, nullptr, "8 bit raw midi", 2);
+                if (names) {
+                    for (int i = 0; names[i]; ++i) {
+                        if (i)
+                            out << ',';
+                        out << "{\"name\":" << quote(names[i]) << ",\"connected\":"
+                            << (jack.port_connected_to(jack.ports[4], names[i]) ? "true" : "false") << "}";
+                    }
+                    jack.free_(const_cast<char **>(names));
+                }
+            }
+            out << "]}";
+            return out.str();
+        }
+        if (cmd == "BUFFER") {
+            int frames = 0;
+            if (!(in >> frames) ||
+                (frames != 64 && frames != 128 && frames != 256 && frames != 512 && frames != 1024) ||
+                !jack.client)
+                return "{\"ok\":false,\"error\":\"Invalid buffer or no audio server\"}";
+            if (jack.set_buffer_size(jack.client, uint32_t(frames)) ||
+                jack.get_buffer_size(jack.client) != uint32_t(frames))
+                return "{\"ok\":false,\"error\":\"Audio device rejected buffer\"}";
+            return "{\"ok\":true}";
+        }
+        if (cmd == "MIDIINPUT") {
+            int enable = 0;
+            if (!(in >> enable) || (enable != 0 && enable != 1) || !jack.client)
+                return "{\"ok\":false}";
+            std::string name;
+            std::getline(in, name);
+            if (name.size() < 2)
+                return "{\"ok\":false}";
+            name.erase(0, 1);
+            bool found = false;
+            auto names = jack.get_ports(jack.client, nullptr, "8 bit raw midi", 2);
+            if (names) {
+                for (int i = 0; names[i]; ++i)
+                    if (name == names[i])
+                        found = true;
+                jack.free_(const_cast<char **>(names));
+            }
+            if (!found)
+                return "{\"ok\":false}";
+            if (enable) {
+                jack.disabledMidi.erase(name);
+                if (!jack.port_connected_to(jack.ports[4], name.c_str()))
+                    jack.connect(jack.client, name.c_str(), jack.port_name(jack.ports[4]));
+            } else {
+                jack.disabledMidi.insert(name);
+                if (jack.port_connected_to(jack.ports[4], name.c_str()))
+                    jack.disconnect(jack.client, name.c_str(), jack.port_name(jack.ports[4]));
+            }
+            if (const char *data = std::getenv("MULTIFX_DATA")) {
+                std::ofstream file(std::string(data) + "/midi-inputs-disabled.txt");
+                for (const auto &port : jack.disabledMidi)
+                    file << port << '\n';
+            }
+            return "{\"ok\":true}";
+        }
         if (cmd == "STATE") {
             auto s = state();
             std::ostringstream out;
-            out << "{\"ok\":true,\"sampleRate\":" << sr << ",\"latencySamples\":" << multifx::Engine::latency
+            out << "{\"ok\":true,\"version\":" << quote(MULTIFX_VERSION) << ",\"sampleRate\":" << sr
+                << ",\"latencySamples\":" << engine.currentLatency() << ",\"bpm\":" << bpm.load()
                 << ",\"xruns\":" << xruns.load()
                 << ",\"cpu\":" << (jack.client ? jack.cpu_load(jack.client) : 0)
                 << ",\"in\":" << engine.inputPeak.load() << ",\"out\":" << engine.outputPeak.load()
+                << ",\"bufferSamples\":" << (jack.client ? jack.get_buffer_size(jack.client) : 0)
+                << ",\"clips\":" << engine.clips.load()
+                << ",\"delaysReady\":" << (engine.delaysReady() ? "true" : "false")
                 << ",\"gr\":" << engine.gainReduction.load() << ",\"ir\":" << quote(project.irName)
                 << ",\"values\":[";
             for (size_t i = 0; i < multifx::layout().parameters.size(); ++i) {
@@ -221,7 +428,8 @@ struct Host {
         }
         if (cmd == "METADATA") {
             std::ostringstream out;
-            out << "{\"ok\":true,\"controlCount\":" << multifx::layout().controlCount << ",\"parameters\":[";
+            out << "{\"ok\":true,\"version\":" << quote(MULTIFX_VERSION)
+                << ",\"controlCount\":" << multifx::layout().controlCount << ",\"parameters\":[";
             auto &p = multifx::layout().parameters;
             for (size_t i = 0; i < p.size(); ++i) {
                 if (i)
@@ -229,7 +437,9 @@ struct Host {
                 out << "{\"id\":" << i << ",\"key\":" << quote(p[i].key) << ",\"name\":" << quote(p[i].name)
                     << ",\"min\":" << p[i].minimum << ",\"max\":" << p[i].maximum
                     << ",\"default\":" << p[i].initial << ",\"steps\":" << p[i].steps
-                    << ",\"choices\":" << quote(p[i].choices) << "}";
+                    << ",\"choices\":" << quote(p[i].choices)
+                    << ",\"label\":" << quote(multifx::controlTitle(int(i)))
+                    << ",\"unit\":" << quote(p[i].unit) << "}";
             }
             out << "]}";
             return out.str();
@@ -268,10 +478,27 @@ struct Host {
                     values[id].store(float(b) / 127);
                     dirty.store(true);
                 }
-            } else if ((status & 240) == 192)
-                program.store(a);
-            else
                 pendingMidi.store(uint32_t(status << 16 | a << 8 | b));
+            } else if ((status & 240) == 192) {
+                if (a < 8) {
+                    auto s = state();
+                    multifx::selectFactory(s, a);
+                    setState(s);
+                    dirty.store(true);
+                } else
+                    program.store(a);
+            } else
+                pendingMidi.store(uint32_t(status << 16 | a << 8 | b));
+            return "{\"ok\":true}";
+        }
+        if (cmd == "IRNAME") {
+            std::string name;
+            std::getline(in, name);
+            if (name.size() < 2 || name.size() > 256)
+                return "{\"ok\":false}";
+            name.erase(0, 1);
+            project.irName = name;
+            dirty.store(true);
             return "{\"ok\":true}";
         }
         if (cmd == "BPM") {
@@ -279,6 +506,24 @@ struct Host {
             if (!(in >> v) || !std::isfinite(v) || v < 20 || v > 400)
                 return "{\"ok\":false}";
             bpm.store(v);
+            return "{\"ok\":true}";
+        }
+        if (cmd == "KEEP_MIDI") {
+            std::string path;
+            std::getline(in, path);
+            if (path.size() < 2)
+                return "{\"ok\":false}";
+            path.erase(0, 1);
+            multifx::Project old;
+            if (!multifx::loadProject(path, old))
+                return "{\"ok\":false}";
+            auto clean = multifx::factoryPresets()[0];
+            const auto &l = multifx::layout();
+            for (int cc = 0; cc < 128; ++cc)
+                clean.values[l.midiMap + cc] = old.state.values[l.midiMap + cc];
+            setState(clean);
+            project.state = clean;
+            dirty.store(true);
             return "{\"ok\":true}";
         }
         if (cmd == "SAVE" || cmd == "LOAD" || cmd == "IR") {
@@ -306,6 +551,11 @@ struct Host {
                         ok = engine.loadIR(&identity, nullptr, 1);
                     }
                     if (ok) {
+                        if (cmd == "IR") {
+                            p.state.values[multifx::layout().ir] = 1;
+                            p.state.values[multifx::layout().blockBypass[4]] = 0;
+                            dirty.store(true);
+                        }
                         project = std::move(p);
                         setState(project.state);
                     }
@@ -330,11 +580,22 @@ struct Host {
             close(fd);
             throw std::runtime_error("Control port unavailable");
         }
+        auto lastRouting = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+        auto lastSave = std::chrono::steady_clock::now(), lastChange = lastSave;
+        bool savePending = false;
+        auto save = [&] {
+            if (const char *data = std::getenv("MULTIFX_DATA")) {
+                const std::string path = std::string(data) + "/last-state.jmfx";
+                project.state = state();
+                if (multifx::saveProject(path + ".tmp", project))
+                    std::rename((path + ".tmp").c_str(), path.c_str());
+            }
+        };
         while (running.load()) {
             fd_set set;
             FD_ZERO(&set);
             FD_SET(fd, &set);
-            timeval timeout{1, 0};
+            timeval timeout{0, 10000};
             if (select(fd + 1, &set, nullptr, nullptr, &timeout) > 0) {
                 int client = accept(fd, nullptr, nullptr);
                 if (client < 0)
@@ -355,14 +616,16 @@ struct Host {
                 }
                 close(client);
             }
+            const auto now = std::chrono::steady_clock::now();
             if (dirty.exchange(false)) {
-                const char *data = std::getenv("MULTIFX_DATA");
-                if (data) {
-                    std::string path = std::string(data) + "/last-state.jmfx";
-                    project.state = state();
-                    if (multifx::saveProject(path + ".tmp", project))
-                        std::rename((path + ".tmp").c_str(), path.c_str());
-                }
+                savePending = true;
+                lastChange = now;
+            }
+            if (savePending && (now - lastChange >= std::chrono::milliseconds(300) ||
+                                now - lastSave >= std::chrono::seconds(2))) {
+                save();
+                savePending = false;
+                lastSave = now;
             }
             int selected = program.exchange(-1);
             if (selected >= 0) {
@@ -379,9 +642,13 @@ struct Host {
                     dirty.store(true);
                 }
             }
-            if (jack.client)
+            if (jack.client && now - lastRouting >= std::chrono::milliseconds(500)) {
                 jack.connectPorts();
+                lastRouting = now;
+            }
         }
+        if (savePending || dirty.exchange(false))
+            save();
         close(fd);
     }
 };
@@ -406,6 +673,20 @@ int main(int argc, char **argv) {
         host->engine.prepare(host->sr);
         if (const char *data = std::getenv("MULTIFX_DATA"))
             host->command("LOAD " + std::string(data) + "/last-state.jmfx");
+        if (const char *data = std::getenv("MULTIFX_DATA")) {
+            std::ifstream file(std::string(data) + "/midi-inputs-disabled.txt");
+            std::string port;
+            while (std::getline(file, port))
+                if (!port.empty())
+                    host->jack.disabledMidi.insert(port);
+        }
+        if (const char *data = std::getenv("MULTIFX_DATA")) {
+            std::ifstream file(std::string(data) + "/audio-routing.txt");
+            for (auto &port : host->jack.routing)
+                std::getline(file, port);
+        }
+        if (!host->engine.prepareState(host->state()))
+            throw std::runtime_error("Active DSP could not be prepared");
         if (!test) {
             host->jack.set_process_callback(host->jack.client, Host::audio, host.get());
             host->jack.set_xrun_callback(host->jack.client, Host::xrun, host.get());
@@ -416,7 +697,7 @@ int main(int argc, char **argv) {
         std::cout << "Jerzy MultiFX control ready (loopback), " << host->sr << " Hz; "
                   << (test ? "TEST SERVER - no audio" : "JACK audio active") << std::endl;
         host->serve(port);
-        return 0;
+        return host->jack.serverLost.load() ? 75 : 0;
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
         return 1;

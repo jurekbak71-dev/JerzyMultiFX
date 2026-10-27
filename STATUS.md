@@ -69,3 +69,31 @@ Linki do plików lokalnych z rozmowy okazały się niedostępne dla użytkownika
 Run https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40550934315 — SUCCESS: 17 testów, pobranie natywnej paczki, weryfikacja jej SHA/architektury i publikacja instalatora. Faktycznie pobrano opublikowany ZIP ponownie, sprawdzono SHA256, wykaz i składnię osadzonego skryptu — PASS. Anulowano wyłącznie zbędny nowy pełny rebuild 40550933952, bez usuwania historii; binaria DSP nie zmieniły się.
 
 Działający adres instalatora: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/download/v0.1.0-preview.1.ci.40539397637.1/JerzyMultiFX-INSTALATOR.zip . Pobranie w przeglądarce wymaga zalogowania do konta z dostępem do prywatnego repozytorium. Instalacja na urządzeniu użytkownika nadal czeka na wykonanie.
+
+## Preview 2 — prace po uwagach z odsłuchu i GUI
+
+Właściciel potwierdził uruchomienie preview 1 na fizycznym bassambient/HeadRush i panelu HTTP, następnie zgłosił nieakceptowalne brzmienie/ergonomię, bypass i IR. Sam fakt uruchomienia nie oznacza potwierdzenia jakości. START autoryzuje poprawki obu platform i przygotowanie nowych rzeczywistych paczek.
+
+W implementacji: dynamiczna latencja zależna od aktywnych efektów, pomijanie wyłączonych silników, opóźnienia tworzone i zwalniane poza audio, oddzielne panele Chorus/Attack/Atomic, MD z listami rodzin/modeli i parametrami wybranego modelu, Settings, most do istniejącej usługi Bluetooth i wybór MIDI/portów audio. Uzupełniany jest oryginalny solver 14 modeli Muff oraz sześć modeli Legacy; Attack otrzymuje Return i expression. Wewnętrzny ABI modułów jest w wersji 2, stan w wersji 2 z migracją starych map CC. Stabilne ID parametrów/VST zachowane; nowe dopisywane na końcu.
+
+Dotąd: lokalne testy dotychczasowe oraz pierwsza regresja rzeczywistych sygnałów PASS (clean0/IR128/Attack2064/Atomic2048, porównanie próbek Chorus/Atomic z oryginalnym kodem). Pierwszy nowy edytor Windows testowany jako prawdziwa DLL pod Wine: wybór 14 modeli Chorus, odrębne strony, wybór dziewięciu modeli MX i ich zmiana — PASS. Dalsze rozszerzenia Return/expression/stanu i pełne aktualne paczki nadal wymagają ponownego sprawdzenia. Nie instalowano zmian zdalnie na sprzęcie użytkownika.
+
+### Preview 2 — wykonana weryfikacja lokalna
+
+953 parametry; czysty start z pominiętymi efektami. Maksymalne opóźnienie aktywnego łańcucha 4256 próbek obejmuje nowy FIR DRIVE 16; nie jest narzucane torowi clean. Sekcje Chorus/Attack/Atomic mają osobny bypass, MD ma jedną listę 13 silników na bank i pełne parametry zaawansowane. IR import włącza blok/miks. Return jest dostępny w JACK i jako dodatkowy bus VST. Settings obejmuje bufor JACK, routing, ochronę wyjścia i diagnostykę. Most MIDI nie odwołuje się do starych portów JerzyAudioPlatform.
+
+- Python: 24 testy PASS, w tym kontrola brokera/UID, protokół BLE i rzeczywisty skrypt przywracania poprzednich plików w symulowanej instalacji. Nie jest to test fizycznej aktualizacji.
+- CTest Linux: 2/2 PASS — stan/RT i rzeczywiste sygnały; clean 0, IR 128, Attack 2064, Atomic 2048; oryginalny Chorus/Atomic porównane próbka po próbce; zero alokacji na wątku audio.
+- ARM64 cross-build i te same dwa programy testowe pod QEMU: PASS. Natywny build ARM64 w CI będzie osobną kontrolą.
+- Rzeczywisty JACK dummy: audio, gain, USB CC Learn, transport Unix → natywny port MIDI JACK → parametr DSP, zmiana bufora 128/256 i Return routing — PASS; lokalny przebieg bez xrun. Nie jest to pomiar HeadRush.
+- HTTP/core: autoryzacja, zapis/odczyt presetu, resampling/import/osadzenie IR oraz parametry wybranego modelu — PASS.
+- Chromium: ukrycie logowania po połączeniu, 5 bloków, Chorus 14 modeli/6 regulatorów, odrębne Attack/Atomic, trigger, MD 13 silników i strona Brig bez parametrów innych modeli, Settings i Bluetooth/USB MIDI, szerokość 390 px — PASS.
+- Prawdziwa DLL VST3 pod Wine: audio clean, import IR zmienia sygnał, bypass IR przywraca dry, aktualizacja PDC na głównym wątku przy zamkniętym GUI i wejście Return — PASS. Pełny edytor i walidacja poprawnej paczki są sprawdzane oddzielnie przed publikacją.
+
+Benchmark lokalny x86_64, 48 kHz/128, po 1 sekundzie audio: clean 0,0031 s CPU; TS 0,0130; Chorus 0,0104; Attack 0,1404; Atomic 0,0445; MX Volante 0,0389; IR 16384 0,0262. Pełny solver Muff Supa 0,3636 s CPU i dlatego nie jest domyślny. Szczyt RSS procesu w kolejnych profilach około 7,4–12,3 MiB. To mikrobenchmark tego komputera, nie gwarancja realtime ani pomiar RPi; wyniki natywnych runnerów są dołączane do VALIDATION.json.
+
+Instalator RPi zawiera teraz plik `ZAINSTALUJ-NA-RASPBERRY.cmd` do dwukliku na Windows. Obsługuje aktualizację istniejącego preview 1, zachowuje presety/IR/mapy CC/klucz, Wi-Fi i konfigurację JACK oraz zapisuje działające cofnięcie. Startuje z czystym brzmieniem zamiast odtwarzać nieakceptowany stan preview 1. Instalator VST tworzy kopię poprzedniego bundle przed podmianą. Nie zainstalowano preview 2 na sprzęcie użytkownika.
+
+Starsze akapity opisują historyczny preview 1; jego ograniczenia 919 parametrów, stałej latencji i braku Return nie opisują preview 2. Fizyczny odsłuch, FL Studio, radio BLE/telefon PAN/USB MIDI i LCD preview 2 nadal czekają na sprawdzenie. Przygotowanie nowych plików do pobrania nie oznacza ich pozytywnej oceny muzycznej przez właściciela.
+
+Dodatkowe końcowe kontrole: poprawiono indeksowanie modeli MX wykryte przez test prawdziwego edytora. Pełny edytor DLL (trzy cykle otwarcia/zamknięcia, zmiany parametrów, MIDI Learn, kolejność, skalowanie, 14 modeli Chorus, wybór Brig z listy MD) — PASS. Poprawna struktura paczki VST3 i pełny walidator SDK pod Wine: **47/47 PASS**. Własne sprawdzenie obu architektur, manifestów SHA256, dołączonych źródeł i allowlisty prywatności — PASS. Samowystarczalny ZIP RPi zawiera trzy pliki, w tym skrypt dwukliku. Publikacja natywnych paczek CI pozostaje następnym etapem.

@@ -19,6 +19,8 @@ class Convolver {
     std::array<std::array<Spectrum, P>, 2> history{};
     std::array<std::array<float, H>, 2> previous{}, input{}, output{}, dry{}, oldOutput{};
     int position = 0, head = 0, active = 0;
+    std::array<uint64_t, P> historyEpoch{};
+    uint64_t epoch = 1;
     float swapFade = 1;
     static void fft(Spectrum &a, bool inverse = false) {
         for (int i = 1, j = 0; i < N; ++i) {
@@ -80,13 +82,19 @@ class Convolver {
         return true;
     }
     void reset() {
-        history = {};
+        ++epoch;
         previous = {};
         input = {};
         output = {};
         dry = {};
         position = head = 0;
-        active = published.load();
+        int bank;
+        do {
+            bank = published.load();
+            reading.store(bank);
+            oldReading.store(bank);
+        } while (bank != published.load());
+        active = bank;
         swapFade = 1;
         oldOutput = {};
     }
@@ -124,9 +132,15 @@ class Convolver {
                 fft(spectrum);
                 Spectrum sum{};
                 for (int p = 0; p < b.parts; ++p) {
-                    const auto &s = history[c][(head - p + P) % P];
-                    for (int k = 0; k < N; ++k)
-                        sum[k] += s[k] * b.ir[c][p][k];
+                    const auto at = (head - p + P) % P;
+                    if (at != head && historyEpoch[at] != epoch)
+                        continue;
+                    const auto &s = history[c][at];
+                    for (int k = 0; k < N; ++k) {
+                        const float ar = s[k].real(), ai = s[k].imag(), br = b.ir[c][p][k].real(),
+                                    bi = b.ir[c][p][k].imag();
+                        sum[k] = {sum[k].real() + ar * br - ai * bi, sum[k].imag() + ar * bi + ai * br};
+                    }
                 }
                 fft(sum, true);
                 for (int i = 0; i < H; ++i)
@@ -134,15 +148,23 @@ class Convolver {
                 if (changed) {
                     Spectrum prior{};
                     for (int p = 0; p < old.parts; ++p) {
-                        const auto &h = history[c][(head - p + P) % P];
-                        for (int k = 0; k < N; ++k)
-                            prior[k] += h[k] * old.ir[c][p][k];
+                        const auto at = (head - p + P) % P;
+                        if (at != head && historyEpoch[at] != epoch)
+                            continue;
+                        const auto &h = history[c][at];
+                        for (int k = 0; k < N; ++k) {
+                            const float ar = h[k].real(), ai = h[k].imag(), br = old.ir[c][p][k].real(),
+                                        bi = old.ir[c][p][k].imag();
+                            prior[k] = {prior[k].real() + ar * br - ai * bi,
+                                        prior[k].imag() + ar * bi + ai * br};
+                        }
                     }
                     fft(prior, true);
                     for (int i = 0; i < H; ++i)
                         oldOutput[c][i] = prior[i + H].real();
                 }
             }
+            historyEpoch[head] = epoch;
             active = bank;
             oldReading.store(bank);
             head = (head + 1) % P;

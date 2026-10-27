@@ -87,5 +87,15 @@
     ],
     "destination": "vendor/muff",
     "license": "                    GNU GENERAL PUBLIC LICENSE"
+  },
+  {
+    "repository": "JerzyBigMuffCollectionVST3",
+    "commit": "ce8ca2a848a57c6e6a91a596e3cc0016e7a22554",
+    "files": [
+      "Source/Circuit/AnalogCircuit.h",
+      "Source/Circuit/Catalog.h"
+    ],
+    "destination": "vendor/muff/Circuit",
+    "license": "GPL-3.0-only; unchanged original circuit solver and catalogue"
   }
 ]

@@ -1,4 +1,5 @@
 #pragma once
+#include "base/source/timer.h"
 #include "core/Engine.h"
 #include "core/Project.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
@@ -16,7 +17,7 @@ class Processor final : public AudioEffect {
     Project assets;
     std::mutex assetMutex;
     double bpm = 120;
-    std::array<std::array<float, 1024>, 4> scratch{};
+    std::array<std::array<float, 1024>, 6> scratch{};
     bool restoreIR();
 
   public:
@@ -33,7 +34,10 @@ class Processor final : public AudioEffect {
     tresult PLUGIN_API setActive(TBool) override;
     tresult PLUGIN_API process(ProcessData &) override;
     uint32 PLUGIN_API getLatencySamples() override {
-        return Engine::latency;
+        State s;
+        for (size_t i = 0; i < layout().parameters.size(); ++i)
+            s.values[i] = values[i].load(std::memory_order_relaxed);
+        return uint32(Engine::latencyFor(s));
     }
     uint32 PLUGIN_API getTailSamples() override {
         return uint32(processSetup.sampleRate * 20);
@@ -42,9 +46,17 @@ class Processor final : public AudioEffect {
     tresult PLUGIN_API getState(IBStream *) override;
     tresult PLUGIN_API notify(IMessage *) override;
 };
-class Controller final : public EditControllerEx1, public IMidiMapping {
+class Controller final : public EditControllerEx1, public IMidiMapping, public ITimerCallback {
+    Timer *meterTimer = nullptr;
+
   public:
     std::atomic<float> meterIn{0}, meterOut{0}, meterGR{0};
+    std::atomic<int> meterLatency{0};
+    std::string fileStatus;
+    void onTimer(Timer *) override {
+        requestMeters();
+    }
+    tresult PLUGIN_API terminate() override;
     void requestMeters();
     tresult PLUGIN_API notify(IMessage *) override;
 

@@ -20,7 +20,7 @@ def asset_names(platform,version):
     if platform=='windows':
         return [f'JerzyMultiFX-VST3-Windows-x64-v{version}.zip','INSTALACJA_VST3_PL.md']
     if platform=='arm64':
-        return [f'JerzyMultiFX-RPi-aarch64-v{version}.tar.gz','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md']
+        return [f'JerzyMultiFX-RPi-aarch64-v{version}.tar.gz','JerzyMultiFX-INSTALATOR.zip','INSTALACJA_RPI_PROSTO.txt','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md']
     raise ValueError('Unsupported platform')
 
 def notes(repo,tag,version,sha,run_id):
@@ -32,14 +32,15 @@ Native Windows x64 and ARM64 jobs publish independently after their tests. Files
 
 ## Instalacja
 
-- **Windows:** rozpakuj ZIP i skopiuj cały `Jerzy MultiFX.vst3` do `C:\\Program Files\\Common Files\\VST3`. [Pełna instrukcja]({prefix}INSTALACJA_VST3_PL.md).
-- **RPi ARM64:** rozpakuj TAR.GZ, sprawdź sumy, uruchom `sudo bash scripts/install.sh` i wybierz rzeczywiste urządzenie audio przed włączeniem usług. [Pełna instrukcja]({prefix}INSTALACJA_RPI_PL.md).
+- **Windows:** rozpakuj ZIP, zamknij DAW i kliknij dwa razy `ZAINSTALUJ-VST3.cmd`. Możesz też skopiować cały `Jerzy MultiFX.vst3` do `C:\\Program Files\\Common Files\\VST3`. [Pełna instrukcja]({prefix}INSTALACJA_VST3_PL.md).
+- **RPi bassambient / HeadRush:** [pobierz instalator ZIP]({prefix}JerzyMultiFX-INSTALATOR.zip), rozpakuj cały ZIP na Windows i kliknij dwa razy `ZAINSTALUJ-NA-RASPBERRY.cmd`. Włącz HeadRush i Raspberry Pi; podawaj hasło użytkownika `jerzy`. Aktualizacja zachowuje Wi-Fi, JACK, presety i możliwość cofnięcia. TAR.GZ jest paczką do ręcznej instalacji na innym RPi ARM64. [Pełna instrukcja]({prefix}INSTALACJA_RPI_PL.md).
 - Sprawdź sumy w pliku SHA256SUMS dla właściwej platformy. Każda paczka zawiera również własny manifest SHA256 oraz odpowiadające źródła.
 
 ## Wykaz plików
 
 - `JerzyMultiFX-VST3-Windows-x64-v{version}.zip` — rzeczywisty bundle VST3 x64.
 - `JerzyMultiFX-RPi-aarch64-v{version}.tar.gz` — rzeczywisty ELF AArch64, aplikacja i instalator.
+- `JerzyMultiFX-INSTALATOR.zip` — samowystarczalny instalator RPi, uruchamiany dwuklikiem z Windows; `INSTALACJA_RPI_PROSTO.txt` — krótka instrukcja.
 - `INSTALACJA_VST3_PL.md`, `INSTALACJA_RPI_PL.md`, `WIFI_BLUETOOTH_PL.md`, `HARDWARE_TESTS_PL.md` — instrukcje i ograniczenia.
 - `FILES-Windows-x64.json`, `FILES-RPi-aarch64.json` — wykaz plików, wielkości i sumy SHA256 dla opublikowanej platformy.
 - `SHA256SUMS-Windows-x64`, `SHA256SUMS-RPi-aarch64` — sumy gotowych plików do pobrania.

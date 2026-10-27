@@ -23,6 +23,7 @@ inline const std::array<State, 8> &factoryPresets() {
         set(out[2], "drive.gain", .35);
         set(out[3], "drive.bypass", 0);
         set(out[3], "drive.gain", .4);
+        set(out[3], "fuzz.model", 4.f / 19);
         set(out[4], "clone.bypass", 0);
         set(out[4], "clone.mix", .4);
         set(out[5], "delayA.mix", .35);
@@ -39,8 +40,9 @@ inline void selectFactory(State &state, int index) {
     auto &l = layout();
     index = std::clamp(index, 0, 7);
     const auto &source = factoryPresets()[index];
-    for (int i = 0; i < l.midiLearn; ++i)
-        state.values[i] = source.values[i];
+    for (size_t i = 0; i < l.parameters.size(); ++i)
+        if (int(i) < l.midiLearn || int(i) > l.factoryProgram)
+            state.values[i] = source.values[i];
     state.values[l.factoryProgram] = float(index) / 7;
 }
 } // namespace multifx

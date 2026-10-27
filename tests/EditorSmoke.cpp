@@ -26,7 +26,9 @@ static void click(HWND h, int x, int y) {
     pump();
 }
 static void screenshot(HWND h, const char *path) {
-    constexpr int w = 1100, height = 740;
+    RECT size{};
+    GetClientRect(h, &size);
+    const int w = size.right, height = size.bottom;
     HDC dc = GetDC(h), memory = CreateCompatibleDC(dc);
     HBITMAP bmp = CreateCompatibleBitmap(dc, w, height);
     auto previous = SelectObject(memory, bmp);
@@ -76,33 +78,63 @@ int main(int argc, char **argv) try {
         auto *view = c->createView(ViewType::kEditor);
         check(view, "custom pedal editor exists");
         HWND parent = CreateWindowExA(0, "STATIC", "Jerzy MultiFX GUI test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                      0, 0, 1140, 800, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+                                      0, 0, 1320, 920, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
         check(parent, "create test host window");
         check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "attach custom GUI");
+        ViewRect testSize(0, 0, 1280, 850);
+        check(view->onSize(&testSize) == kResultOk, "set deterministic GUI test size");
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
         check(child, "editor child window");
         int gain = layout().preamp + 1;
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 291));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(100, 241));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(100, 241));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(210, 366));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(210, 316));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(210, 316));
         pump();
         check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
-        click(child, 980, 690);
+        click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
-        click(child, 980, 690);
+        click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(100, 291));
+        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(210, 366));
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 125));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(480, 125));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(480, 125));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 95));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(550, 95));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(550, 95));
         pump();
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
         ViewRect size(0, 0, 880, 592);
         check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
-        ViewRect normal(0, 0, 1100, 740);
+        ViewRect normal(0, 0, 1280, 850);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
+        click(child, 300, 95); // Three separate effect panels in block two.
+        pump();
+        int model = -1;
+        for (size_t i = 0; i < layout().parameters.size(); ++i)
+            if (layout().parameters[i].key == "clone.model")
+                model = int(i);
+        HWND modelList = GetDlgItem(child, 10000 + model);
+        check(modelList && SendMessage(modelList, CB_GETCOUNT, 0, 0) == 14, "original Chorus model dropdown");
+        click(child, 290, 195);
+        pump(); // Attack page.
+        check(GetDlgItem(child, 10000 + model) == nullptr, "Chorus controls hidden on Attack page");
+        click(child, 520, 195);
+        pump(); // Atomic page.
+        click(child, 90, 95);
+        pump(); // Reordered MD block is now first.
+        HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
+        check(family && SendMessage(family, CB_GETCOUNT, 0, 0) == 13, "MD family dropdown");
+        SendMessage(family, CB_SETCURSEL, 5, 0);
+        SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + layout().delayType[0], CBN_SELCHANGE),
+                    reinterpret_cast<LPARAM>(family));
+        pump();
+        int algorithm = -1;
+        for (size_t i = 0; i < layout().parameters.size(); ++i)
+            if (layout().parameters[i].key == "delayA.mx.slot0_algorithm")
+                algorithm = int(i);
+        // Choosing Brig from the single engine menu sets its original model and hides unrelated models.
+        check(std::abs(c->getParamNormalized(algorithm) - .5) < 1e-6,
+              "selected MX Brig model reaches controller");
         if (argc >= 3)
             screenshot(child, argv[2]);
         check(view->removed() == kResultOk, "detach GUI");

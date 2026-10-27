@@ -8,10 +8,10 @@
 #include <new>
 #include <set>
 #include <stdexcept>
-static std::atomic<bool> tracking{false};
+static thread_local bool tracking = false;
 static std::atomic<unsigned long> allocations{0};
 void *operator new(std::size_t n) {
-    if (tracking.load())
+    if (tracking)
         allocations.fetch_add(1);
     if (void *p = std::malloc(n ? n : 1))
         return p;
@@ -95,9 +95,9 @@ int main() {
                         l[i] = .1f * std::sin(float(i + block * size) * .031f);
                         r[i] = -l[i];
                     }
-                    tracking.store(true);
+                    tracking = true;
                     e->process(l.data(), r.data(), a.data(), b.data(), size, state);
-                    tracking.store(false);
+                    tracking = false;
                     for (int i = 0; i < size; ++i)
                         require(std::isfinite(a[i]) && std::isfinite(b[i]), "Finite stereo");
                     processed += size;
@@ -117,8 +117,10 @@ int main() {
                 l[0] = r[0] = .25f;
             e->process(l.data(), r.data(), a.data(), b.data(), 1024, cleanState);
             for (int i = 0; i < 1024; ++i)
-                require(std::abs(a[i] - ((offset + i) == multifx::Engine::latency ? .25f : 0)) < .0002,
-                        "Actual chain latency matches host PDC");
+                require(
+                    std::abs(a[i] - ((offset + i) == multifx::Engine::latencyFor(cleanState) ? .25f : 0)) <
+                        .0002,
+                    "Actual chain latency matches host PDC");
         }
         e->prepare(48000);
         for (int j = 0; j < 180; ++j) {
@@ -137,10 +139,10 @@ int main() {
                 l[i] = .08f * std::sin(float(j * 256 + i) * .04f);
                 r[i] = l[i] * .6f;
             }
-            tracking.store(true);
+            tracking = true;
             e->process(l.data(), r.data(), a.data(), b.data(), 256, state, 120, j * 256 * 120 / (60. * 48000),
                        true);
-            tracking.store(false);
+            tracking = false;
             for (int i = 0; i < 256; ++i)
                 require(std::isfinite(a[i]) && std::abs(a[i]) <= 16 && std::isfinite(b[i]),
                         "Routing/engine change stability");
@@ -150,13 +152,13 @@ int main() {
         for (int block = 0; block < 40; ++block) {
             for (int i = 0; i < 1024; ++i)
                 l[i] = r[i] = .125f;
-            tracking.store(true);
+            tracking = true;
             e->process(l.data(), r.data(), a.data(), b.data(), 1024, state);
-            tracking.store(false);
+            tracking = false;
         }
         require(std::abs(a.back() - .125f) < .0001, "Bypass preserves audio");
         require(allocations.load() == 0, "Zero allocations on audio thread");
-        std::cout << "PASS: partitioned convolution, IR latency128 / chain4240, " << lay.parameters.size()
+        std::cout << "PASS: partitioned convolution, IR latency128 / clean chain0, " << lay.parameters.size()
                   << " stable parameters, complete MIDI/IR state+CRC, 120 orders, mono-compatible stereo "
                      "44.1/48/96kHz, blocks32..1024, active engine/routing switches, bypass, zero RT "
                      "allocations. Processed "
@@ -165,7 +167,7 @@ int main() {
                   << " s (includes preparation; not an RPi benchmark).\n";
         return 0;
     } catch (const std::exception &e) {
-        tracking.store(false);
+        tracking = false;
         std::cerr << e.what() << '\n';
         return 1;
     }
