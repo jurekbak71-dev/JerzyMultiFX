@@ -131,3 +131,15 @@ Wykonano lokalnie: CTest DSP/sygnałów 2/2, Python 24 testy, HTTP/core z rzeczy
 ### Test renderowania na małym pulpicie runnera
 
 Natywny job Windows rewizji 59f0c17 zatrzymał się w kroku testu edytora. Lokalny test odczytywał piksele okna z ekranu; część okna może znajdować się poza pulpitem runnera. Renderowanie udostępniono także przez standardowy WM_PRINTCLIENT, a test wskazówek oraz zrzuty korzystają teraz z bitmapy w pamięci, z zachowaniem wszystkich asercji. Dodano dokładny komunikat błędu edytora do adnotacji CI, ponieważ pobranie pełnego logu z hosta Actions zostało odrzucone przez politykę sieci środowiska. Nowy test sprawdzany również przy pulpicie 800×600. Nowa natywna walidacja nadal jest wymagana przed publikacją VST.
+
+## Preview 3 — końcowe paczki opublikowane i ponownie pobrane
+
+Źródłowy commit **50843d24962e946fdd89749af5e5ee12dbb94a2e**. Natywny przebieg obu platform **SUCCESS**: https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40578180112 . Release: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.3.ci.40578180112.1 . Wcześniejsze akapity o oczekującej walidacji opisują etapy prac, nie końcowy wynik.
+
+- Windows x64/MSVC: CTest DSP/sygnałów i pełny walidator SDK **47/47**, rzeczywisty edytor (3 cykle, parametry, bypass, MIDI Learn, kolejność, skalowanie, niezależne wskazówki IN/OUT i położenie list Oil), rzeczywisty sygnał DLL/IR/bypass/PDC/Return, benchmark oraz składnia instalatorów — PASS. Render testu przez WM_PRINTCLIENT usunął zależność od wielkości pulpitu, bez usuwania asercji. Ostatni podpis zaawansowanego delay przeniesiono do stałego pasa.
+- Natywny ARM64: CTest 2/2, Python 24 testy, Node 3 testy panelu/MIDI Learn, HTTP/core z automatycznym cookie, wszystkie przełączniki bypass przez MIDI CC oraz restart i odtworzenie pełnego stanu, JACK dummy/audio/MIDI/Return, benchmark i kontrola paczek — PASS.
+- Po publikacji pobrano z tego Release oba archiwa binarne, samowystarczalny instalator RPi, instrukcje i manifesty. Zewnętrzne i wewnętrzne SHA256, PE32+ x64/ELF64 AArch64, źródłowy SHA, prywatność/dołączone źródła, brak formularza klucza w gotowym panelu, kod autostartu i zgodność osadzonej paczki instalatora z opublikowanym TAR.GZ — PASS.
+
+Windows: `JerzyMultiFX-VST3-Windows-x64-v0.1.0-preview.3.zip` → rozpakować → `ZAINSTALUJ-VST3.cmd` przy zamkniętym DAW. RPi bassambient/HeadRush: `JerzyMultiFX-INSTALATOR.zip` → rozpakować → `ZAINSTALUJ-NA-RASPBERRY.cmd`. Panel otwiera się bez wpisywania klucza. Instalator włącza autostart i zachowuje ostatnie brzmienie/mapy MIDI. Przy każdym ON/OFF, również PREAMP/TAPE DRIVE/DRIVE/COMP, jest MIDI Learn; w VST prawy przycisk.
+
+Nie instalowano preview 3 zdalnie na fizycznym Pi. Restart/odsłuch HeadRush, radio Bluetooth i FL Studio nadal wymagają potwierdzenia na sprzęcie właściciela. Repozytoria źródłowe pozostają niezmienione. Zastąpione przebiegi anulowano bez usuwania historii ani istniejących assetów; końcowy przebieg oraz wcześniejsza rewizja 543493d zakończyły się sukcesem na obu platformach.
