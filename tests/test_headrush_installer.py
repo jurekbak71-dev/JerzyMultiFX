@@ -70,7 +70,26 @@ class UpgradeTransactionTests(unittest.TestCase):
             def urlopen(*args,**kwargs):
                 if fail:raise OSError('simulated failed audio startup')
                 return io.StringIO(json.dumps({'values':[0]*953}))
-            with patch.object(module.os,'geteuid',return_value=1000),patch.object(module.pwd,'getpwuid',return_value=types.SimpleNamespace(pw_name='jerzy')),patch.object(Path,'home',return_value=home),patch.object(module.platform,'machine',return_value='aarch64'),patch.object(Path,'read_text',read),patch.object(module,'state',side_effect=lambda u:previous[u]),patch.object(module,'ctl',side_effect=ctl),patch.object(module,'jack_ports',return_value=required),patch.object(module,'PAYLOAD',base64.b64encode(raw),create=True),patch.object(module,'PAYLOAD_SHA256',hashlib.sha256(raw).hexdigest(),create=True),patch.object(module.subprocess,'run',side_effect=run),patch.object(module.time,'strftime',return_value='instalacja-new'),patch.object(module.time,'monotonic',side_effect=iter([0,100]) if fail else lambda:0),patch.object(module.time,'sleep'),patch.dict(sys.modules,{'control':types.SimpleNamespace(rpc=lambda x:{'ok':True})}),patch.object(urllib.request,'urlopen',side_effect=urlopen),patch.dict(os.environ,{}),patch.object(sys,'argv',['installer.py']),contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(patch.object(module.os, 'geteuid', return_value=1000))
+                stack.enter_context(patch.object(module.pwd, 'getpwuid', return_value=types.SimpleNamespace(pw_name='jerzy')))
+                stack.enter_context(patch.object(Path, 'home', return_value=home))
+                stack.enter_context(patch.object(module.platform, 'machine', return_value='aarch64'))
+                stack.enter_context(patch.object(Path, 'read_text', read))
+                stack.enter_context(patch.object(module, 'state', side_effect=lambda u: previous[u]))
+                stack.enter_context(patch.object(module, 'ctl', side_effect=ctl))
+                stack.enter_context(patch.object(module, 'jack_ports', return_value=required))
+                stack.enter_context(patch.object(module, 'PAYLOAD', base64.b64encode(raw), create=True))
+                stack.enter_context(patch.object(module, 'PAYLOAD_SHA256', hashlib.sha256(raw).hexdigest(), create=True))
+                stack.enter_context(patch.object(module.subprocess, 'run', side_effect=run))
+                stack.enter_context(patch.object(module.time, 'strftime', return_value='instalacja-new'))
+                stack.enter_context(patch.object(module.time, 'monotonic', side_effect=iter([0, 100]) if fail else lambda: 0))
+                stack.enter_context(patch.object(module.time, 'sleep'))
+                stack.enter_context(patch.dict(sys.modules, {'control': types.SimpleNamespace(rpc=lambda x: {'ok': True})}))
+                stack.enter_context(patch.object(urllib.request, 'urlopen', side_effect=urlopen))
+                stack.enter_context(patch.dict(os.environ, {}))
+                stack.enter_context(patch.object(sys, 'argv', ['installer.py']))
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
                 if fail:
                     with self.assertRaisesRegex(RuntimeError,'nie potwierdził'):module.main()
                 else:module.main()
