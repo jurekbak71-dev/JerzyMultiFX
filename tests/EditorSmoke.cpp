@@ -58,60 +58,62 @@ static void screenshot(HWND h, const char *path) {
 }
 int main(int argc, char **argv) try {
     check(argc >= 2, "usage: editor_smoke plugin.vst3 [screenshot.bmp]");
-    HMODULE module = LoadLibraryA(argv[1]);
-    check(module != nullptr, "load Windows VST3 DLL");
-    auto init = reinterpret_cast<bool (*)()>(GetProcAddress(module, "InitDll"));
-    auto exit = reinterpret_cast<bool (*)()>(GetProcAddress(module, "ExitDll"));
-    auto factoryFunction =
-        reinterpret_cast<IPluginFactory *(*)()>(GetProcAddress(module, "GetPluginFactory"));
-    check(init && exit && factoryFunction && init(), "module entry points");
-    auto *factory = factoryFunction();
-    IEditController *c = nullptr;
-    check(factory->createInstance(controllerId, IEditController::iid, reinterpret_cast<void **>(&c)) ==
-                  kResultOk &&
-              c,
-          "instantiate real DLL controller");
-    check(c->initialize(nullptr) == kResultOk, "initialize GUI controller");
-    auto *view = c->createView(ViewType::kEditor);
-    check(view, "custom pedal editor exists");
-    HWND parent = CreateWindowExA(0, "STATIC", "Jerzy MultiFX GUI test", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0,
-                                  0, 1140, 800, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
-    check(parent, "create test host window");
-    check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "attach custom GUI");
-    pump();
-    HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
-    check(child, "editor child window");
-    int gain = layout().preamp + 1;
-    SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 291));
-    SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(100, 241));
-    SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(100, 241));
-    pump();
-    check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
-    click(child, 980, 690);
-    check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
-    click(child, 980, 690);
-    check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-    SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(100, 291));
-    check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
-    SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 125));
-    SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(480, 125));
-    SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(480, 125));
-    pump();
-    check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
-    ViewRect size(0, 0, 880, 592);
-    check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
-    ViewRect normal(0, 0, 1100, 740);
-    check(view->onSize(&normal) == kResultOk, "GUI restore scale");
-    if (argc >= 3)
-        screenshot(child, argv[2]);
-    check(view->removed() == kResultOk, "detach GUI");
-    view->release();
-    DestroyWindow(parent);
-    c->terminate();
-    c->release();
-    factory->release();
-    check(exit(), "unload module");
-    FreeLibrary(module);
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        HMODULE module = LoadLibraryA(argv[1]);
+        check(module != nullptr, "load Windows VST3 DLL");
+        auto init = reinterpret_cast<bool (*)()>(GetProcAddress(module, "InitDll"));
+        auto exit = reinterpret_cast<bool (*)()>(GetProcAddress(module, "ExitDll"));
+        auto factoryFunction =
+            reinterpret_cast<IPluginFactory *(*)()>(GetProcAddress(module, "GetPluginFactory"));
+        check(init && exit && factoryFunction && init(), "module entry points");
+        auto *factory = factoryFunction();
+        IEditController *c = nullptr;
+        check(factory->createInstance(controllerId, IEditController::iid, reinterpret_cast<void **>(&c)) ==
+                      kResultOk &&
+                  c,
+              "instantiate real DLL controller");
+        check(c->initialize(nullptr) == kResultOk, "initialize GUI controller");
+        auto *view = c->createView(ViewType::kEditor);
+        check(view, "custom pedal editor exists");
+        HWND parent = CreateWindowExA(0, "STATIC", "Jerzy MultiFX GUI test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                      0, 0, 1140, 800, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+        check(parent, "create test host window");
+        check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "attach custom GUI");
+        pump();
+        HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
+        check(child, "editor child window");
+        int gain = layout().preamp + 1;
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 291));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(100, 241));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(100, 241));
+        pump();
+        check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
+        click(child, 980, 690);
+        check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
+        click(child, 980, 690);
+        check(c->getParamNormalized(layout().bypass) == 0, "master enable");
+        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(100, 291));
+        check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 125));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(480, 125));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(480, 125));
+        pump();
+        check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
+        ViewRect size(0, 0, 880, 592);
+        check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
+        ViewRect normal(0, 0, 1100, 740);
+        check(view->onSize(&normal) == kResultOk, "GUI restore scale");
+        if (argc >= 3)
+            screenshot(child, argv[2]);
+        check(view->removed() == kResultOk, "detach GUI");
+        view->release();
+        DestroyWindow(parent);
+        c->terminate();
+        c->release();
+        factory->release();
+        check(exit(), "unload module");
+        FreeLibrary(module);
+    }
     std::cout << "Windows real VST3 GUI: attach, parameter edit, bypass, MIDI learn, reorder, resize, "
                  "screenshot, close passed\n";
     return 0;

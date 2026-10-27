@@ -47,3 +47,6 @@ Test całego łańcucha ujawnił, że oryginalny AttackDecay opóźnia o2064 pr�
 - Pomocnicza diagnostyka opcjonalna, retencja1 dzień; domyślnie wyłączona.
 - Jawna allowlista produktu/źródeł wyklucza prywatne prompty, referencje, cache, logi, konfiguracje i pliki pośrednie. Nie usunięto żadnego wcześniejszego wydania/artefaktu.
 - actionlint PASS; 11 testów Python PASS (w tym tagi, wykaz plików, privacy i brak delete/clobber). Weryfikacja rzeczywistej publikacji CI w toku.
+
+## Natywny MSVC: fałszywy błąd parsera MSBuild
+47/47 testów walidatora przeszło, lecz SDK uruchamiał go jako POST_BUILD w MSBuild. Diagnostyka celowo odrzucanych, niewspieranych sample rate była interpretowana przez MSBuild jako błąd mimo kodu wyjścia0. Ten sam pełny walidator zarejestrowano w CTest; nadal wymagany jest kod0 i zero niezaliczonych testów, a pakowanie ponownie weryfikuje gotowy bundle. Nie zmieniano SDK ani asercji. Dodano także trzy cykle tworzenia/zamykania/wyładowania GUI i wyrejestrowanie klasy okna.

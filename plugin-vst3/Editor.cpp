@@ -311,6 +311,7 @@ class Editor final : public Steinberg::CPluginView {
             KillTimer(window, 1);
             DestroyWindow(window);
             window = nullptr;
+            UnregisterClassA("JerzyMultiFXEditor010", instance);
         }
         systemWindow = nullptr;
         return Steinberg::kResultOk;
