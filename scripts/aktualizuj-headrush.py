@@ -199,5 +199,5 @@ def main():
 if __name__ == '__main__':
     try: main()
     except (Exception, KeyboardInterrupt) as error:
-        print('\nSTOP: '+str(error)+'\nZrób zdjęcie tego komunikatu. Zasłoń klucz dostępu.', file=sys.stderr)
+        print('\nSTOP: '+str(error)+'\nZrób zdjęcie tego komunikatu.', file=sys.stderr)
         sys.exit(1)

@@ -2,7 +2,7 @@
 
 # Połączenie z bassambient / HeadRush
 
-Panel: **http://bassambient.local:8097**. Komputer lub telefon ma być w tej samej sieci domowej. Wklej klucz pokazany przez instalator. Nie trzeba internetu do obsługi panelu.
+Panel: **http://bassambient.local:8097**. Komputer lub telefon ma być w tej samej sieci domowej. Panel otwiera się automatycznie, bez wpisywania klucza. Nie trzeba internetu do obsługi panelu.
 
 W panelu otwórz **MIDI i Bluetooth**:
 

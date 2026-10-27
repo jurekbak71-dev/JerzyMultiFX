@@ -35,7 +35,7 @@ def main():
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('JerzyMultiFX-AKTUALIZUJ.py', script)
         z.writestr('ZAINSTALUJ-NA-RASPBERRY.cmd',(root/'scripts/install-from-windows.cmd').read_bytes())
-        z.writestr('PRZECZYTAJ-MNIE.txt', 'ROZPAKUJ CALY ZIP. Na Windows kliknij dwa razy ZAINSTALUJ-NA-RASPBERRY.cmd.\nWlacz HeadRush i scisz glosniki. Podawaj haslo jerzy, gdy zapyta.\nInstalator dla bassambient, użytkownik jerzy, HeadRush Core.\nZachowuje sieć i dotychczasowy JACK. Stary program można przywrócić.\nPo skopiowaniu pliku na Raspberry Pi uruchom bez sudo:\npython3 ~/JerzyMultiFX-AKTUALIZUJ.py\nNie został jeszcze przetestowany na fizycznym Raspberry Pi.\n')
+        z.writestr('PRZECZYTAJ-MNIE.txt', 'ROZPAKUJ CALY ZIP. Na Windows kliknij dwa razy ZAINSTALUJ-NA-RASPBERRY.cmd.\nWlacz HeadRush i scisz glosniki. Podawaj haslo jerzy, gdy zapyta.\nInstalator dla bassambient, użytkownik jerzy, HeadRush Core.\nZachowuje sieć i dotychczasowy JACK. Stary program można przywrócić.\nPanel otwiera się bez klucza. Efekt startuje z Pi z ostatnim brzmieniem i MIDI.\nPo skopiowaniu pliku na Raspberry Pi uruchom bez sudo:\npython3 ~/JerzyMultiFX-AKTUALIZUJ.py\nNie został jeszcze przetestowany na fizycznym Raspberry Pi.\n')
     with zipfile.ZipFile(target) as z:
         assert z.testzip() is None
         assert z.namelist() == ['JerzyMultiFX-AKTUALIZUJ.py', 'ZAINSTALUJ-NA-RASPBERRY.cmd', 'PRZECZYTAJ-MNIE.txt']

@@ -35,6 +35,5 @@ echo Najpierw rozpakuj CALY ZIP do folderu. Nie uruchamiaj pliku wewnatrz ZIP.
 :failed
 echo.
 echo Instalacja nie zostala potwierdzona. Zrob zdjecie komunikatu.
-echo Zaslon klucz dostepu, jesli jest widoczny.
 pause
 exit /b 1

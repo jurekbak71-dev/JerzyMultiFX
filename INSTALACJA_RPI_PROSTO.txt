@@ -8,18 +8,19 @@ JERZY MULTIFX — INSTALACJA NA TWOIM RASPBERRY PI
    nie widać znaków — to normalne. Poczekaj na napis GOTOWE.
 
 Panel otworzy się w przeglądarce: http://bassambient.local:8097
-Wklej klucz dostępu pokazany przez instalator, jeśli panel o niego poprosi.
-Nie wysyłaj tego klucza innym osobom.
+Panel otwiera się automatycznie. Nie wpisujesz żadnego klucza.
+Po włączeniu Pi efekt startuje sam z ostatnim brzmieniem i mapami MIDI.
+MIDI Learn przy ON/OFF obejmuje także PREAMP, TAPE DRIVE, DRIVE i COMP.
 
 Instalator przeznaczony jest dla istniejącego bassambient, użytkownika jerzy,
 systemu Debian 13 ARM64 i działającego HeadRush Core / JACK.
 Zachowuje Wi-Fi, ustawienia karty dźwiękowej i zapisane presety.
-Uruchamia nową wersję od czystego brzmienia. Poprzedni program i jego stan
-zostają na karcie; instalator pokazuje komendę pozwalającą do niego wrócić.
+Zachowuje ostatnie brzmienie oraz przypisania MIDI. Poprzedni program i jego
+stan zostają na karcie; instalator pokazuje komendę pozwalającą do niego wrócić.
 Dodaje obsługę kontrolerów USB MIDI, jeśli jej brakuje; potrzebny jest internet.
 Nie formatuje karty pamięci i nie uruchamia drugiego serwera dźwięku.
 
-Jeśli coś się nie uda, zrób zdjęcie komunikatu. Zasłoń klucz dostępu.
+Jeśli coś się nie uda, zrób zdjęcie komunikatu.
 Nie formatuj karty ani nie instaluj systemu od nowa.
 
 To wersja próbna. Nowa aktualizacja nadal wymaga odsłuchu na Twoim sprzęcie.
