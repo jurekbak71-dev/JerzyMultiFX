@@ -1,0 +1,37 @@
+name: Publish simple HeadRush installer
+on:
+  push:
+    branches: ['codex/**']
+    paths:
+      - '.github/workflows/installer.yml'
+      - 'scripts/aktualizuj-headrush.py'
+      - 'scripts/make_headrush_installer.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: v0.1.0-preview.1.ci.40539397637.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test installation safety and publication
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Download existing verified native ARM64 package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .build/installer-input
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir .build/installer-input --pattern 'JerzyMultiFX-RPi-aarch64-v0.1.0-preview.1.tar.gz' --pattern SHA256SUMS-RPi-aarch64
+      - name: Build self-contained installer without private files
+        run: |
+          python3 scripts/make_headrush_installer.py --package .build/installer-input/JerzyMultiFX-RPi-aarch64-v0.1.0-preview.1.tar.gz --checksums .build/installer-input/SHA256SUMS-RPi-aarch64
+      - name: Publish directly without Artifacts or replacement
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" dist/JerzyMultiFX-INSTALATOR.zip dist/SHA256SUMS-INSTALATOR dist/FILES-INSTALATOR.json
