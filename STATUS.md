@@ -45,3 +45,9 @@ Repozytoria źródłowe nie są modyfikowane; pochodzenie kopii i SHA opisuje do
 ## Niewykonane testy i ograniczenia preview
 
 Fizyczny Raspberry Pi/USB audio, FL Studio, radio BLE/Bluefy/iOS oraz LCD: **AWAITING HARDWARE VALIDATION**. Nie deklarujemy stabilności sprzętowej ani małej latencji do gry na żywo. Brakuje kreatora ALSA/AP w panelu i zewnętrznego wejścia Return/sidechain AttackDecay. Niektóre źródła mają nierozstrzygnięte noty licencyjne; publiczna dystrybucja wymaga ich uporządkowania. Obecne wydanie pozostaje prywatne.
+
+## Prosty instalator dla użytkownika — 27.10.2026
+
+Dodano `scripts/instaluj-rpi.sh` oraz `INSTALACJA_RPI_PROSTO.txt`. Gotowy plik `dist/JerzyMultiFX-RPi-PROSTA-INSTALACJA.zip` zawiera instalator po polsku, krótką instrukcję, SHA256 i niezmienioną, pobraną wcześniej z Release natywną paczkę ARM64. Nie wymaga logowania do GitHuba ani kompilacji. Instalator sprawdza ARM64/Trixie i integralność paczki, pokazuje wyłącznie karty z wejściem i wyjściem, następnie wywołuje istniejącą instalację z backupem i autostartem. Nie formatuje nośników.
+
+Weryfikacja: składnia Bash, `--help`, test wyboru zgodnych wejść/wyjść, integralność ZIP oraz zgodność osadzonego programu z pobraną paczką — PASS. Instalacja na fizycznym Raspberry Pi pozostaje niesprawdzona. Próba dodania dwóch nowych plików do istniejącego Release została odrzucona przez GitHub HTTP 401; pliki są dostępne lokalnie do pobrania z rozmowy. Nie nadpisano ani nie usunięto dotychczasowych assetów.
