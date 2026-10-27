@@ -61,3 +61,11 @@ Testy: 17 Python PASS; w tym odrzucenie uszkodzonego pliku, traversal i symlink�
 ## LCD — identyfikacja z materiałów
 
 Obejrzano wszystkie cztery zdjęcia LCD: QAPASS 1602A, etykieta BotiLand LCD-03336, 16 pinów bez I²C; pinout nadrukowany na froncie. Dodano docs/hardware/LCD_1602A_POLACZENIE.md i kopię tekstową do pobrania w dist. Schemat obejmuje sześć sygnałów przez jednokierunkowy 74AHCT245 (5 V, DIR HIGH, /OE LOW), RW LOW, kontrast 10 kΩ, ograniczenie prądu podświetlenia i odsprzęganie. GPIO BCM17/18/27/22/23/24. Nie potwierdzono fizycznych progów wejściowych kontrolera pod zalewą ani testu modułu. Z tego powodu schemat nie zakłada bezpośredniego sterowania 3,3 V bez bufora. Sterownik LCD nie jest jeszcze automatycznie uruchamiany przez instalator audio.
+
+## Naprawa dostarczania instalatora
+
+Linki do plików lokalnych z rozmowy okazały się niedostępne dla użytkownika. Bezpośredni upload z chmury zwracał 401 mimo działającego odczytu API i git push. Dodano workflow `installer.yml`, który używa własnego GITHUB_TOKEN i bez Artifacts publikuje samowystarczalny instalator ZIP oraz oddzielne SHA256 i wykaz plików do istniejącego prywatnego prerelease. Nie nadpisuje wcześniejszych assetów.
+
+Run https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40550934315 — SUCCESS: 17 testów, pobranie natywnej paczki, weryfikacja jej SHA/architektury i publikacja instalatora. Faktycznie pobrano opublikowany ZIP ponownie, sprawdzono SHA256, wykaz i składnię osadzonego skryptu — PASS. Anulowano wyłącznie zbędny nowy pełny rebuild 40550933952, bez usuwania historii; binaria DSP nie zmieniły się.
+
+Działający adres instalatora: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/download/v0.1.0-preview.1.ci.40539397637.1/JerzyMultiFX-INSTALATOR.zip . Pobranie w przeglądarce wymaga zalogowania do konta z dostępem do prywatnego repozytorium. Instalacja na urządzeniu użytkownika nadal czeka na wykonanie.
