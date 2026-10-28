@@ -1,3 +1,12 @@
+## 0.1.0-preview.4 — RPi
+
+- Czytelne ON/OFF: zielone WŁĄCZONY, czerwone WYŁĄCZONY/BYPASS; stan MIDI i natychmiastowa reakcja panelu, wysyłanie zmian podczas ruchu gałek.
+- Listy/przełączniki dla trybów; MIDI Learn także PREAMP/TD/DRIVE/COMP i master. CC Toggle 0/127 dla bypassów.
+- Tape Warm/mechanika, nowa dyfuzja Cloud, korekta Decay i Shimmer, niezależne od sample rate wygładzanie COMP/Digital, optymalizacja Memory.
+- Autostart zachowujący brzmienie, restart USB/core po restarcie JACK, automatyczne odzyskiwanie radia Bluetooth, backup/rollback.
+- Autosave poza kontrolą/audio z ograniczeniem zapisów SD, BPM i mono/stereo, import pełnego presetu VST. Panel bez wpisywania klucza.
+- Szczegóły i ograniczenia: docs/DSP_REVIEW_PREVIEW4_PL.md oraz STATUS.md. Fizyczny odbiór sprzętu pozostaje wymagany.
+
 ## 0.1.0-preview.3
 
 - Windows: studio rack with walnut cheeks, brushed steel/aluminium, ebonite knobs, toggle switches and independent IN/OUT peak VU needles; scrollable controls cannot cover the fixed effect switches.

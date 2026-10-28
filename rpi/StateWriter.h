@@ -1,7 +1,10 @@
 #pragma once
 #include "core/Project.h"
 #include <atomic>
+#include <algorithm>
+#include <cstdint>
 #include <condition_variable>
+#include <chrono>
 #include <cstdio>
 #include <mutex>
 #include <optional>
@@ -16,6 +19,7 @@ class StateWriter {
     std::condition_variable changed;
     std::optional<Project> pending;
     bool stopping = false;
+    uint64_t revision = 0;
     std::string path;
     std::thread worker;
   public:
@@ -28,6 +32,16 @@ class StateWriter {
                 std::unique_lock lock(mutex);
                 changed.wait(lock, [this] { return stopping || pending.has_value(); });
                 if (!pending && stopping) return;
+                // Coalesce knob movements: avoid dozens of SD writes/second.
+                // Continuous motion is still checkpointed at most every 750ms;
+                // shutdown flushes immediately rather than waiting for debounce.
+                const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(750);
+                while(!stopping){
+                    const auto observed=revision;
+                    const auto quiet=std::min(deadline,std::chrono::steady_clock::now()+std::chrono::milliseconds(150));
+                    if(!changed.wait_until(lock,quiet,[&]{return stopping || revision!=observed;}))break;
+                    if(std::chrono::steady_clock::now()>=deadline)break;
+                }
                 next.swap(pending);
             }
             try {
@@ -38,7 +52,7 @@ class StateWriter {
         }
     }) {}
     void submit(Project snapshot) {
-        { std::lock_guard lock(mutex); pending = std::move(snapshot); }
+        { std::lock_guard lock(mutex); pending = std::move(snapshot); ++revision; }
         changed.notify_one();
     }
     ~StateWriter() {

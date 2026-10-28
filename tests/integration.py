@@ -66,6 +66,17 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
         hardware=request('/api/hardware');assert 'midi_inputs' in hardware and 'audio_ports' in hardware
 
         assert request('/api/save',{'name':'embedded'})['ok']
+        # New RPi settings, preset uploads and discrete choices use the real RPC.
+        assert request('/api/hardware',{'operation':'tempo','bpm':97.5})['ok']
+        assert request('/api/hardware',{'operation':'input-mode','mode':1})['ok']
+        current=request('/api/state')
+        assert current['bpm']==97.5 and current['inputMode']==1
+        choice=find('td.shift')
+        assert request('/api/set',{'id':choice,'value':.37})['ok']
+        assert request('/api/state')['values'][choice]==.5,'Discrete modes snap to actual positions'
+        request('/api/set',{'id':parameter,'value':.12})
+        assert request('/api/preset',(data/'presets/embedded.jmfx').read_bytes(),raw=True)['ok']
+        assert abs(request('/api/state')['values'][parameter]-.73)<1e-5
         for message in ({'id':parameter,'value':1.5},{'id':-1,'value':.5}):
             try:
                 result=request('/api/set',message)
@@ -99,6 +110,8 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
             time.sleep(.05)
         else:raise AssertionError('Restart failed')
         assert restored==before,'last sound and MIDI maps survive a core restart'
+        persisted=request('/api/state')
+        assert persisted['bpm']==97.5 and persisted['inputMode']==1,'Tempo and mono input survive restart'
         print('PASS actual core/HTTP: 924+ parameters, authentication, parameter update, preset persistence, stereo WAV44100 -> 48000 IR import/embedding, invalid ranges and traversal rejected')
     finally:
         for p in reversed(processes):

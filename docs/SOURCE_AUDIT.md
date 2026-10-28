@@ -19,3 +19,11 @@ TS808: filtrowane ujemne sprzężenie, przeciwstawne diody i podbicie środka; i
 Schematy w references nie są dołączane do paczek binarnych — prawa ilustracji nie zostały ustalone. Kopie kodu bez jawnej licencji pozostają wyraźnie oznaczone; publiczne wydanie wymaga uporządkowania praw. Nie wyciągamy uprawnień do cudzych plików ze zrzutów ekranów.
 
 Preview 2: `vendor/muff/Circuit/AnalogCircuit.h` i `Catalog.h` są niezmienionymi kopiami oryginalnego solvera/katalogu z tego samego SHA BigMuff (GPL); sumy w source-manifest.json. Adapter `effects/Native.h` wybiera 6 lżejszych Legacy albo 14 oryginalnych modeli obwodowych, z oversamplingiem FIR 4×. Oryginalne repozytoria pozostają bez zmian. Analiza ergonomii i granic porównań: [ERGONOMIA_AUDIO_AUDYT_PL.md](ERGONOMIA_AUDIO_AUDYT_PL.md).
+
+Preview 4: lokalna kopia `vendor/tape/tapedrive_dsp.h` zawiera zmodyfikowany Warm
+oraz zakres/smoothing mechaniki. `vendor/memory/dsp.h` ma przeniesione stałe
+współczynniki do prepare (lokalne porównanie próbek: bez różnicy). Manifest nadal
+wskazuje commit pochodzenia, a nie obietnicę identyczności kopii. Własne reverb,
+kompresor i Digital są zmienione w `effects/Native.h`. Zakres i wykonana weryfikacja:
+[DSP_REVIEW_PREVIEW4_PL.md](DSP_REVIEW_PREVIEW4_PL.md). Oryginalnych repozytoriów nie
+zmieniano; kod ani materiały Strymon nie były kopiowane.

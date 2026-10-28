@@ -164,3 +164,16 @@ zgodności z ich sprzętem. Dodano nieuruchomione regresje sygnałowe 44.1/48/96
 Wykonano wyłącznie statyczny przegląd i `git diff --check` PASS. Nie kompilowano,
 nie uruchamiano CTest/CI, nie publikowano ani nie instalowano. Brzmienie, aliasing,
 wydajność Pi i pomiary ogona nie są jeszcze potwierdzone.
+
+## Preview 4 — przygotowanie instalatora RPi (kompilacja odblokowana)
+
+Właściciel zlecił kompilację i instalator RPi, co zastępuje wcześniejszy zakaz
+budowania. Zebrano poprzednie zmiany panelu/MIDI/autostartu i DSP. Dalszy przegląd
+oraz poprawki: `docs/DSP_REVIEW_PREVIEW4_PL.md`. VERSION 0.1.0-preview.4.
+Lokalnie build x86_64 i CTest 3/3 PASS, Node 9/9 PASS, Python 28/28 PASS,
+HTTP/core PASS z nowymi BPM/mono/importem presetu i zapisem po restarcie.
+Porównanie Memory przed/po optymalizacji dla 6 modeli i 3 sample rate: różnica 0.
+Wszystkie źródła są lokalne do JerzyMultiFX; źródłowe repozytoria bez zmian.
+Natywny ARM64, jego JACK dummy oraz gotowa paczka są jeszcze w przygotowaniu;
+nie traktować tego wpisu jako potwierdzenia publikacji. Fizyczny Pi/HeadRush/radio
+i odsłuch nie były sprawdzone. Nie zmieniono zainstalowanej wersji Windows VST.

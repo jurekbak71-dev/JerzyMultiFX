@@ -23,8 +23,44 @@ def asset_names(platform,version):
         return [f'JerzyMultiFX-RPi-aarch64-v{version}.tar.gz','JerzyMultiFX-INSTALATOR.zip','INSTALACJA_RPI_PROSTO.txt','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md']
     raise ValueError('Unsupported platform')
 
-def notes(repo,tag,version,sha,run_id):
+def notes(repo,tag,version,sha,run_id,platform=None):
     prefix=f'https://github.com/{repo}/releases/download/{tag}/'
+    if platform=='arm64':
+        return f"""# Jerzy MultiFX {version} — RPi preview
+
+Źródła: `{sha}`. [Natywny build ARM64 i testy](https://github.com/{repo}/actions/runs/{run_id}).
+
+## Instalacja
+
+[Pobierz JerzyMultiFX-INSTALATOR.zip]({prefix}JerzyMultiFX-INSTALATOR.zip).
+Rozpakuj cały ZIP na Windows i uruchom `ZAINSTALUJ-NA-RASPBERRY.cmd`.
+Włącz Raspberry Pi i HeadRush; podawaj hasło użytkownika `jerzy`.
+Panel otwiera się bez klucza. Brzmienie i mapy MIDI startują razem z Pi.
+Instalator dla istniejącego bassambient/jerzy/HeadRush Core na Debian 13 ARM64;
+zachowuje Wi-Fi, JACK, presety oraz kopię poprzedniej instalacji i rollback.
+[Instrukcja]({prefix}INSTALACJA_RPI_PL.md).
+
+## Zmiany
+
+Zielone WŁĄCZONY / czerwone WYŁĄCZONY-BYPASS, szybsze sterowanie, listy i przełączniki
+trybów, MIDI Learn wszystkich bypassów. CC Toggle 0=efekt włączony, 127=bypass.
+Tape Warm/mechanika, dedykowana dyfuzja Cloud, poprawki Decay/Shimmer,
+wygładzania COMP/Digital oraz optymalizacja Memory. Autosave poza wątkiem kontroli,
+BPM/mono/stereo i import pełnego presetu VST. Odzyskiwanie USB MIDI/radia Bluetooth
+oraz restart core po restarcie JACK. Szczegóły przeglądu DSP w źródłach paczki.
+Cloud to własny algorytm ambientowy, bez deklaracji identyczności ze Strymon.
+
+## Wykaz plików
+
+- `JerzyMultiFX-INSTALATOR.zip` — samowystarczalny instalator z rzeczywistymi binariami AArch64.
+- `JerzyMultiFX-RPi-aarch64-v{version}.tar.gz` — binaria ARM64, aplikacja, odpowiadające źródła i manifest SHA256.
+- `SHA256SUMS-RPi-aarch64`, `FILES-RPi-aarch64.json` — sumy i rozmiary plików do pobrania.
+- `INSTALACJA_RPI_PROSTO.txt`, `INSTALACJA_RPI_PL.md`, `WIFI_BLUETOOTH_PL.md`, `HARDWARE_TESTS_PL.md` — instrukcje.
+
+To wydanie RPi; nie podmienia opublikowanej wersji Windows VST.
+Testy programowe są w zalinkowanym runie. Fizyczny Pi/HeadRush, radio BLE, odsłuch A/B:
+**AWAITING HARDWARE VALIDATION**. Nie zmieniono widoczności repozytorium.
+"""
     return f'''# Jerzy MultiFX {version} — development prerelease
 
 Source commit: `{sha}`. [Build and test run](https://github.com/{repo}/actions/runs/{run_id}).
@@ -68,7 +104,7 @@ def main():
     manifest={'version':VERSION,'tag':tag,'commit':sha,'platform':label,'files':[{'name':f.name,'size':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest()} for f in selected]}
     filelist=staging/f'FILES-{label}.json';filelist.write_text(json.dumps(manifest,indent=2)+'\n');selected.append(filelist)
     checksums=staging/f'SHA256SUMS-{label}';checksums.write_text(''.join(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n' for f in selected));selected.append(checksums)
-    body=notes(repo,tag,VERSION,sha,run_id)
+    body=notes(repo,tag,VERSION,sha,run_id,a.platform)
     if a.dry_run:
         print(json.dumps({'tag':tag,'prerelease':True,'assets':[f.name for f in selected]},indent=2));return
     repository=json.loads(gh('api',f'repos/{repo}').stdout)

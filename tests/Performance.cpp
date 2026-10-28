@@ -33,8 +33,8 @@ int main(int argc, char **argv) {
     auto &l = layout();
     *out << "{\"sampleRate\":48000,\"buffer\":128,\"profiles\":[";
     const char *names[]{"Clean",          "TS808",      "Muff circuit Supa", "Chorus",         "Attack Decay",
-                        "Atomic Cluster", "MX Volante", "Reverb Plate",      "IR 16384 frames"};
-    for (int profile = 0; profile < 9; ++profile) {
+                        "Atomic Cluster", "MX Volante", "Reverb Plate",      "IR 16384 frames", "Tape Warm", "Cloud", "Shimmer", "Memory Delay"};
+    for (int profile = 0; profile < 13; ++profile) {
         State s;
         auto set = [&](const char *key, float value) {
             const int id = parameterId(key);
@@ -65,6 +65,9 @@ int main(int argc, char **argv) {
             set("reverb.mix", .3);
         if (profile == 8)
             set("ir.mix", 1);
+        if(profile==9){set("td.bypass",0);set("td.sat",.65);set("td.wowFlutter",.5);}
+        if(profile==10 || profile==11){set("reverb.engine",profile==10?.75f:1.f);set("reverb.mix",.5);set("reverb.pitch",1);}
+        if(profile==12){set("delayA.type",.5);set("delayA.mix",1);}
         Engine engine;
         engine.prepare(48000);
         if (!engine.prepareState(s))

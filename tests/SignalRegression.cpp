@@ -122,8 +122,21 @@ int main() try {
         }
         require(maximum < .00001, "Integrated Chorus/Atomic differs from original DSP at matching controls");
     }
-    // Prepared regression coverage for the new WARM and CLOUD algorithms.
-    // These assertions must be executed after the owner's build hold is lifted.
+    // Decay must track actual reflection length in every mode/Size.
+    for(int mode=0;mode<5;++mode)
+        for(float size : {0.f,.5f,1.f}){
+            State s;
+            s.values[lay.reverb]=float(mode)/4;
+            s.values[lay.reverb+3]=size;
+            Reverb reverb;reverb.prepare(48000);reverb.configure(s);
+            for(int line=0;line<8;++line){
+                const double rt60=-6.907755*reverb.lineBase[line]/
+                    (48000*std::log(reverb.lineFeedback[line]));
+                require(std::abs(rt60-plain(lay.reverb+1,s.values[lay.reverb+1]))<.002,
+                        "Reverb Size must not change nominal decay calibration");
+            }
+        }
+    // Regression coverage for the new WARM and CLOUD algorithms.
     for(double rate : {44100.,48000.,96000.}) {
         double harmonic[2]{};
         for(int setting=0;setting<2;++setting){

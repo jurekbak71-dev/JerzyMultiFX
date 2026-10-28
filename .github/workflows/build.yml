@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      rpi_only:
+        description: Build and publish only the RPi installer
+        type: boolean
+        default: false
       upload_diagnostics:
         description: Upload sanitized auxiliary diagnostics (optional; 1 day)
         type: boolean
@@ -13,7 +17,7 @@ permissions:
   contents: read
 jobs:
   release-windows:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !(github.event_name == 'workflow_dispatch' && inputs.rpi_only)
     permissions:
       contents: write
     uses: ./.github/workflows/platform.yml

@@ -24,6 +24,7 @@ struct Analog {
         return output;
     }
     float env = 0, gain = 1, gr = 0, inPeak = 0, outPeak = 0;
+    float gainSmoothing = .003f;
     float preGain = 1, preOut = 1, slew = .002f;
     float driveCut[2]{}, driveAA = 0;
     int driveMode = 0, preampModel = 0;
@@ -32,6 +33,7 @@ struct Analog {
           compThreshold = 0, compRatio = 1, compMakeup = 0;
     void prepare(double rate) {
         sr = rate;
+        gainSmoothing=float(1-std::exp(-1./(.006934*sr)));
         dc = {};
         tone = {};
         last = {};
@@ -180,7 +182,7 @@ struct Analog {
                             ? (1 - 1 / ratio) * (over + knee * .5f) * (over + knee * .5f) / (2 * knee)
                             : 0);
             float target = db(-gr + compMakeup);
-            gain += .003f * (target - gain);
+            gain += gainSmoothing * (target - gain);
             l *= gain;
             r *= gain;
         } else
@@ -211,10 +213,11 @@ struct Digital {
     size_t pos = 0;
     double sr = 48000, time = 240;
     std::array<float, 2> low{};
-    double goal = 240;
+    double goal = 240, timeSmoothing = .0005;
     float coefficient = 0, feedback = 0;
     void prepare(double rate) {
         sr = rate;
+        timeSmoothing=1-std::exp(-1./(.041656*sr));
         for (auto &a : ring)
             a.assign(size_t(sr * 2.1) + 8, 0);
         epochs.assign(ring[0].size(), 0);
@@ -234,7 +237,7 @@ struct Digital {
         feedback = plain(base + 1, s.values[base + 1]);
     }
     std::array<float, 2> tick(float l, float r) {
-        time += (goal - time) * .0005;
+        time += (goal - time) * timeSmoothing;
         float in[]{l, r};
         std::array<float, 2> out{};
         const float a = coefficient;
@@ -359,16 +362,13 @@ struct Reverb {
         const double factor = (.35 + 1.3 * s.values[p + 3]) * (mode == 1 ? .55 : mode == 2 ? 1.2 : 1.);
         for (int i = 0; i < 8; ++i) {
             lineBase[i] = (lines[i].size() - 8) * factor * .65;
-            if(mode==3){
-                // Longer decorrelated cloud, with RT60 derived from the actual
-                // delay rather than the allocated ring length.
-                lineBase[i]=std::clamp(lineBase[i]*1.35,1.,double(lines[i].size()-32));
-                lineFeedback[i]=float(std::exp(-6.907755*lineBase[i]/
-                    (sr*plain(p+1,s.values[p+1]))));
-                continue;
-            }
-            lineFeedback[i] = std::min(.985f, float(std::exp(-6.907755 * lines[i].size() * .65 /
-                                                             (sr * plain(p + 1, s.values[p + 1])))));
+            if(mode==3)
+                lineBase[i]*=1.35;
+            lineBase[i]=std::clamp(lineBase[i],1.,double(lines[i].size())-(mode==3?sr*.0016+8.:16.));
+            // RT60 follows the actual delay in every engine and at every Size.
+            // A ring's allocated capacity is not the acoustic reflection time.
+            lineFeedback[i]=float(std::exp(-6.907755*lineBase[i]/
+                (sr*plain(p+1,s.values[p+1]))));
         }
     }
     std::array<float, 2> tick(float l, float r, const State &s) {
@@ -437,11 +437,14 @@ struct Reverb {
             float orth = v[i] - sum * .25f;
             const float feedback = lineFeedback[i];
             float diffuse = mode==3 ? 1.f : s.values[p + 7];
-            float feed = (orth * diffuse + v[(i + 3) % 8] * (1 - diffuse)) * feedback;
+            float network = orth * diffuse + v[(i + 3) % 8] * (1 - diffuse);
             if (mode == 4) {
-                float amount = plain(p + 12, s.values[p + 12]) * .15f;
-                feed = (feed + shifted * amount) / (1 + amount);
+                // Convex injection BEFORE the decay coefficient: pitch feedback
+                // must not create an independent, uncontrolled feedback path.
+                const float amount=plain(p+12,s.values[p+12])*.75f;
+                network=network*(1-amount)+shifted*amount;
             }
+            const float feed=network*feedback;
             lines[i][pos[i]] = std::clamp((in[i % 2]) * .25f + feed, -8.f, 8.f);
             lineEpoch[i][pos[i]] = epoch;
             pos[i] = (pos[i] + 1) % lines[i].size();

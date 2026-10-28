@@ -141,7 +141,7 @@ def main():
     units.mkdir(parents=True, exist_ok=True)
     def quote(path):
         return '"' + str(path).replace('\\','\\\\').replace('"','\\"').replace('%','%%') + '"'
-    common = '\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=5\nNoNewPrivileges=true\n\n[Install]\nWantedBy=default.target\n'
+    common = '\nRestart=always\nRestartSec=3\nTimeoutStopSec=5\nNoNewPrivileges=true\n\n[Install]\nWantedBy=default.target\n'
     core = '[Unit]\nDescription=Jerzy MultiFX Preview on existing HeadRush JACK\n\n[Service]\nEnvironment=JACK_DEFAULT_SERVER=default\nEnvironment="MULTIFX_DATA='+str(data)+'"\nExecStart='+quote(binary)+common
     web = '[Unit]\nDescription=Jerzy MultiFX Preview panel\nAfter='+NEW[0]+'\nWants='+NEW[0]+'\n\n[Service]\nExecStart=/usr/bin/python3 '+quote(root/'rpi/web.py')+' --host 0.0.0.0 --data '+quote(data)+' --ui '+quote(root/'ui')+common
     changed = False
