@@ -602,6 +602,7 @@ struct Host {
                         }
                         project = std::move(p);
                         setState(project.state);
+                        dirty.store(true);
                     }
                 }
             }
@@ -628,8 +629,6 @@ struct Host {
         const char *dataDirectory = std::getenv("MULTIFX_DATA");
         std::unique_ptr<multifx::rpi::StateWriter> stateWriter;
         if (dataDirectory) stateWriter=std::make_unique<multifx::rpi::StateWriter>(std::string(dataDirectory)+"/last-state.jmfx");
-        auto lastSave = std::chrono::steady_clock::now(), lastChange = lastSave;
-        bool savePending = false;
         auto save = [&] {
             if (stateWriter) {
                 project.state = state();
@@ -662,16 +661,9 @@ struct Host {
                 close(client);
             }
             const auto now = std::chrono::steady_clock::now();
-            if (dirty.exchange(false)) {
-                savePending = true;
-                lastChange = now;
-            }
-            if (savePending && (now - lastChange >= std::chrono::milliseconds(300) ||
-                                now - lastSave >= std::chrono::seconds(2))) {
-                save();
-                savePending = false;
-                lastSave = now;
-            }
+            // The background writer owns debounce/checkpoint timing. Keep
+            // preset/MIDI updates on the same path without a second 2s delay.
+            if (dirty.exchange(false)) save();
             int selected = program.exchange(-1);
             if (selected >= 0) {
                 const char *data = std::getenv("MULTIFX_DATA");
@@ -692,7 +684,7 @@ struct Host {
                 lastRouting = now;
             }
         }
-        if (savePending || dirty.exchange(false))
+        if (dirty.exchange(false))
             save();
         close(fd);
     }

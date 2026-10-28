@@ -49,8 +49,18 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
         assert abs(request('/api/state')['values'][parameter]-.73)<1e-5
         assert request('/api/save',{'name':'integration'})['ok']
         request('/api/set',{'id':parameter,'value':.11})
+        time.sleep(.6) # Ensure the different sound is persisted before LOAD.
         assert request('/api/load',{'name':'integration'})['ok']
         assert abs(request('/api/state')['values'][parameter]-.73)<1e-5
+        time.sleep(.6)
+        processes[0].terminate();processes[0].wait(timeout=5)
+        start([*prefix,core,'--test-server','19817'],env,data/'core-after-load.log')
+        for _ in range(100):
+            try:
+                assert abs(request('/api/state')['values'][parameter]-.73)<1e-5,'Preset LOAD survives restart without further edits'
+                break
+            except (OSError,urllib.error.HTTPError):time.sleep(.05)
+        else:raise AssertionError('Restart after LOAD failed')
         path=data/'impulse.wav'
         with wave.open(str(path),'wb') as wav:wav.setnchannels(2);wav.setsampwidth(2);wav.setframerate(44100);wav.writeframes(b''.join(struct.pack('<hh',12000 if i==0 else 0,-6000 if i==0 else 0) for i in range(100)))
         assert request('/api/ir',path.read_bytes(),raw=True)['ok']
@@ -99,7 +109,7 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
             assert request('/api/state')['values'][p['id']]==0,p['key']
         # Graceful restart is the same state restore path used at boot.
         before=request('/api/state')['values']
-        processes[0].terminate();processes[0].wait(timeout=5)
+        processes[-1].terminate();processes[-1].wait(timeout=5)
         assert (data/'last-state.jmfx').is_file()
         start([*prefix,core,'--test-server','19817'],env,data/'core-restarted.log')
         for _ in range(100):

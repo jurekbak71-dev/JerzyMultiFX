@@ -24,7 +24,8 @@ Autosave działa w oddzielnym wątku, czeka 150 ms ciszy w zmianach, a ciągły 
 zapisuje nie rzadziej niż co około 750 ms (plus czas I/O). Zamknięcie usługi opróżnia
 ostatni stan bez czekania na debounce. Przy nagłym zaniku zasilania końcówka zmian
 może pozostać niezapisana. Core i USB bridge restartują także po poprawnym zakończeniu
-procesu wskutek restartu JACK.
+procesu wskutek restartu JACK. Samo LOAD/import presetu także oznacza stan do
+automatycznego zapisu; osobna regresja restartuje rdzeń bez dalszych edycji.
 
 Sprawdzone lokalnie: CTest 3/3 (w tym harmoniczne Warm, gęstość/stereo/reset Cloud,
 kalibracja Decay, brak alokacji RT), Python 28/28, Node 9/9, rzeczywiste HTTP/core,
