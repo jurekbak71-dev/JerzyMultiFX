@@ -34,3 +34,41 @@ Odczytano źródłowy unit [MODEP mod-host](https://github.com/BlokasLabs/modep-
 Wykonano wyłącznie interpretowane regresje panelu JS oraz Python (bez budowania binariów). Nowy test C++ `RPi_controls_and_background_state` przygotowano, ale **nie uruchomiono**. Nie uruchomiono CMake, kompilatora, CTest, QEMU, Actions ani nowych pomiarów JACK. Nie wydano nowej paczki i nie zainstalowano poprawki u właściciela.
 
 Po zgodzie na kompilację: najpierw nowy host/metadata i zapis stanu; następnie porównanie prawdziwego sygnału RPi/JACK z referencją VST dla tego samego presetu/IR, 44,1/48/96 kHz, obu kanałów, poziomów i różnych buforów; pomiar reakcji CC i liczników xrun/CPU. Dopiero to pozwoli ocenić brzmienie i realną latencję. Attack/Atomic zachowują opóźnienie FFT oryginałów; nie usuwamy go kosztem działającego brzmienia VST.
+
+## Tape Drive / Cloud — robocza zmiana DSP, nadal bez kompilacji
+
+Uwaga właściciela: mechanika TD mało słyszalna, Warm nie daje satysfakcjonującego
+wzbogacenia harmonicznych, Cloud brzmi jak standardowy reverb. Wcześniejsze
+stwierdzenie o niezmienionym wspólnym DSP dotyczy poprzedniego etapu. Na wyraźne
+zlecenie właściciela zmieniono teraz wspólny DSP; przyszły build VST także odziedziczy
+te zmiany. Nie zmodyfikowano repozytoriów oryginalnych efektów ani wydanych paczek.
+
+Analiza kodu: Cloud był tą samą ośmioliniową siecią co Plate, z niewielkim
+resamplingiem 1.004 i bardzo małym udziałem w feedback. Nie miał osobnego wejściowego
+dyfuzora. W TD Warm stosował duże podbicie przed tanh, częściowo znoszone przez
+kompresję obwiedni. Mechanika miała niewielką amplitudę, a centrum opóźnienia
+przeskakiwało z 0 na 5.8 ms po przekroczeniu progu aktywacji.
+
+Zmiany:
+- Warm: osobna asymetryczna miękka charakterystyka z normalizacją wzmocnienia
+  małosygnałowego, udziałem czystego sygnału i progresją harmonicznych. Hot zachowuje
+  dotychczasowy agresywny tor. Harmoniczne są z definicji nieliniowością; celem jest
+  subtelne nasycenie bez ostrego clippingu, nie matematyczny brak zniekształceń.
+- Mechanika: zwiększony zakres wow/flutter i losowego dryfu, płynne centrum 0–8 ms,
+  zachowane ograniczenia bufora. Jest to dynamiczne opóźnienie efektowe, nie nowa
+  deklaracja stałej latencji/PDC. Age i poziom szumów bez zwiększania.
+- Cloud: 6 stopni stereofonicznej dyfuzji allpass z ortogonalnymi rotacjami,
+  dłuższe opóźnienia sieci, RT60 obliczane z rzeczywistej długości odczytu,
+  modulacja skalowana czasowo do sample rate i rozproszone wyjścia stereo.
+  Usunięto słaby pitchshift z Cloud; Shimmer nadal używa własnego pitchshift.
+  Brak kopiowania kodu Strymon i brak deklaracji emulacji konkretnego produktu.
+  Pozostałe tryby reverb nie mają zmienionego toru audio.
+- Bufory dyfuzji przydzielane wyłącznie w prepare; reset unieważnia pamięć epoką.
+  Brak nowych locków, alokacji i I/O wewnątrz tick.
+
+Weryfikacja wykonana: statyczny przegląd zmian i git diff --check PASS.
+Przygotowane, lecz NIE URUCHOMIONE testy C++: pomiar harmonicznych Warm,
+bezpieczne poziomy, gęsty ogon i stereo Cloud, reset dyfuzorów dla 44.1/48/96 kHz.
+Nadal wymagane po odblokowaniu kompilacji: wykonanie testów, pomiar aliasingu i CPU
+na ARM, porównanie głośności/transjentów na gitarze i basie, odsłuch Cloud oraz
+płynność automatyzacji i zmiany silników. Poprawka nie jest zainstalowana na Pi.

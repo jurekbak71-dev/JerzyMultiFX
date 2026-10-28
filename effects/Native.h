@@ -257,6 +257,45 @@ struct Digital {
     }
 };
 struct Reverb {
+    // Cloud has its own six-stage stereo input diffuser. Allocation and epoch
+    // storage live in prepare(); reset invalidates tails without clearing RAM
+    // in the audio callback. Allpass gain stays below unity.
+    struct CloudDiffuser {
+        std::array<std::array<std::vector<float>, 2>, 6> ring;
+        std::array<std::array<std::vector<uint32_t>, 2>, 6> stamps;
+        std::array<std::array<size_t, 2>, 6> position{};
+        void prepare(double rate) {
+            constexpr double ms[6][2]{{3.7,4.9},{7.1,8.3},{11.3,12.7},
+                                     {16.9,18.1},{21.1,23.3},{27.7,29.9}};
+            for(int stage=0;stage<6;++stage)
+                for(int ch=0;ch<2;++ch){
+                    const size_t n=size_t(rate*ms[stage][ch]*.001)+1;
+                    ring[stage][ch].assign(n,0);
+                    stamps[stage][ch].assign(n,0);
+                }
+            position={};
+        }
+        void tick(float (&signal)[2], float gain, uint32_t epoch) {
+            for(int stage=0;stage<6;++stage){
+                // Orthogonal stereo rotation between stages preserves energy
+                // while preventing identical left/right reflection patterns.
+                const float l=signal[0],r=signal[1];
+                signal[0]=(l+r)*.70710678f;
+                signal[1]=(l-r)*.70710678f;
+                for(int ch=0;ch<2;++ch){
+                    auto& at=position[stage][ch];
+                    auto& b=ring[stage][ch];
+                    auto& stamp=stamps[stage][ch];
+                    const float delayed=stamp[at]==epoch?b[at]:0.f;
+                    const float output=delayed-gain*signal[ch];
+                    b[at]=signal[ch]+gain*output;
+                    stamp[at]=epoch;
+                    signal[ch]=output;
+                    at=(at+1)%b.size();
+                }
+            }
+        }
+    } cloudDiffuser;
     double sr = 48000, phase = 0, pitchPhase = 0;
     std::array<std::vector<float>, 8> lines;
     std::array<std::vector<uint32_t>, 8> lineEpoch;
@@ -266,6 +305,7 @@ struct Reverb {
     void reset() {
         ++epoch;
         pos = {};
+        cloudDiffuser.position = {};
         low = {};
         high = {};
         pp = pitchPos = 0;
@@ -285,6 +325,7 @@ struct Reverb {
     std::array<double, 8> lineBase{}, phaseSine{}, phaseCosine{};
     void prepare(double rate) {
         sr = rate;
+        cloudDiffuser.prepare(rate);
         constexpr double times[]{.0297, .0371, .0411, .0437, .0531, .0617, .0719, .0893};
         for (int i = 0; i < 8; ++i) {
             lines[i].assign(size_t(sr * times[i] * 1.8) + 8, 0);
@@ -298,6 +339,7 @@ struct Reverb {
         epoch = 1;
         pitchEpoch = {};
         pos = {};
+        cloudDiffuser.position = {};
         low = {};
         high = {};
         pp = pitchPos = 0;
@@ -317,6 +359,14 @@ struct Reverb {
         const double factor = (.35 + 1.3 * s.values[p + 3]) * (mode == 1 ? .55 : mode == 2 ? 1.2 : 1.);
         for (int i = 0; i < 8; ++i) {
             lineBase[i] = (lines[i].size() - 8) * factor * .65;
+            if(mode==3){
+                // Longer decorrelated cloud, with RT60 derived from the actual
+                // delay rather than the allocated ring length.
+                lineBase[i]=std::clamp(lineBase[i]*1.35,1.,double(lines[i].size()-32));
+                lineFeedback[i]=float(std::exp(-6.907755*lineBase[i]/
+                    (sr*plain(p+1,s.values[p+1]))));
+                continue;
+            }
             lineFeedback[i] = std::min(.985f, float(std::exp(-6.907755 * lines[i].size() * .65 /
                                                              (sr * plain(p + 1, s.values[p + 1])))));
         }
@@ -334,6 +384,8 @@ struct Reverb {
             in[c] = preEpoch[at] == epoch ? predelay[c][at] : 0;
         }
         pp = (pp + 1) % predelay[0].size();
+        if(mode==3)
+            cloudDiffuser.tick(in,.55f+.23f*s.values[p+7],epoch);
         phase += .17 / sr;
         if (phase >= 1)
             phase -= 1;
@@ -343,7 +395,8 @@ struct Reverb {
         float sum = 0;
         for (int i = 0; i < 8; ++i) {
             double d = std::clamp(lineBase[i] +
-                                      (sine * phaseCosine[i] + cosine * phaseSine[i]) * s.values[p + 8] * 8,
+                                      (sine * phaseCosine[i] + cosine * phaseSine[i]) *
+                                          (mode==3 ? sr*.0015*s.values[p+8] : s.values[p+8]*8),
                                   1., double(lines[i].size() - 4));
             double at = double(pos[i]) - d;
             while (at < 0)
@@ -359,12 +412,10 @@ struct Reverb {
             sum += v[i];
         }
         float shifted = 0;
-        if (mode == 4 || mode == 3) {
+        if (mode == 4) {
             pitch[pitchPos] = sum * .125f;
             pitchEpoch[pitchPos] = epoch;
             double ratio = pitchRatio;
-            if (mode == 3)
-                ratio = 1.004;
             pitchPhase += (1 - ratio) / 2048;
             pitchPhase -= std::floor(pitchPhase);
             for (int w = 0; w < 2; ++w) {
@@ -385,9 +436,9 @@ struct Reverb {
         for (int i = 0; i < 8; ++i) {
             float orth = v[i] - sum * .25f;
             const float feedback = lineFeedback[i];
-            float diffuse = s.values[p + 7];
+            float diffuse = mode==3 ? 1.f : s.values[p + 7];
             float feed = (orth * diffuse + v[(i + 3) % 8] * (1 - diffuse)) * feedback;
-            if (mode >= 3) {
+            if (mode == 4) {
                 float amount = plain(p + 12, s.values[p + 12]) * .15f;
                 feed = (feed + shifted * amount) / (1 + amount);
             }
@@ -396,6 +447,11 @@ struct Reverb {
             pos[i] = (pos[i] + 1) % lines[i].size();
         }
         float wetL = (v[0] + v[2] + v[4] + v[6]) * .5f, wetR = (v[1] + v[3] + v[5] + v[7]) * .5f;
+        if(mode==3){
+            // Signed orthogonal output taps give a wide, non-mono late field.
+            wetL=(v[0]+v[2]-v[4]-v[6])*.5f;
+            wetR=(v[1]-v[3]+v[5]-v[7])*.5f;
+        }
         if (mode == 0) {
             wetL += v[1] * .2f;
             wetR += v[0] * .2f;

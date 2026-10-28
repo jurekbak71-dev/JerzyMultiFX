@@ -151,3 +151,16 @@ Właściciel potwierdził dobre brzmienie VST i zgłosił problemy RPi: audio, r
 W kodzie: ON/OFF zielony/czerwony z jednoznacznym statusem; live zmiany gałek zamiast czekania na koniec ruchu; odświeżanie statusów MIDI bez utraty fokusu/przebudowy panelu; ochrona przed starym STATE i błędem zapisu; listy/przełączniki dla dyskretnych opcji; import presetu VST; osobny wątek autosave; poprawki restartu USB i automatyczne odzyskiwanie radia BT wraz z backup/rollback; RT w dedykowanym wariancie systemd, bez przestawiania istniejącego JACK HeadRush.
 
 Wykonano interpretowane regresje: Node 9/9 i Python 28/28 PASS. C++ i zmienione unity nie zostały zbudowane/uruchomione, porównania brzmienia i wydajności nie wykonano. Nie uruchomiono kompilacji/Actions, nie opublikowano paczki, nie zmieniono instalacji na Pi. Ostatnim opublikowanym wydaniem pozostaje preview 3 z poprzedniego rozdziału; nie zawiera tych poprawek. Weryfikacja dodanego BPM/transportu JACK i wejścia Mono/Stereo względem DAW, pomiar parytetu sygnału i fizyczny odbiór MIDI/audio pozostają do dalszego etapu, a nie jako deklaracja sukcesu.
+
+### Dalsze uwagi właściciela — TD Warm/mechanika i Cloud, BEZ KOMPILACJI
+
+Na nowe zlecenie zmieniono wspólny DSP (tym samym przyszły VST także obejmie tę
+rewizję): osobna miękka charakterystyka Warm z normalizacją małosygnałową,
+większy zakres wow/flutter i płynne centrum opóźnienia TD, dedykowana sześciostopniowa
+dyfuzja stereo Cloud, jego RT60/modulacja i wyjścia. Hot oraz pozostałe algorytmy
+reverb zachowują swoje tory audio. Szczegóły i ograniczenia:
+`docs/RPI_PARITY_WORKING_PL.md`. Brak kopiowania algorytmów Strymon lub deklaracji
+zgodności z ich sprzętem. Dodano nieuruchomione regresje sygnałowe 44.1/48/96 kHz.
+Wykonano wyłącznie statyczny przegląd i `git diff --check` PASS. Nie kompilowano,
+nie uruchamiano CTest/CI, nie publikowano ani nie instalowano. Brzmienie, aliasing,
+wydajność Pi i pomiary ogona nie są jeszcze potwierdzone.

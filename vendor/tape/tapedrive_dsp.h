@@ -37,6 +37,7 @@ public:
         randomState=0x4a65727au;
         wowMotion={}; flutterMotion={}; scrapeMotion={}; wearMotion={};
         smoothWow=smoothFlutter=smoothAge=0.0;
+        smoothCentreMs=0.0;
         smoothOpto=0.0; smoothMakeup=1.0; smoothOptoMix=0.0;
         optoDetectorFast=optoDetectorSlow=0.0;
         optoFastReduction=optoSlowReduction=optoReduction=optoHistory=0.0;
@@ -140,11 +141,15 @@ public:
                 --slipLeft;
             }
 
-            const double wowMs=smoothWow*(0.48*std::sin(wowPhase1)+0.22*std::sin(wowPhase2)+1.65*wowRnd);
-            const double flutterMs=smoothFlutter*(0.055*std::sin(flutterPhase1)+0.028*std::sin(flutterPhase2)+0.085*flutterRnd);
+            const double wowMs=smoothWow*(1.25*std::sin(wowPhase1)+0.60*std::sin(wowPhase2)+2.60*wowRnd);
+            const double flutterMs=smoothFlutter*(0.145*std::sin(flutterPhase1)+0.075*std::sin(flutterPhase2)+0.18*flutterRnd);
             const double scrapeMs=smoothAge*smoothAge*(0.012*std::sin(scrapePhase)+0.024*scrapeRnd);
             const double movement=std::max({smoothWow,smoothFlutter,smoothAge*0.55});
-            const double centreDelayMs=movement>0.0001?5.8:0.0;
+            // Smooth the delay centre as well as its modulation: enabling mechanics
+            // must not jump instantly from zero to several milliseconds.
+            const double centreTargetMs=8.0*std::min(1.0,movement*20.0);
+            smoothCentreMs=smoothA*smoothCentreMs+(1.0-smoothA)*centreTargetMs;
+            const double centreDelayMs=smoothCentreMs;
             const double delaySamples=std::clamp((centreDelayMs+wowMs+flutterMs+scrapeMs+slipMs)*0.001*sampleRate,0.0,0.050*sampleRate);
 
             // Program/frequency-dependent optical detector. Low frequencies are
@@ -255,8 +260,22 @@ public:
                 const double z=shapedIn*drive*comp;
                 const double soft=std::tanh(z+bias)-std::tanh(bias);
                 double wet=soft+0.08*sat*std::tanh(z*z*(z>=0?1.0:-1.0));
+                if(!gainMode){
+                    // WARM: progressive asymmetric soft-knee colour, not the
+                    // HOT pre-gain/compressor. Normalize small-signal gain so
+                    // added harmonics are not confused with a loudness boost.
+                    // Parallel clean preserves transients; no hard clipping.
+                    const double warmDrive=1.0+4.0*sat;
+                    const double warmBias=0.08+0.20*sat;
+                    const double b=std::tanh(warmBias);
+                    const double coloured=(std::tanh(shapedIn*warmDrive+warmBias)-b)
+                        /(warmDrive*(1.0-b*b));
+                    const double colourMix=0.85*sat;
+                    wet=shapedIn+colourMix*(coloured-shapedIn);
+                }
 
-                const double tapeSat=std::clamp(std::abs(z-soft)/(std::abs(z)+0.35),0.0,1.0)
+                const double tapeSat=std::clamp(gainMode ? std::abs(z-soft)/(std::abs(z)+0.35)
+                    : std::abs(shapedIn-wet)/(std::abs(shapedIn)+0.035),0.0,1.0)
                                      *std::min(1.0,0.25+1.15*sat);
                 saturationPeak=std::max(saturationPeak,std::max(preSat,tapeSat));
 
@@ -418,7 +437,7 @@ private:
     double wowPhase1=0.0,wowPhase2=0.0,flutterPhase1=0.0,flutterPhase2=0.0,scrapePhase=0.0;
     int slipLeft=0,slipLength=0;
     double slipDepthMs=0.0;
-    double smoothWow=0.0,smoothFlutter=0.0,smoothAge=0.0;
+    double smoothWow=0.0,smoothFlutter=0.0,smoothAge=0.0,smoothCentreMs=0.0;
     double smoothOpto=0.0,smoothMakeup=1.0,smoothOptoMix=0.0;
     double optoDetectorFast=0.0,optoDetectorSlow=0.0,optoSidechainLow=0.0;
     double optoFastReduction=0.0,optoSlowReduction=0.0,optoReduction=0.0,optoHistory=0.0;

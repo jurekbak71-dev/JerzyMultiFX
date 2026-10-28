@@ -3,6 +3,8 @@
 #include "core/Project.h"
 #include "vendor/atomic/Dsp.h"
 #include "vendor/clone/Dsp.h"
+#include "vendor/tape/tapedrive_dsp.h"
+#include "effects/Native.h"
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -119,6 +121,58 @@ int main() try {
             }
         }
         require(maximum < .00001, "Integrated Chorus/Atomic differs from original DSP at matching controls");
+    }
+    // Prepared regression coverage for the new WARM and CLOUD algorithms.
+    // These assertions must be executed after the owner's build hold is lifted.
+    for(double rate : {44100.,48000.,96000.}) {
+        double harmonic[2]{};
+        for(int setting=0;setting<2;++setting){
+            JerzyAudio::TapeDriveDSP<double> tape;
+            tape.prepare(rate);
+            JerzyAudio::TapeDriveParams p;
+            p.sat=double(setting); p.level=2./3.; p.shift=0.;
+            p.optoBypass=1.; p.dry=0.;
+            double real[2]{},imag[2]{};
+            for(int n=0;n<int(rate)*2;++n){
+                double x=.18*std::sin(6.283185307179586*375.*n/rate),y=0.;
+                const double* input[]{&x}; double* output[]{&y};
+                double a,b,c,d;
+                tape.process(input,output,1,1,p,a,b,c,d);
+                require(std::isfinite(y) && std::abs(y)<1., "Warm finite headroom");
+                if(n>=int(rate))
+                    for(int h=0;h<2;++h){
+                        const double phase=6.283185307179586*375.*(h+2)*n/rate;
+                        real[h]+=y*std::cos(phase); imag[h]+=y*std::sin(phase);
+                    }
+            }
+            harmonic[setting]=(std::hypot(real[0],imag[0])+std::hypot(real[1],imag[1]))/rate;
+        }
+        require(harmonic[1]>.0001 && harmonic[1]>harmonic[0]*5.,
+                "Warm adds measurable low-order harmonics without hard clipping");
+        State state;
+        state.values[lay.reverb]=.75f; // Cloud
+        state.values[lay.reverb+9]=1.f;
+        Reverb cloud;
+        cloud.prepare(rate); cloud.configure(state);
+        double energy=0,stereoDifference=0;
+        int occupied=0;
+        for(int n=0;n<int(rate)*3;++n){
+            auto y=cloud.tick(n==0?.2f:0.f,n==0?.2f:0.f,state);
+            require(std::isfinite(y[0]) && std::isfinite(y[1]) &&
+                    std::abs(y[0])<2.f && std::abs(y[1])<2.f,"Cloud stable impulse tail");
+            if(n>int(rate)/2){
+                energy+=double(y[0])*y[0]+double(y[1])*y[1];
+                stereoDifference+=double(y[0]-y[1])*(y[0]-y[1]);
+                occupied+=std::abs(y[0])+std::abs(y[1])>1e-9f;
+            }
+        }
+        require(energy>1e-10 && occupied>int(rate),"Cloud dense sustained late tail");
+        require(stereoDifference>energy*.01,"Cloud stereo decorrelation");
+        cloud.reset();
+        for(int n=0;n<int(rate)/2;++n){
+            auto y=cloud.tick(0,0,state);
+            require(y[0]==0 && y[1]==0,"Cloud reset invalidates all diffusion memories");
+        }
     }
     // Every block must return the same zero-latency clean signal when bypassed.
     for (int block = 0; block < 5; ++block) {
