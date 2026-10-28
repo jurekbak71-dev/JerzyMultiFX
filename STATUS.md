@@ -177,3 +177,32 @@ Wszystkie źródła są lokalne do JerzyMultiFX; źródłowe repozytoria bez zmi
 Natywny ARM64, jego JACK dummy oraz gotowa paczka są jeszcze w przygotowaniu;
 nie traktować tego wpisu jako potwierdzenia publikacji. Fizyczny Pi/HeadRush/radio
 i odsłuch nie były sprawdzone. Nie zmieniono zainstalowanej wersji Windows VST.
+
+## Preview 4 — końcowy instalator RPi opublikowany i pobrany
+
+Źródłowy commit **19c05423a0b1b3be744131f1becaf2cdbf689638**.
+Natywny ARM64: **SUCCESS**
+https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40725074577 .
+Release:
+https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.4.ci.40725074577.1 .
+Wydanie RPi; Windows celowo pominięty. Wcześniejszy run 40724632983 także przeszedł,
+ale końcowy powyższy obejmuje dodatkową poprawkę zapisu po LOAD bez dalszej edycji.
+Wcześniejszych wydań ani plików nie kasowano.
+
+- Natywny ARM64: CTest 3/3 (DSP/RT, sygnał i latencja, kontrolki RPi/autosave),
+  Python 28/28, Node 9/9, HTTP/core/IR/preset/BPM/mono/CC, restart po LOAD i po MIDI,
+  rzeczywisty JACK dummy z sygnałem, MIDI i zmianą bufora — PASS.
+- Paczkowanie, architektura i prywatność źródeł — PASS w CI.
+- Po publikacji pobrano gotowy ZIP instalatora, TAR.GZ i manifesty. Zewnętrzne i
+  wewnętrzne SHA256, oba ELF64 AArch64, SHA źródeł, nowe kontrolki/DSP/odzyskiwanie,
+  składnia osadzonego instalatora i identyczność bajtowa jego payloadu z TAR.GZ — PASS.
+- Mikrobenchmark CI ARM64, 48 kHz/128, CPU sekund na sekundę audio: Tape Warm
+  0.020161, Cloud 0.008835, Shimmer 0.009457, Memory 0.008598. To pomiar runnera ARM64,
+  nie fizycznego Raspberry Pi; nie jest gwarancją obciążenia całego toru użytkownika.
+
+Instalator: `JerzyMultiFX-INSTALATOR.zip` w powyższym Release. Rozpakować na Windows,
+włączyć HeadRush i Raspberry Pi, uruchomić `ZAINSTALUJ-NA-RASPBERRY.cmd`.
+Instalator zachowuje sieć/JACK/presety, dodaje autostart/recovery oraz rollback.
+Nie instalowano zdalnie na fizycznym bassambient. Radio Bluetooth/USB kontroler
+właściciela, odsłuch i rzeczywista latencja HeadRush nadal wymagają odbioru na
+sprzęcie. Nie potwierdzono identyczności Cloud z urządzeniami Strymon.
