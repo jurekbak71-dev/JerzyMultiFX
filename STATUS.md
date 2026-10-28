@@ -143,3 +143,11 @@ Natywny job Windows rewizji 59f0c17 zatrzymał się w kroku testu edytora. Lokal
 Windows: `JerzyMultiFX-VST3-Windows-x64-v0.1.0-preview.3.zip` → rozpakować → `ZAINSTALUJ-VST3.cmd` przy zamkniętym DAW. RPi bassambient/HeadRush: `JerzyMultiFX-INSTALATOR.zip` → rozpakować → `ZAINSTALUJ-NA-RASPBERRY.cmd`. Panel otwiera się bez wpisywania klucza. Instalator włącza autostart i zachowuje ostatnie brzmienie/mapy MIDI. Przy każdym ON/OFF, również PREAMP/TAPE DRIVE/DRIVE/COMP, jest MIDI Learn; w VST prawy przycisk.
 
 Nie instalowano preview 3 zdalnie na fizycznym Pi. Restart/odsłuch HeadRush, radio Bluetooth i FL Studio nadal wymagają potwierdzenia na sprzęcie właściciela. Repozytoria źródłowe pozostają niezmienione. Zastąpione przebiegi anulowano bez usuwania historii ani istniejących assetów; końcowy przebieg oraz wcześniejsza rewizja 543493d zakończyły się sukcesem na obu platformach.
+
+## RPi — poprawki robocze po uwagach 28.10.2026, BEZ KOMPILACJI
+
+Właściciel potwierdził dobre brzmienie VST i zgłosił problemy RPi: audio, reakcje regulatorów, mylące statusy, niedziałające USB/BT MIDI. Wyraźnie wstrzymał kompilację. Poprawki są lokalne; źródła VST i wspólne algorytmy DSP niezmienione. Zakres i analiza MODEP/Patchbox OS: [RPI_PARITY_WORKING_PL.md](docs/RPI_PARITY_WORKING_PL.md).
+
+W kodzie: ON/OFF zielony/czerwony z jednoznacznym statusem; live zmiany gałek zamiast czekania na koniec ruchu; odświeżanie statusów MIDI bez utraty fokusu/przebudowy panelu; ochrona przed starym STATE i błędem zapisu; listy/przełączniki dla dyskretnych opcji; import presetu VST; osobny wątek autosave; poprawki restartu USB i automatyczne odzyskiwanie radia BT wraz z backup/rollback; RT w dedykowanym wariancie systemd, bez przestawiania istniejącego JACK HeadRush.
+
+Wykonano interpretowane regresje: Node 9/9 i Python 28/28 PASS. C++ i zmienione unity nie zostały zbudowane/uruchomione, porównania brzmienia i wydajności nie wykonano. Nie uruchomiono kompilacji/Actions, nie opublikowano paczki, nie zmieniono instalacji na Pi. Ostatnim opublikowanym wydaniem pozostaje preview 3 z poprzedniego rozdziału; nie zawiera tych poprawek. Weryfikacja dodanego BPM/transportu JACK i wejścia Mono/Stereo względem DAW, pomiar parytetu sygnału i fizyczny odbiór MIDI/audio pozostają do dalszego etapu, a nie jako deklaracja sukcesu.

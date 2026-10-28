@@ -5,25 +5,32 @@ const fs=require('node:fs');
 const source=fs.readFileSync('ui/app.js','utf8');
 const storage=()=>{const data=new Map();return {getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,String(v)),removeItem:k=>data.delete(k)}};
 function panel(local=storage(),session=storage(),options={}){
- const nodes=new Map(),timers=[];
+ const nodes=new Map(),timers=[],roots=[],timeouts=new Map();let timeoutId=0;
+ const parameters=options.parameters||['master.bypass',...Array.from({length:5},(_,i)=>'block.'+i+'.bypass')].map((key,id)=>({id,key,name:key,label:key,default:0,min:0,max:1,steps:1,control:'switch'}));
+ const values=parameters.map(p=>p.default||0);
+ const matches=(x,selector)=>selector==='button'?x.tagName==='button':selector==='[data-parameter]'?x.dataset.parameter!==undefined:selector==='[data-block]'?x.dataset.block!==undefined:false;
+ const walk=(root,selector)=>root.children.flatMap(x=>[...(matches(x,selector)?[x]:[]),...walk(x,selector)]);
  class Element{
-  constructor(){this.children=[];this.dataset={};this.style={};this.value='';this.hidden=false;}
+  constructor(tag){this.tagName=tag;this.children=[];this.dataset={};this.style={};this.value='';this.hidden=false;this.attributes={};}
   set id(v){this._id=v;nodes.set(v,this)} get id(){return this._id}
   append(...items){this.children.push(...items)} replaceChildren(...items){this.children=items}
   get lastElementChild(){return this.children.at(-1)}
-  setAttribute(){} querySelectorAll(){return []} click(){return this.onclick?.()}
+  setAttribute(k,v){this.attributes[k]=v} querySelectorAll(selector){return walk(this,selector)} click(){return this.onclick?.()}
  }
- for(const id of ['token','login','logout','status','master','master-learn','connect','error','tabs','main','meter-in','meter-out','meter-cpu','meter-latency','meter-xruns','meter-clips']){const n=new Element();n.id=id}
+ for(const id of ['token','login','logout','status','master','master-learn','connect','error','tabs','main','meter-in','meter-out','meter-cpu','meter-latency','meter-xruns','meter-clips']){const n=new Element();n.id=id;roots.push(n)}
  const requests=[];
- const context=vm.createContext({window:{MF_META:{parameters:[]},localStorage:local,sessionStorage:session},localStorage:local,sessionStorage:session,document:{getElementById:id=>nodes.get(id),createElement:()=>new Element(),querySelectorAll:()=>[],querySelector:()=>null},setInterval:f=>timers.push(f),setTimeout:()=>0,console,fetch:async(url,opts)=>{
+ const document={getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),querySelectorAll:selector=>[...new Set(roots.flatMap(r=>[...(matches(r,selector)?[r]:[]),...walk(r,selector)]))],querySelector:()=>null};
+ const context=vm.createContext({window:{MF_META:{parameters:[]},localStorage:local,sessionStorage:session},localStorage:local,sessionStorage:session,document,setInterval:f=>timers.push(f),setTimeout:f=>{timeouts.set(++timeoutId,f);return timeoutId},clearTimeout:id=>timeouts.delete(id),console,fetch:async(url,opts)=>{
   requests.push({url,headers:opts.headers,body:opts.body});
   if(options.offline)throw Error('offline');
   const status=options.reject?503:200;
-  const data=url.endsWith('/metadata')?{parameters:[]}:url.endsWith('/view')?{ids:[]}:{values:[],in:0,out:0,cpu:0,latencySamples:0,sampleRate:48000};
+  if(url.endsWith('/set')){if(options.deferSet)await options.deferSet;if(options.failSet)return {ok:false,status:503,json:async()=>({error:'offline'})};const v=JSON.parse(opts.body);values[v.id]=v.value;}
+  if(url.endsWith('/state')&&options.deferState)await options.deferState;
+  const data=url.endsWith('/metadata')?{parameters,controlCount:parameters.length}:url.endsWith('/view')?{ids:options.ids||[]}:{values:[...values],in:0,out:0,cpu:0,latencySamples:0,sampleRate:48000};
   return {ok:status===200,status,json:async()=>status===200?data:{error:'Token required'}};
  }});
  vm.runInContext(source,context);
- return {nodes,requests,timers,context,options};
+ return {nodes,requests,timers,context,options,document,values,timeouts};
 }
 const settle=()=>new Promise(r=>setImmediate(r));
 test('panel opens automatically without a token or browser storage',async()=>{
@@ -41,10 +48,70 @@ test('core starting late retries automatically',async()=>{
 });
 test('MIDI Learn for every switch sends its own parameter ID',async()=>{
  const a=panel();await settle();await settle();
- vm.runInContext("parameters=[{id:5,key:'midi.learn'}];window.MF_META.controlCount=100;",a.context);
+ vm.runInContext("parameters.push({id:6,key:'midi.learn',name:'MIDI Learn'});window.MF_META.controlCount=100;",a.context);
  for(const id of [0,2,7,11,19,30,45,60,82,95]){
   await vm.runInContext(`learnButton(${id}).click()`,a.context);
   const request=a.requests.filter(r=>r.url.endsWith('/set')).at(-1);
-  assert.deepEqual(JSON.parse(request.body),{id:5,value:(id+1)/100});
+  assert.deepEqual(JSON.parse(request.body),{id:6,value:(id+1)/100});
  }
+});
+test('focused switch responds before HTTP acknowledgement and rolls back on failure',async()=>{
+ const parameters=[{id:0,key:'master.bypass',name:'Master',min:0,max:1,steps:1,default:0,control:'switch'}];
+ const a=panel(storage(),storage(),{parameters});await settle();await settle();
+ let release;a.options.deferSet=new Promise(r=>release=r);
+ const button=a.nodes.get('master');a.document.activeElement=button;
+ const click=button.click();await settle();
+ assert.equal(button.textContent,'WYŁĄCZONY / BYPASS');assert.equal(button.className,'toggle off');assert.equal(button.attributes['aria-busy'],'true');
+ release();await click;assert.equal(button.attributes['aria-busy'],'false');
+ a.options.deferSet=null;a.options.failSet=true;await button.click();
+ assert.equal(button.textContent,'WYŁĄCZONY / BYPASS');assert.equal(button.className,'toggle off');
+});
+test('MIDI updates focused master and block switches without rebuilding the panel',async()=>{
+ const a=panel();await settle();await settle();
+ const before=a.nodes.get('main').children[0],button=a.nodes.get('master');a.document.activeElement=button;
+ a.values[0]=1;a.values[1]=1;await a.timers[0]();
+ assert.equal(button.className,'toggle off');assert.equal(button.textContent,'WYŁĄCZONY / BYPASS');
+ const block=a.document.querySelectorAll('[data-parameter]').find(x=>Number(x.dataset.parameter)===1);
+ assert.equal(block.className,'toggle off');assert.equal(a.nodes.get('main').children[0],before);
+ await block.click();await block.click();assert.equal(block.textContent,'WYŁĄCZONY / BYPASS');
+});
+test('an older poll cannot undo a newer switch click',async()=>{
+ const a=panel();await settle();await settle();let release;
+ a.options.deferState=new Promise(r=>release=r);
+ const poll=a.timers[0]();await settle();await a.nodes.get('master').click();
+ a.values[0]=0;release();await poll;
+ assert.equal(a.nodes.get('master').textContent,'WYŁĄCZONY / BYPASS');
+});
+test('all discrete parameters render as switches, lists or numeric fields',async()=>{
+ const a=panel();await settle();await settle();
+ for(const [steps,control,choices] of [[1,'switch',''],[2,'select','A|B|C'],[3,'select',''],[65534,'number','']]){
+  const key=JSON.stringify({id:20,key:'test.option',name:'Test',min:0,max:steps,steps,control,choices});
+  const element=vm.runInContext(`control(${key})`,a.context);
+  assert.notEqual(element.children[0]?.className,'rotary');
+  if(control==='switch')assert.equal(element.children[0].tagName,'button');
+  if(control==='select')assert.equal(element.children[0].tagName,'select');
+  if(control==='number')assert.equal(element.children[0].type,'number');
+ }
+});
+test('continuous knob and compact slider send during movement, not only on release',async()=>{
+ const base=['master.bypass',...Array.from({length:5},(_,i)=>'block.'+i+'.bypass')].map((key,id)=>({id,key,name:key,default:0,min:0,max:1,steps:1,control:'switch'}));
+ const gain={id:6,key:'td.sat',name:'Saturation',min:0,max:1,default:0,steps:0,control:'knob'};
+ for(const compact of [false,true]){
+  const a=panel(storage(),storage(),{parameters:[...base,gain]});await settle();await settle();
+  const widget=vm.runInContext(`control(${JSON.stringify(gain)},${compact})`,a.context);
+  const input=compact?widget.children[0]:widget.children[0].children[1];
+  for(let i=1;i<=10;i++){input.value=i/10;input.oninput()}
+  assert.equal(a.timeouts.size,1,'continuous movement must not keep deferring the timer');
+  const [id,callback]=a.timeouts.entries().next().value;a.timeouts.delete(id);callback();await settle();
+  assert.deepEqual(JSON.parse(a.requests.filter(r=>r.url.endsWith('/set')).at(-1).body),{id:6,value:1});
+  input.value=.3;input.oninput();assert.equal(a.timeouts.size,1,'the next movement schedules the next live update');
+ }
+});
+test('child enabled state cannot hide a bypassed master or parent block',async()=>{
+ const a=panel();await settle();await settle();
+ a.values[0]=1;await a.timers[0]();
+ assert.equal(a.nodes.get('signal-status').hidden,false);assert.match(a.nodes.get('signal-status').textContent,/CAŁY TOR WYŁĄCZONY/);
+ a.values[0]=0;a.values[1]=1;await a.timers[0]();
+ assert.match(a.nodes.get('signal-status').textContent,/ANALOG WYŁĄCZONY/);
+ a.values[1]=0;await a.timers[0]();assert.equal(a.nodes.get('signal-status').hidden,true);
 });

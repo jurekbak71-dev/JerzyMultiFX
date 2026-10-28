@@ -109,7 +109,7 @@ def main():
     if previous_data:
         for directory in ('presets','ir'):
             if (previous_data/directory).is_dir():shutil.copytree(previous_data/directory,data/directory)
-        for name in ('token','midi-inputs-disabled.txt','audio-routing.txt','last-state.jmfx'):
+        for name in ('token','midi-inputs-disabled.txt','audio-routing.txt','tempo.txt','input-mode.txt','last-state.jmfx'):
             if (previous_data/name).is_file():shutil.copy2(previous_data/name,data/name)
     backup=run/'poprzednie-pliki-uslug';backup.mkdir(mode=0o700)
     for unit in NEW+[BRIDGE]:
@@ -136,7 +136,8 @@ def main():
         print('Dodaję obsługę USB MIDI. W razie pytania wpisz hasło jerzy.',flush=True)
         subprocess.run(['sudo','apt-get','update'],check=True)
         subprocess.run(['sudo','apt-get','install','-y','--no-install-recommends','a2jmidid'],check=True)
-    external_bridge=subprocess.run(['pgrep','-u',str(os.getuid()),'-x','a2jmidid'],capture_output=True).returncode==0 and not previous[BRIDGE]['active']
+    if not shutil.which('rfkill'):
+        subprocess.run(['sudo','apt-get','install','-y','--no-install-recommends','rfkill'],check=True)
     units.mkdir(parents=True, exist_ok=True)
     def quote(path):
         return '"' + str(path).replace('\\','\\\\').replace('"','\\"').replace('%','%%') + '"'
@@ -151,13 +152,20 @@ def main():
             if previous[u]['active'] or previous[u]['enabled'] or (units/u).exists():ctl('stop',u)
         for u in OLD:
             if previous[u]['enabled']:ctl('disable',u)
+        external_bridge=subprocess.run(['pgrep','-u',str(os.getuid()),'-x','a2jmidid'],capture_output=True).returncode==0
         if any(p.startswith('JerzyAudioPlatform:') for p in jack_ports()):
             raise RuntimeError('Stary silnik nie zatrzymał się. Przerwano wymianę.')
         (units/NEW[0]).write_text(core)
         (units/NEW[1]).write_text(web)
         (units/NEW[2]).write_text('[Unit]\nDescription=MultiFX Bluetooth MIDI relay\n\n[Service]\nEnvironment=JACK_DEFAULT_SERVER=default\nExecStart=/usr/bin/python3 '+quote(root/'rpi/bluetooth_relay.py')+' --binary '+quote(root/'bin/jerzy-multifx-midi')+' --data '+quote(data)+common)
         if not external_bridge:
-            (units/BRIDGE).write_text('[Unit]\nDescription=USB MIDI to existing JACK\n\n[Service]\nEnvironment=JACK_DEFAULT_SERVER=default\nExecStart=/usr/bin/a2jmidid -e\nRestart=on-failure\nRestartSec=3\n\n[Install]\nWantedBy=default.target\n')
+            (units/BRIDGE).write_text('[Unit]\nDescription=USB MIDI to existing JACK\n\n[Service]\nEnvironment=JACK_DEFAULT_SERVER=default\nExecStart=/usr/bin/a2jmidid -e\nRestart=always\nRestartSec=3\n\n[Install]\nWantedBy=default.target\n')
+        radio = subprocess.run(['sudo','python3',str(root/'rpi/bluetooth_recovery.py'),'--install'],text=True,capture_output=True,check=True)
+        radio_backup=radio.stdout.strip().splitlines()[-1]
+        if not radio_backup.startswith('/var/backups/jerzy-multifx-midi/update-'):
+            raise RuntimeError('Nie potwierdzono kopii konfiguracji Bluetooth.')
+        with rollback.open('a') as f:
+            f.write('sudo python3 /usr/local/lib/jerzy-multifx/bluetooth_recovery.py --restore '+shlex.quote(radio_backup)+'\n')
         ctl('daemon-reload')
         ctl('enable', '--now', *NEW)
         if not external_bridge:ctl('enable','--now',BRIDGE)

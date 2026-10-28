@@ -26,7 +26,7 @@ for unit in jerzy-multifx-web jerzy-multifx-ble jerzy-multifx jerzy-multifx-jack
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends jackd2 libjack-jackd2-0 alsa-utils python3 avahi-daemon
-if ((ble));then apt-get install -y --no-install-recommends bluez python3-dbus python3-gi;fi
+if ((ble));then apt-get install -y --no-install-recommends bluez rfkill python3-dbus python3-gi;fi
 id jerzymultifx >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/jerzy-multifx --groups audio jerzymultifx
 mkdir -p /opt/jerzy-multifx /etc/jerzy-multifx /var/lib/jerzy-multifx
 cp -a "$root/bin" "$root/rpi" "$root/ui" "$root/scripts" "$root/source.tar.gz" /opt/jerzy-multifx/
@@ -37,6 +37,6 @@ if [[ -n $device ]];then printf 'MULTIFX_DEVICE=%s\n' "$device" > /etc/jerzy-mul
 for unit in "$root"/rpi/*.service;do install -m 644 "$unit" /etc/systemd/system/;done
 systemctl daemon-reload
 if ((enable));then systemctl enable --now jerzy-multifx-jack.service jerzy-multifx.service jerzy-multifx-web.service;fi
-if ((ble));then systemctl enable jerzy-multifx-ble.service;echo 'BLE zainstalowane. Skonfiguruj parowanie BlueZ i uruchom usługę po sprawdzeniu adaptera.';fi
+if ((ble));then python3 /opt/jerzy-multifx/rpi/bluetooth_recovery.py --install;systemctl enable jerzy-multifx-ble.service;echo 'BLE zainstalowane. Skonfiguruj parowanie BlueZ i uruchom usługę po sprawdzeniu adaptera.';fi
 echo "Zainstalowano. Backup: $backup. Dane użytkownika pozostają w /var/lib/jerzy-multifx."
 echo 'Panel otwiera się automatycznie, bez wpisywania klucza.'

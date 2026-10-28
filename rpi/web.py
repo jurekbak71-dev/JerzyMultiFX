@@ -3,9 +3,12 @@ import argparse, hashlib, hmac, http.server, json, os, secrets, urllib.parse
 from pathlib import Path
 from control import rpc
 import hardware
+import tempfile
 from http.cookies import SimpleCookie
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    disable_nagle_algorithm = True
     def log_message(self, *args):
         pass  # Do not log authentication values or uploaded data.
     def send(self, code, data, mime='application/json', session=False):
@@ -52,12 +55,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(404,{'error':'Unknown resource'})
         except (OSError,ValueError,KeyError): self.send(503,{'error':'Audio core unavailable'})
     def do_POST(self):
-        if not self.authorized(): return self.send(403,{'error':'Unauthorized or invalid origin'})
+        if not self.authorized():
+            self.close_connection=True
+            return self.send(403,{'error':'Unauthorized or invalid origin'})
         try:
             length=int(self.headers.get('Content-Length','0'))
-            if not 0 < length <= 1024*1024: return self.send(413,{'error':'Size limit'})
+            if not 0 < length <= 1024*1024:
+                self.close_connection=True
+                return self.send(413,{'error':'Size limit'})
             body=self.rfile.read(length)
             if len(body)!=length: raise ValueError('Truncated body')
+            if self.path == '/api/preset':
+                # Let the common C++ decoder verify CRC, IDs, embedded IR and version.
+                directory=self.server.data/'presets';directory.mkdir(parents=True,exist_ok=True)
+                with tempfile.NamedTemporaryFile(dir=directory,suffix='.jmfx',delete=False) as f:
+                    f.write(body);path=Path(f.name)
+                try:
+                    result=rpc('LOAD '+str(path))
+                    return self.send(200 if result.get('ok') else 422,result)
+                finally:path.unlink(missing_ok=True)
             if self.path == '/api/ir':
                 # A content-addressed controlled library; no client filesystem paths.
                 name=hashlib.sha256(body).hexdigest()+'.wav'

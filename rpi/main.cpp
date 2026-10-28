@@ -2,6 +2,8 @@
 #include "core/Presentation.h"
 #include "core/Presets.h"
 #include "core/Project.h"
+#include "ParameterUI.h"
+#include "StateWriter.h"
 #include <chrono>
 #include <csignal>
 #include <dlfcn.h>
@@ -38,9 +40,12 @@ struct Jack {
     using Frames = uint32_t;
     void *(*client_open)(const char *, unsigned, unsigned *, ...) = nullptr;
     int (*client_close)(void *) = nullptr;
+    int (*is_realtime)(void *) = nullptr;
     int (*activate)(void *) = nullptr;
     int (*deactivate)(void *) = nullptr;
     Frames (*get_sample_rate)(void *) = nullptr;
+    int (*transport_query)(const void *, void *) = nullptr;
+    Frames (*transport_frame)(const void *) = nullptr;
     Frames (*get_buffer_size)(void *) = nullptr;
     int (*set_process_callback)(void *, int (*)(Frames, void *), void *) = nullptr;
     int (*set_xrun_callback)(void *, int (*)(void *), void *) = nullptr;
@@ -76,8 +81,11 @@ struct Jack {
         LOAD(client_open);
         LOAD(client_close);
         LOAD(activate);
+        LOAD(is_realtime);
         LOAD(deactivate);
         LOAD(get_sample_rate);
+        transport_query=reinterpret_cast<decltype(transport_query)>(dlsym(library,"jack_transport_query"));
+        transport_frame=reinterpret_cast<decltype(transport_frame)>(dlsym(library,"jack_get_current_transport_frame"));
         LOAD(get_buffer_size);
         LOAD(set_process_callback);
         LOAD(set_xrun_callback);
@@ -185,11 +193,13 @@ struct Host {
     double sr = 48000;
     std::atomic<uint32_t> xruns{0};
     std::atomic<float> bpm{120};
+    std::atomic<int> inputMode{0};
     std::atomic<int> program{-1};
     std::atomic<uint32_t> pendingMidi{0};
     std::atomic<bool> dirty{false};
     Host() {
         (void)multifx::factoryPresets();
+        (void)multifx::rpi::parameterUI();
         for (int i = 0; i < multifx::maxParameters; ++i)
             values[i].store(project.state.values[i]);
     }
@@ -250,8 +260,13 @@ struct Host {
              r = static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[1], n));
         auto ol = static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[2], n)),
              orr = static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[3], n));
+        const int inputMode=h.inputMode.load();
+        const float *inputLeft=inputMode==2?r:l,*inputRight=inputMode==1?l:r;
+        const double tempo=h.bpm.load();
+        const bool playing=h.jack.transport_query && h.jack.transport_query(h.jack.client,nullptr)==1;
+        const double beat=playing && h.jack.transport_frame ? double(h.jack.transport_frame(h.jack.client))*tempo/(60*h.sr) : 0;
         h.engine.process(
-            l, r, ol, orr, int(n), s, h.bpm.load(), 0, false, midi.data(), nm,
+            inputLeft, inputRight, ol, orr, int(n), s, tempo, beat, playing, midi.data(), nm,
             h.jack.returnConnected.load() ? static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[5], n))
                                           : nullptr,
             h.jack.returnConnected.load() ? static_cast<float *>(h.jack.port_get_buffer(h.jack.ports[6], n))
@@ -410,6 +425,8 @@ struct Host {
             std::ostringstream out;
             out << "{\"ok\":true,\"version\":" << quote(MULTIFX_VERSION) << ",\"sampleRate\":" << sr
                 << ",\"latencySamples\":" << engine.currentLatency() << ",\"bpm\":" << bpm.load()
+                << ",\"inputMode\":" << inputMode.load()
+                << ",\"realtime\":" << (jack.client && jack.is_realtime(jack.client) ? "true" : "false")
                 << ",\"xruns\":" << xruns.load()
                 << ",\"cpu\":" << (jack.client ? jack.cpu_load(jack.client) : 0)
                 << ",\"in\":" << engine.inputPeak.load() << ",\"out\":" << engine.outputPeak.load()
@@ -430,7 +447,9 @@ struct Host {
             std::ostringstream out;
             out << "{\"ok\":true,\"version\":" << quote(MULTIFX_VERSION)
                 << ",\"controlCount\":" << multifx::layout().controlCount << ",\"parameters\":[";
-            auto &p = multifx::layout().parameters;
+            const auto &presentation = multifx::rpi::parameterUI();
+            std::vector<multifx::Parameter> p;
+            for (const auto &item : presentation) p.push_back(item.definition);
             for (size_t i = 0; i < p.size(); ++i) {
                 if (i)
                     out << ',';
@@ -439,10 +458,35 @@ struct Host {
                     << ",\"default\":" << p[i].initial << ",\"steps\":" << p[i].steps
                     << ",\"choices\":" << quote(p[i].choices)
                     << ",\"label\":" << quote(multifx::controlTitle(int(i)))
-                    << ",\"unit\":" << quote(p[i].unit) << "}";
+                    << ",\"unit\":" << quote(p[i].unit)
+                    << ",\"control\":" << quote(presentation[i].control)
+                    << ",\"bypass\":" << (presentation[i].bypass ? "true" : "false") << "}";
             }
             out << "]}";
             return out.str();
+        }
+        if (cmd == "INPUTMODE") {
+            int mode;
+            if (!(in >> mode) || mode<0 || mode>2)return "{\"ok\":false}";
+            if (const char *data=std::getenv("MULTIFX_DATA")) {
+                const auto path=std::string(data)+"/input-mode.txt";
+                std::ofstream file(path+".tmp");file<<mode;file.close();
+                if (!file || std::rename((path+".tmp").c_str(),path.c_str()))return "{\"ok\":false}";
+            }
+            inputMode.store(mode);return "{\"ok\":true}";
+        }
+        if (cmd == "TEMPO") {
+            float tempo;
+            if (!(in >> tempo) || !std::isfinite(tempo) || tempo<20 || tempo>400)
+                return "{\"ok\":false,\"error\":\"BPM must be 20..400\"}";
+            if (const char *data=std::getenv("MULTIFX_DATA")) {
+                const auto path=std::string(data)+"/tempo.txt";
+                std::ofstream file(path+".tmp");file<<tempo;file.close();
+                if (!file || std::rename((path+".tmp").c_str(),path.c_str()))
+                    return "{\"ok\":false,\"error\":\"Tempo could not be saved\"}";
+            }
+            bpm.store(tempo);
+            return "{\"ok\":true}";
         }
         if (cmd == "SET") {
             int id;
@@ -455,7 +499,7 @@ struct Host {
                 multifx::selectFactory(s, int(std::round(value * 7)));
                 setState(s);
             }
-            values[id].store(value);
+            values[id].store(multifx::rpi::discreteValue(id, value));
             dirty.store(true);
             return "{\"ok\":true}";
         }
@@ -581,14 +625,15 @@ struct Host {
             throw std::runtime_error("Control port unavailable");
         }
         auto lastRouting = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+        const char *dataDirectory = std::getenv("MULTIFX_DATA");
+        std::unique_ptr<multifx::rpi::StateWriter> stateWriter;
+        if (dataDirectory) stateWriter=std::make_unique<multifx::rpi::StateWriter>(std::string(dataDirectory)+"/last-state.jmfx");
         auto lastSave = std::chrono::steady_clock::now(), lastChange = lastSave;
         bool savePending = false;
         auto save = [&] {
-            if (const char *data = std::getenv("MULTIFX_DATA")) {
-                const std::string path = std::string(data) + "/last-state.jmfx";
+            if (stateWriter) {
                 project.state = state();
-                if (multifx::saveProject(path + ".tmp", project))
-                    std::rename((path + ".tmp").c_str(), path.c_str());
+                stateWriter->submit(project);
             }
         };
         while (running.load()) {
@@ -669,6 +714,12 @@ int main(int argc, char **argv) {
         if (!test) {
             host->jack.open();
             host->sr = host->jack.get_sample_rate(host->jack.client);
+        }
+        if (const char *data=std::getenv("MULTIFX_DATA")) {
+            std::ifstream channelFile(std::string(data)+"/input-mode.txt");int mode;
+            if ((channelFile>>mode) && mode>=0 && mode<=2)host->inputMode.store(mode);
+            std::ifstream file(std::string(data)+"/tempo.txt");float tempo;
+            if ((file>>tempo) && std::isfinite(tempo) && tempo>=20 && tempo<=400)host->bpm.store(tempo);
         }
         host->engine.prepare(host->sr);
         if (const char *data = std::getenv("MULTIFX_DATA"))

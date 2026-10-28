@@ -4,8 +4,10 @@ After=sound.target
 [Service]
 User=jerzymultifx
 EnvironmentFile=/etc/jerzy-multifx/audio.env
-ExecStart=/usr/bin/jackd --name JerzyMultiFX --no-realtime -d alsa --device ${MULTIFX_DEVICE} -r 48000 -p 128 -n 3
-Restart=on-failure
+ExecStart=/usr/bin/jackd --name JerzyMultiFX --realtime --realtime-priority 70 -d alsa --device ${MULTIFX_DEVICE} -r 48000 -p 128 -n 3
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+Restart=always
 NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target

@@ -7,3 +7,14 @@
 .pedal.attack{background:linear-gradient(145deg,#ec761b,#be4d08);color:#101814}.attack .knobs{grid-template-columns:repeat(4,minmax(0,1fr))}.attack .control .label,.attack .control .value{color:#141b17;font-weight:700}.attack .common{background:#10161b99}.attack .common label,.attack .common .value{color:#f0e5cc}@media(max-width:760px){.attack .knobs{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .block .learn{width:100%;white-space:normal;padding:4px;font-size:10px}.connection{flex-wrap:wrap}.connection .learn{max-width:180px;white-space:normal}.pedalhead{flex-wrap:wrap}@media(max-width:760px){.top{flex-wrap:wrap}.connection{flex-direction:row;justify-content:flex-start;align-items:center;width:100%}}
+
+/* The colour and wording always describe current enabled state, never the next action. */
+button.toggle.on,button.foot.on{background:#16733b;color:#fff;border:2px solid #66e994;font-weight:750}
+button.toggle.off,button.foot.off{background:#9a252b;color:#fff;border:2px solid #ff8c92;font-weight:750}
+button.toggle.on:before,button.foot.on:before{color:#b6ffd0}
+button.toggle.off:before,button.foot.off:before{color:#ffd2d5}
+button.toggle[aria-busy="true"]{box-shadow:0 0 0 2px #e6c365}
+.block .toggle{min-height:44px;white-space:normal;line-height:1.3}
+#master{min-height:44px;max-width:240px;white-space:normal}
+
+.signal-status{background:#7c2026;color:#fff;border:2px solid #ff8c92;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.4}.switch-title{font-size:12px;font-weight:750}

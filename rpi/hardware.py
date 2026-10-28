@@ -42,6 +42,14 @@ def action(data):
     if operation=='repair-audio':
         if not status()['available']:raise ValueError('Brak aktywnej usługi obsługi sprzętu.')
         return call('jack-restart')
+    if operation=='input-mode':
+        mode=data.get('mode')
+        if type(mode) is not int or not 0<=mode<=2:raise ValueError('Wybierz stereo albo jedno wejście mono.')
+        return rpc('INPUTMODE '+str(mode))
+    if operation=='tempo':
+        bpm=data.get('bpm')
+        if type(bpm) not in (int,float) or not 20<=bpm<=400:raise ValueError('Tempo musi być od 20 do 400 BPM.')
+        return rpc('TEMPO '+str(bpm))
     if operation=='buffer':
         frames=data.get('buffer')
         if type(frames) is not int or frames not in (64,128,256,512,1024):raise ValueError('Niepoprawny bufor.')

@@ -7,7 +7,9 @@ User=jerzymultifx
 Environment=JACK_DEFAULT_SERVER=JerzyMultiFX
 Environment=MULTIFX_DATA=/var/lib/jerzy-multifx
 ExecStart=/opt/jerzy-multifx/bin/jerzy-multifx
-Restart=on-failure
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+Restart=always
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

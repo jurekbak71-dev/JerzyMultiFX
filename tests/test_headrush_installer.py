@@ -56,9 +56,10 @@ class UpgradeTransactionTests(unittest.TestCase):
             raw=ExistingHeadRushInstallerTests().archive(files)
             required={'system:capture_1','system:capture_2','system:playback_1','system:playback_2','JerzyMultiFX:input_L','JerzyMultiFX:output_L','JerzyMultiFX:midi_control'}
             calls=[];data=base/'instalacja-new/dane';real_read=Path.read_text;real_run=subprocess.run
-            tools=home/'fake-bin';tools.mkdir();fake=tools/'systemctl';fake.write_text('#!/bin/sh\nexit 0\n');fake.chmod(0o755)
+            tools=home/'fake-bin';tools.mkdir();fake=tools/'systemctl';fake.write_text('#!/bin/sh\nexit 0\n');fake.chmod(0o755);(tools/'sudo').write_text('#!/bin/sh\nexit 0\n');(tools/'sudo').chmod(0o755)
             def run(command,**kwargs):
                 calls.append(command)
+                if '--install' in command and any('bluetooth_recovery.py' in str(v) for v in command):return subprocess.CompletedProcess(command,0,'/var/backups/jerzy-multifx-midi/update-fixture\n','')
                 if command[0]=='bash':return real_run(command,env={**os.environ,'PATH':str(tools)+':'+os.environ['PATH']},capture_output=True)
                 return subprocess.CompletedProcess(command,1 if command[0]=='pgrep' else 0,'yes\n' if command[0]=='loginctl' else '', '')
             def ctl(*args,**kwargs):
@@ -103,6 +104,7 @@ class UpgradeTransactionTests(unittest.TestCase):
                 self.assertFalse((units/module.NEW[2]).exists())
             else:
                 self.assertIn('/rpi/bluetooth_relay.py',(units/module.NEW[2]).read_text())
+                self.assertIn('Restart=always',(units/module.BRIDGE).read_text())
                 self.assertIn('Wants=',(units/module.NEW[1]).read_text())
                 self.assertNotIn('Requires=',(units/module.NEW[1]).read_text())
     def test_upgrade_preserves_old_version_network_jack_and_presets(self):self.run_upgrade()
