@@ -31,6 +31,7 @@ def build(stage: Path, output: Path, version: str = VERSION) -> Path:
     target = output / f'JerzyMultiFX-RPi-aarch64-v{version}.deb'
     with tempfile.TemporaryDirectory(prefix='jerzy-deb-') as tmp:
         root = Path(tmp)
+        root.chmod(0o755)
         payload = root / 'usr/share/jerzy-multifx'
         shutil.copytree(stage, payload)
         command = root / 'usr/bin/jerzy-multifx-setup'

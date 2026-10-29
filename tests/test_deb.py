@@ -30,6 +30,9 @@ class DebianPackageTests(unittest.TestCase):
             (stage / 'scripts/install.sh').write_text('#!/bin/bash\n')
             sums(stage)
             target = build_deb.build(stage, root / 'out')
+            listing = subprocess.check_output(['dpkg-deb', '--contents', str(target)], text=True)
+            self.assertTrue(listing.splitlines()[0].startswith('drwxr-xr-x root/root'),
+                            'DEB root must not change filesystem access permissions')
             fields = subprocess.check_output(['dpkg-deb', '--field', str(target)], text=True)
             self.assertIn('Architecture: arm64', fields)
             self.assertIn('Package: jerzy-multifx-preview', fields)

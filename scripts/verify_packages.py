@@ -50,6 +50,8 @@ if deb.exists():
     assert arm.exists(),'Debian package requires matching ARM64 tarball'
     fields=subprocess.check_output(['dpkg-deb','--field',str(deb)],text=True)
     assert f'Version: {VERSION}' in fields and 'Architecture: arm64' in fields
+    listing=subprocess.check_output(['dpkg-deb','--contents',str(deb)],text=True)
+    assert listing.splitlines()[0].startswith('drwxr-xr-x root/root'),'Unsafe DEB root permissions'
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(['dpkg-deb','--extract',str(deb),tmp],check=True)
         payload=Path(tmp)/'usr/share/jerzy-multifx'

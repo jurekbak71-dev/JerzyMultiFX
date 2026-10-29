@@ -317,3 +317,12 @@ Analiza patchOS/MODEP: `docs/PATCHOS_ANALYSIS.md`. W dedykowanym wariancie JACK
 dodano 5 s między próbami startu przy odłączonym USB. Nie zmienia to istniejącego
 systemowego JACK na `bassambient`; brak pomiaru, który uzasadniałby kopiowanie
 ustawień ES-8/ES-9 lub Pisound na HeadRush.
+
+### Kontrola opublikowanego preview 8 i poprawka preview 9
+
+CI preview 8 przeszło na ARM64 i pobrany `.deb` miał ten sam payload co TAR.GZ.
+Dodatkowa kontrola listy TAR wewnątrz DEB wykazała jednak tryb `700` dla wpisu
+głównego `./`, odziedziczony po prywatnym katalogu tymczasowym. Preview 8 DEB
+nie należy instalować. Preview 9 ustawia `755` i sprawdza ten warunek w teście
+jednostkowym oraz weryfikatorze gotowej paczki. Natywne CI i ponowne pobranie
+preview 9 są wymagane przed oznaczeniem tej poprawki jako wydanej.

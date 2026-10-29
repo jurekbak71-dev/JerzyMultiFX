@@ -1,6 +1,6 @@
-# 0.1.0-preview.8
+# 0.1.0-preview.9
 
-- Dodatkowy pakiet Debian ARM64 z natywnym programem, pełnym payloadem z TAR.GZ i poleceniem `jerzy-multifx-setup`. Instalacja DEB nie przestawia audio automatycznie; konfiguracja świadomie korzysta z dotychczasowego instalatora z backupem.
+- Dodatkowy pakiet Debian ARM64 z natywnym programem, pełnym payloadem z TAR.GZ i poleceniem `jerzy-multifx-setup`. Instalacja DEB nie przestawia audio automatycznie; konfiguracja świadomie korzysta z dotychczasowego instalatora z backupem. Poprawiono uprawnienia katalogu głównego archiwum po kontroli opublikowanego preview 8.
 
 ## 0.1.0-preview.7 — raport sprzętu RPi
 
