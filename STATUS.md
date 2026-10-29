@@ -326,3 +326,18 @@ głównego `./`, odziedziczony po prywatnym katalogu tymczasowym. Preview 8 DEB
 nie należy instalować. Preview 9 ustawia `755` i sprawdza ten warunek w teście
 jednostkowym oraz weryfikatorze gotowej paczki. Natywne CI i ponowne pobranie
 preview 9 są wymagane przed oznaczeniem tej poprawki jako wydanej.
+
+Natywne CI preview 9: ARM64, testy i publikacja SUCCESS:
+https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40855140222 .
+Pobrany `.deb`, TAR.GZ i instalator ZIP mają poprawne zewnętrzne SHA256, zgodny
+SHA źródła `6f482a59ec85fc404a49ec5e3995a10e945b783f`; `.deb` ma `755`
+na `./` i byte-identyczny payload z TAR.GZ. W tym samym runie Windows przeszedł
+kompilację, test edytora, walidator i pakowanie, lecz **publikacja VST3 nie powiodła
+się**: Python na runnerze dekodował JSON z polskim opisem Release jako cp1252.
+Preview 9 RPi jest gotowe programowo, ale cały run ma status failure; nie
+deklarujemy Windows preview 9 jako wydanego.
+
+## Preview 10 — poprawka publikatora Windows
+
+GitHub CLI jest teraz czytany jawnie jako UTF-8, z testem tej ścieżki.
+Natywny CI, publikacja i ponowne pobranie obu platform nadal oczekują.

@@ -5,7 +5,8 @@ from pathlib import Path
 from package import ROOT,VERSION
 
 def gh(*args,input=None,check=True):
-    result=subprocess.run(['gh',*args],input=input,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    result=subprocess.run(['gh',*args],input=input,text=True,encoding='utf-8',
+                          stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     if check and result.returncode:
         raise RuntimeError(result.stderr.strip() or 'GitHub CLI request failed')
     return result
@@ -58,7 +59,7 @@ Cloud to własny algorytm ambientowy, bez deklaracji identyczności ze Strymon.
 - `SHA256SUMS-RPi-aarch64`, `FILES-RPi-aarch64.json` — sumy i rozmiary plików do pobrania.
 - `INSTALACJA_RPI_PROSTO.txt`, `INSTALACJA_RPI_PL.md`, `WIFI_BLUETOOTH_PL.md`, `HARDWARE_TESTS_PL.md` — instrukcje.
 
-To wydanie RPi; nie podmienia opublikowanej wersji Windows VST.
+Windows VST3 pojawi się w tym samym Release tylko po osobnym, pozytywnym jobie Windows.
 Testy programowe są w zalinkowanym runie. Fizyczny Pi/HeadRush, radio BLE, odsłuch A/B:
 **AWAITING HARDWARE VALIDATION**. Nie zmieniono widoczności repozytorium.
 """

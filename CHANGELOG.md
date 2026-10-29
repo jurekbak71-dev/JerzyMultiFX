@@ -1,4 +1,8 @@
-# 0.1.0-preview.9
+# 0.1.0-preview.10
+
+- Publikator Windows odczytuje odpowiedź GitHub CLI jako UTF-8 także na runnerze z kodowaniem cp1252. Preview 9 zbudowało VST3, ale jego upload przerwał się przy polskim opisie Release.
+
+## 0.1.0-preview.9
 
 - Dodatkowy pakiet Debian ARM64 z natywnym programem, pełnym payloadem z TAR.GZ i poleceniem `jerzy-multifx-setup`. Instalacja DEB nie przestawia audio automatycznie; konfiguracja świadomie korzysta z dotychczasowego instalatora z backupem. Poprawiono uprawnienia katalogu głównego archiwum po kontroli opublikowanego preview 8.
 

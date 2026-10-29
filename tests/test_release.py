@@ -5,6 +5,12 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 import publish_release as release
 import package
 class ReleaseTests(unittest.TestCase):
+    def test_github_output_is_decoded_as_utf8_on_windows(self):
+        import subprocess
+        result=subprocess.CompletedProcess(['gh'],0,'{"body":"zażółć"}','')
+        with patch.object(release.subprocess,'run',return_value=result) as call:
+            self.assertEqual(release.gh('api','repos/owner/repo').stdout,result.stdout)
+            self.assertEqual(call.call_args.kwargs['encoding'],'utf-8')
     def test_development_tags_and_no_collision_between_attempts(self):
         self.assertEqual(release.release_tag('0.1.0-preview.1',42,1),'v0.1.0-preview.1.ci.42.1')
         self.assertEqual(release.release_tag('1.2.3',42,1),'v1.2.3-dev.42.1')
