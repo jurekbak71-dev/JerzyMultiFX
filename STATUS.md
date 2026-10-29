@@ -1,5 +1,10 @@
 # Jerzy MultiFX — status
 
+## Preview 13 — wizualne wskaźniki IN/OUT
+
+- Panel RPi wyświetla teraz paski poziomu IN/OUT obok wartości dB, z czerwonym sygnałem blisko 0 dBFS. Korzystają z istniejących próbek maksimum obliczanych przez silnik i nie dodają opóźnienia DSP; aktualizują się tylko podczas zwykłego odświeżenia panelu.
+- Stroik: zalecana osobna opcjonalna analiza sygnału w wątku pomocniczym z kopiowaniem próbek przez bezblokujący bufor. Nie został jeszcze wdrożony; stałe obliczanie wysokości dźwięku w callbacku zwiększałoby obciążenie niepotrzebnie.
+
 ## Preview 12 — odrębne algorytmy REVERB, Shimmer i etykiety DELAY B
 
 - Plate: krótka kaskada dyfuzorów, gęsty jasny ogon i niezależne wyjściowe odczepy FDN. Room: cztery dyskretne wczesne odbicia 11–47 ms, krótszy/słabiej dyfundowany ogon. Cathedral: dłuższe ciemniejsze linie, sześciostopniowe rozpraszanie i własna topologia odczepów. Cloud pozostaje szeroką kaskadą sześciostopniową; Shimmer ma stereofoniczny pitch-shifter w sprzężeniu i słyszalną bezpośrednią składową przesuniętą.

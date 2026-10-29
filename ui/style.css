@@ -18,3 +18,5 @@ button.toggle[aria-busy="true"]{box-shadow:0 0 0 2px #e6c365}
 #master{min-height:44px;max-width:240px;white-space:normal}
 
 .signal-status{background:#7c2026;color:#fff;border:2px solid #ff8c92;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.4}.switch-title{font-size:12px;font-weight:750}
+
+footer .meterbar{width:100px;height:7px;margin-top:5px}footer .meterbar i{transition:width .12s linear}footer .meterbar i.hot{background:#e66a4f}
