@@ -375,3 +375,11 @@ Na prośbę właściciela przejrzano `react-guitar`, `brummer10/guitarix` oraz
 `Quinny/GuitarEffects`. Konkretne commity, licencje, przydatne rozwiązania i
 odrzucone wzorce realtime opisuje `docs/REFERENCJE_GITARA_RPI.md`.
 Nie dodano ich kodu do paczki ani nie deklarowano testu na HeadRush.
+
+## Wymaganie odłożone — MAKEUP kompresorów
+
+Właściciel polecił zapamiętać, lecz **jeszcze nie wykonywać**: we wszystkich
+kompresorach MAKEUP musi móc ściszać i wzmacniać; 0 dB ma być na środku.
+Pełna lista sześciu obecnych parametrów i uwaga o migracji są w `TASKS.md`.
+Nie zmieniono DSP, panelu, identyfikatorów parametrów, wersji ani paczek;
+nie uruchamiano nowej kompilacji.
