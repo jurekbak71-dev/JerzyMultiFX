@@ -5,6 +5,7 @@
 - Wspólny silnik Attack/Decay utrzymuje historię wejścia POLY, lecz w MONO nie wykonuje transformacji FFT. Po wybraniu POLY przetwarza pierwszą ramkę przed domieszaniem; przejście ma test ciągłości audio. Fuzz 16× nie liczy się, gdy jest wyłączony; po ponownym włączeniu jego bufor jest zerowany i krótko rozgrzewany przed domieszaniem. Zmiany są w obu produktach MFX oraz osobnym VST A-D.
 - Lokalny benchmark x86, 48 kHz/128, 1 sekunda audio, domyślny A-D MONO bez fuzz: ok. 0,177 s CPU przed zmianą i 0,0094 s po zmianie. To pomiar tej maszyny, nie fizycznego Pi. Latencja A-D nadal wynosi 2064 próbki (~43 ms przy 48 kHz); jej zmiana wymaga osobnej przebudowy kompensacji hosta.
 - Testy: pełny natywny zestaw CTest i nowa regresja MONO→POLY/fuzz, zachowanie sygnału przy przełączeniu; CI i paczka ARM64 do uzupełnienia po wydaniu.
+- [CI RPi 40944200219](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40944200219) PASS; [preview14](https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.14.ci.40944200219.1) pobrano ponownie, SHA256 wszystkich assetów i CRC ZIP PASS, binarium to ELF AArch64. Lokalnie 3/3 CTest, 33/33 Python, 10/10 Node; cross-build MultiFX Windows VST3 PE32+ x64 PASS. Test na fizycznym RPi/HeadRush i Windows pluginval MultiFX nadal niewykonany w tej iteracji.
 
 ## Preview 13 — wizualne wskaźniki IN/OUT
 
