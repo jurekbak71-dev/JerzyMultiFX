@@ -4,6 +4,7 @@
 
 - Panel RPi wyświetla teraz paski poziomu IN/OUT obok wartości dB, z czerwonym sygnałem blisko 0 dBFS. Korzystają z istniejących próbek maksimum obliczanych przez silnik i nie dodają opóźnienia DSP; aktualizują się tylko podczas zwykłego odświeżenia panelu.
 - [CI RPi 40940796427](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40940796427) PASS; [preview13](https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.13.ci.40940796427.1) zawiera nowy panel i wszystkie poprawki preview12. Wszystkie assety pobrano ponownie: manifest SHA256 i CRC instalatora PASS, binarium TAR to ELF AArch64. Fizyczne Pi/HeadRush nadal niesprawdzone.
+- Po zmianach w DSP wykonano także lokalny cross-build MultiFX Windows VST3: PASS, PE32+ x64 DLL. W tej iteracji nie wykonano Windows pluginval dla MultiFX; osobne VST Attack/Decay ma własny Windows CI.
 - Stroik: zalecana osobna opcjonalna analiza sygnału w wątku pomocniczym z kopiowaniem próbek przez bezblokujący bufor. Nie został jeszcze wdrożony; stałe obliczanie wysokości dźwięku w callbacku zwiększałoby obciążenie niepotrzebnie.
 
 ## Preview 12 — odrębne algorytmy REVERB, Shimmer i etykiety DELAY B
