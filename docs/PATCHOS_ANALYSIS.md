@@ -9,3 +9,5 @@ Sprawdzone źródła:
 JerzyMultiFX już oddziela JACK, rdzeń DSP i panel. Dedykowany wariant ma limity realtime oraz zapisany wybór urządzenia ALSA. Dla niego dodano `RestartSec=5`, aby brak USB nie wywoływał natychmiastowej pętli restartów. Aktualizator `bassambient` pozostawia istniejący `jerzy-jack.service`, jego sample rate, okres i routing bez zmian; tej poprawki nie przypisujemy działającej instalacji HeadRush.
 
 Nie ma podstaw, by samo skopiowanie jednostki systemd z patchOS poprawiło brzmienie. O różnicy między VST i Pi rozstrzyga porównanie identycznego presetu i poziomów wejścia/wyjścia, sample rate, CPU/xrun oraz rzeczywistego round-trip na HeadRush. Automatyczny raport przed/po już zbiera część danych; fizyczny pomiar i odsłuch pozostają otwarte.
+
+Preview 11 dodaje do automatycznego raportu graf połączeń `jack_lsp -c` oraz zakresy latencji portów `jack_lsp -l`. Te dane ułatwiają wskazanie błędnego routingu w działającym torze HeadRush; wartości portów nie są pomiarem całego opóźnienia instrument → głośnik.

@@ -355,3 +355,16 @@ Raport przed/po aktualizacji zapisuje `jack_lsp -c` oraz `jack_lsp -l`.
 To pozwala skontrolować połączenia portów HeadRush i zgłaszaną przez JACK
 latencję portów; nie zastępuje fizycznego pomiaru round-trip. Istniejący JACK
 na bassambient nie jest przestawiany. Natywna walidacja i wydanie RPi czekają.
+
+Wydanie RPi preview 11: natywny ARM64 SUCCESS:
+https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40857009450 .
+CTest 3/3, Python 33/33, Node 9/9, HTTP/core, JACK dummy/audio/MIDI (0 xrun
+w przebiegu testowym), pakowanie i publikacja — PASS. Pobrane z Release DEB,
+TAR.GZ i instalator ZIP: zewnętrzne i wewnętrzne SHA256, ELF64 AArch64,
+źródło `586b4ac9d044753072e2b12611397914227b03d3`, payload DEB/TAR,
+uprawnienia oraz nowy kolektor w instalatorze — PASS.
+Release: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.11.ci.40857009450.1 .
+Job Windows został świadomie pominięty ze względu na priorytet RPi; wcześniejszy
+preview 10 Windows zakończył się sukcesem CI, ale nie był częścią tego wydania.
+Brak fizycznej instalacji na bassambient, pomiaru round-trip, odsłuchu A/B i
+potwierdzenia reakcji USB/BLE na tym preview.
