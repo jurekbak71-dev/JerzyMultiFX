@@ -257,3 +257,18 @@ przechodziła tą samą ścieżką. Poprzednie `.jmfx` i identyfikatory są zgod
 Lokalny CTest 3/3, HTTP/core z rzeczywistym przejściem przez wszystkie pięć
 silników obu banków, drugim slotem MX oraz dwiema różnymi mapami PC — PASS.
 Natywna paczka ARM64 jest w przygotowaniu, nie zainstalowano jej na fizycznym Pi.
+
+### Preview 6 — opublikowany instalator RPi
+
+Źródłowy commit **d5ceca650c5feacb19ea5aadf1c2d844e8152874**.
+Natywny run ARM64 **SUCCESS**:
+https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40835486341 .
+Release:
+https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.6.ci.40835486341.1 .
+CTest 3/3, Python 28/28, Node 9/9, HTTP/core z mapowaniem MIDI na wszystkie
+silniki i sloty PC, JACK dummy/audio/MIDI, paczkowanie/allowlista — PASS.
+Po pobraniu ZIP instalatora, TAR.GZ i manifestów sprawdzono SHA256, oba binaria
+ELF64 AArch64, SHA źródeł, prywatność źródeł i identyczny payload instalatora — PASS.
+Fizyczny Pi/HeadRush i Hotone nie zostały testowane z preview 6; wcześniejsze
+potwierdzenie działania Ampero dotyczy instalacji właściciela sprzed preview 6.
+Windows VST nie był w tym przebiegu budowany.
