@@ -286,3 +286,16 @@ round-trip ma wartość null. Szczegóły: AUDIO_LATENCY_ANALYSIS.md.
 Wykonano Python 30/30, py_compile oraz diff --check PASS. Nie uruchomiono
 kolektora na fizycznym Pi; jego dostępne urządzenia i realne opóźnienie nie są
 potwierdzone. Natywny ARM64 i paczka są w przygotowaniu.
+
+### Preview 7 — opublikowane i zweryfikowane pliki
+
+Źródło `e207a59703d984702258a567da6cff0512f28ae4`. Natywny ARM64 SUCCESS:
+https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40837981375 .
+Release: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.7.ci.40837981375.1 .
+CTest 3/3, Python 30/30, Node 9/9, HTTP/core, JACK dummy/audio/MIDI, pakowanie — PASS.
+Pobrany ZIP i TAR.GZ: zewnętrzne/wewnętrzne SHA256, ELF64 AArch64, źródłowy SHA,
+identyczny payload, obecność i wywołanie kolektora przed/po — PASS.
+Pierwsze lokalne sprawdzenie manifestu użyło błędnie przepisanego SHA jako oczekiwanego;
+po podaniu dokładnego SHA z BUILD-INFO cała kontrola przeszła. Nie był to błąd paczki.
+Nie instalowano preview 7 na fizycznym Pi. Realny round-trip i AUTO LATENCY TUNE
+są nadal otwartymi zadaniami.
