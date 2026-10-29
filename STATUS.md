@@ -1,5 +1,11 @@
 # Jerzy MultiFX — status
 
+## Preview 14 — Attack/Decay: odciążenie toru MONO
+
+- Wspólny silnik Attack/Decay utrzymuje historię wejścia POLY, lecz w MONO nie wykonuje transformacji FFT. Po wybraniu POLY przetwarza pierwszą ramkę przed domieszaniem; przejście ma test ciągłości audio. Fuzz 16× nie liczy się, gdy jest wyłączony; po ponownym włączeniu jego bufor jest zerowany i krótko rozgrzewany przed domieszaniem. Zmiany są w obu produktach MFX oraz osobnym VST A-D.
+- Lokalny benchmark x86, 48 kHz/128, 1 sekunda audio, domyślny A-D MONO bez fuzz: ok. 0,177 s CPU przed zmianą i 0,0094 s po zmianie. To pomiar tej maszyny, nie fizycznego Pi. Latencja A-D nadal wynosi 2064 próbki (~43 ms przy 48 kHz); jej zmiana wymaga osobnej przebudowy kompensacji hosta.
+- Testy: pełny natywny zestaw CTest i nowa regresja MONO→POLY/fuzz, zachowanie sygnału przy przełączeniu; CI i paczka ARM64 do uzupełnienia po wydaniu.
+
 ## Preview 13 — wizualne wskaźniki IN/OUT
 
 - Panel RPi wyświetla teraz paski poziomu IN/OUT obok wartości dB, z czerwonym sygnałem blisko 0 dBFS. Korzystają z istniejących próbek maksimum obliczanych przez silnik i nie dodają opóźnienia DSP; aktualizują się tylko podczas zwykłego odświeżenia panelu.

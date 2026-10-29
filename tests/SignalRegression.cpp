@@ -91,6 +91,24 @@ int main() try {
         require(triggers==2,"Attack Decay detects a new overlapping note only once");
     }
     {
+        mf_attack::Engine attack;
+        attack.prepare(48000);
+        mf_attack::Parameters p;
+        p.attack=0;p.decay=1;p.compMono=p.compPoly=false;p.volume=26.f/39;
+        double before=0,after=0;
+        for(int n=0;n<96000;++n){
+            if(n==48000)p.poly=true;
+            if(n==72000)p.fuzz=true;
+            if(n==84000)p.fuzz=false;
+            float l=.15f*std::sin(2*mf_attack::pi*220*n/48000.f),r=l;
+            attack.process(l,r,0,0,p);
+            require(std::isfinite(l)&&std::abs(l)<2,"Attack Decay remains bounded across mode switches");
+            if(n>45000&&n<47000)before+=l*l;
+            if(n>49500&&n<51500)after+=l*l;
+        }
+        require(after>before*.5,"POLY activation must not create an audio gap");
+    }
+    {
         State s;
         s.values[lay.gateEnabled]=1;
         Analog gate;gate.prepare(48000);gate.configure(s);

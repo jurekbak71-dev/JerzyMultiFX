@@ -149,8 +149,12 @@ class Fuzz {
     std::array<float,17> interpolationHistory{};
     int interpolationIndex=0;
 public:
+    void clear() {
+        down={}; interpolationHistory.fill(0); interpolationIndex=0;
+        lastIn=lastOut=memory=low=0;
+    }
     void prepare(float sr) {
-        rate=sr; down={}; interpolationHistory.fill(0); interpolationIndex=0; lastIn=lastOut=memory=low=0;
+        rate=sr; clear();
         float sum=0;
         for(int i=0;i<taps;++i) {
             float n=static_cast<float>(i-128);
@@ -204,12 +208,12 @@ public:
         for(int i=0;i<size/2;++i) roots[i]=std::polar(1.0f,-2*pi*i/size);
         for(int i=0;i<size;++i) { unsigned x=static_cast<unsigned>(i),r=0; for(int b=0;b<11;++b){r=(r<<1)|(x&1);x>>=1;} reversed[i]=static_cast<int>(r); }
     }
-    bool process(float left,float right,float& yl,float& yr,const Parameters& p,bool manual) {
+    bool process(float left,float right,float& yl,float& yr,const Parameters& p,bool manual,bool render) {
         input[0][write]=left; input[1][write]=right; write=(write+1)%size;
         yl=output[0][read]; yr=output[1][read]; output[0][read]=output[1][read]=0;
         bool triggered=false;
-        manualPending=manualPending||manual;
-        if(++count==hop) { count=0; triggered=frame(p); }
+        manualPending=render && (manualPending||manual);
+        if(++count==hop) { count=0; if(render)triggered=frame(p); }
         read=(read+1)%(size*2);
         return triggered;
     }
@@ -283,9 +287,10 @@ public:
         for(auto& d:returnDelay) d.reset();
         for(auto& d:monoDelay) d.reset();
         envDelay.reset(); polyMix=fuzzMix=bypassMix=0; smooth={}; initialized=false; compMix=1;
+        polyRequested=fuzzRequested=false; polyWarm=fuzzWarm=0;
     }
     bool process(float& l,float& r,float retL,float retR,const Parameters& target,bool trigger=false) {
-        if(!initialized) { smooth=target; polyMix=target.poly?1.0f:0.0f; fuzzMix=target.fuzz?1.0f:0.0f; bypassMix=target.bypass?1.0f:0.0f; compMix=(target.poly?target.compPoly:target.compMono)?1.0f:0.0f; initialized=true; }
+        if(!initialized) { smooth=target; polyMix=target.poly?1.0f:0.0f; fuzzMix=target.fuzz?1.0f:0.0f; bypassMix=target.bypass?1.0f:0.0f; compMix=(target.poly?target.compPoly:target.compMono)?1.0f:0.0f; polyRequested=target.poly; fuzzRequested=target.fuzz; initialized=true; }
         float c=1-std::exp(-1/(rate*.008f));
         auto approach=[c](float& x,float v){ x+=c*(v-x); };
         approach(smooth.attack,target.attack); approach(smooth.decay,target.decay);
@@ -296,7 +301,18 @@ public:
         approach(smooth.tone,target.tone); approach(smooth.hvol,target.hvol); approach(smooth.hblend,target.hblend); approach(smooth.rblend,target.rblend);
         smooth.sens=target.sens; smooth.attackShape=target.attackShape; smooth.decayShape=target.decayShape;
         smooth.continuousMono=target.continuousMono; smooth.continuousPoly=target.continuousPoly; smooth.triggerMode=target.triggerMode;
-        approach(polyMix,target.poly?1.0f:0.0f); approach(fuzzMix,target.fuzz?1.0f:0.0f); approach(bypassMix,target.bypass?1.0f:0.0f);
+        if(target.poly&&!polyRequested){polyRequested=true;polyWarm=Spectrum::hop;}
+        if(!target.poly)polyRequested=false;
+        if(polyWarm>0)--polyWarm;
+        if(target.fuzz&&!fuzzRequested){
+            fuzzRequested=true;
+            if(fuzzMix<=1.e-5f){for(auto& f:fuzz)f.clear();fuzzWarm=16;}
+        }
+        if(!target.fuzz)fuzzRequested=false;
+        if(fuzzWarm>0)--fuzzWarm;
+        approach(polyMix,target.poly&&polyWarm==0?1.0f:0.0f);
+        approach(fuzzMix,target.fuzz&&fuzzWarm==0?1.0f:0.0f);
+        approach(bypassMix,target.bypass?1.0f:0.0f);
         float inputL=l,inputR=r;
         bool onset=detector.process(std::abs(l)>=std::abs(r)?l:r,target.sens);
         bool monoEvent=trigger || (target.triggerMode==0&&onset);
@@ -311,14 +327,16 @@ public:
         float processed[2]{};
         for(int ch=0;ch<2;++ch) {
             float clean=cleanDelay[ch].tick(material[ch]);
-            float dirty=fuzz[ch].process(material[ch],smooth.harmonix,smooth.tone,smooth.hvol);
+            float dirty=target.fuzz||fuzzMix>1.e-5f
+                ? fuzz[ch].process(material[ch],smooth.harmonix,smooth.tone,smooth.hvol) : clean;
             processed[ch]=clean+fuzzMix*smooth.hblend*(dirty-clean);
         }
         if(target.useReturn&&!target.fuzzOnReturn) { processed[0]=returnFuzzDelay[0].tick(retL); processed[1]=returnFuzzDelay[1].tick(retR); }
         else { returnFuzzDelay[0].tick(retL); returnFuzzDelay[1].tick(retR); }
         float monoL=monoDelay[0].tick(processed[0]*env), monoR=monoDelay[1].tick(processed[1]*env);
         float polyL=0,polyR=0;
-        bool polyEvent=spectral.process(processed[0],processed[1],polyL,polyR,smooth,trigger);
+        bool polyEvent=spectral.process(processed[0],processed[1],polyL,polyR,smooth,trigger,
+                                        target.poly||polyMix>1.e-5f);
         const float dryL=dryDelay[0].tick(inputL),dryR=dryDelay[1].tick(inputR);
         const float returnL=returnDelay[0].tick(retL),returnR=returnDelay[1].tick(retR);
         float wet[2]={monoL+polyMix*(polyL-monoL),monoR+polyMix*(polyR-monoR)};
@@ -336,7 +354,8 @@ public:
     }
 private:
     float rate=48000,polyMix=0,fuzzMix=0,bypassMix=0,compMix=1;
-    bool initialized=false; Parameters smooth;
+    bool initialized=false,polyRequested=false,fuzzRequested=false;
+    int polyWarm=0,fuzzWarm=0; Parameters smooth;
     PluckDetector detector; Compressor compressor; Envelope envelope; Spectrum spectral;
     std::array<Fuzz,2> fuzz;
     std::array<Delay<16>,2> cleanDelay,returnFuzzDelay;
