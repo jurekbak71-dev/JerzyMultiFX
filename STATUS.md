@@ -1,11 +1,17 @@
 # Jerzy MultiFX — status
 
+## Preview 15 — ujemny MAKEUP kompresorów
+
+- Główny kompresor oraz kompresory wejścia i wyjścia Oil Drum w obu bankach DELAY mają teraz zakres od -24 do +24 dB i 0 dB pośrodku gałki. Zapis projektu w wersji 3 przelicza stare wartości 0..+24 dB z wersji 1/2, zachowując ich faktyczne wzmocnienie i mapowania MIDI. Kompresor optyczny Tape Drive już miał zakres -12..+12 dB w DSP; panel RPi i tekst parametru VST wyświetlają go teraz w dB z właściwym znakiem.
+- Testy obejmują migrację starego presetu, etykiety RPi/VST i przetwarzanie dźwięku przez kompresory. Lokalnie: 3/3 CTest, 33/33 Python i 11/11 Node PASS. Automatykę hosta VST zapisaną poza projektem trzeba ponownie ustawić, bo jej znormalizowane 0..1 ma teraz zakres -24..+24 dB. Paczki dla RPi i Windows będą oznaczone jako preview; fizyczne Pi/HeadRush nadal wymaga weryfikacji.
+
 ## Preview 14 — Attack/Decay: odciążenie toru MONO
 
 - Wspólny silnik Attack/Decay utrzymuje historię wejścia POLY, lecz w MONO nie wykonuje transformacji FFT. Po wybraniu POLY przetwarza pierwszą ramkę przed domieszaniem; przejście ma test ciągłości audio. Fuzz 16× nie liczy się, gdy jest wyłączony; po ponownym włączeniu jego bufor jest zerowany i krótko rozgrzewany przed domieszaniem. Zmiany są w obu produktach MFX oraz osobnym VST A-D.
 - Lokalny benchmark x86, 48 kHz/128, 1 sekunda audio, domyślny A-D MONO bez fuzz: ok. 0,177 s CPU przed zmianą i 0,0094 s po zmianie. To pomiar tej maszyny, nie fizycznego Pi. Latencja A-D nadal wynosi 2064 próbki (~43 ms przy 48 kHz); jej zmiana wymaga osobnej przebudowy kompensacji hosta.
 - Testy: pełny natywny zestaw CTest i nowa regresja MONO→POLY/fuzz, zachowanie sygnału przy przełączeniu; CI i paczka ARM64 do uzupełnienia po wydaniu.
-- [CI RPi 40944200219](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40944200219) PASS; [preview14](https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.14.ci.40944200219.1) pobrano ponownie, SHA256 wszystkich assetów i CRC ZIP PASS, binarium to ELF AArch64. Lokalnie 3/3 CTest, 33/33 Python, 10/10 Node; cross-build MultiFX Windows VST3 PE32+ x64 PASS. Test na fizycznym RPi/HeadRush i Windows pluginval MultiFX nadal niewykonany w tej iteracji.
+- [CI RPi 40944200219](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40944200219) PASS; [preview14](https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.14.ci.40944200219.1) pobrano ponownie, SHA256 wszystkich assetów i CRC ZIP PASS, binarium to ELF AArch64. Lokalnie 3/3 CTest, 33/33 Python, 10/10 Node; cross-build MultiFX Windows VST3 PE32+ x64 PASS. [Pełne CI 40944794541](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40944794541) PASS: Windows x64 i ARM64. Test na fizycznym RPi/HeadRush nadal niewykonany w tej iteracji.
+- Osobne VST A-D: [CI Windows 40944041793](https://github.com/jurekbak71-dev/JerzyAttackDecayVST3/actions/runs/40944041793) PASS (DSP, pluginval, edytor, pakowanie), [preview VST3 x64](https://github.com/jurekbak71-dev/JerzyAttackDecayVST3/releases/tag/v0.2.1-preview.ci.40944041793.1) pobrano ponownie: SHA256 `55c8d432b017d03faa83a01f7bfa49ecbd00285f6b1f127b025f65cdbd79c63`, CRC i PE32+ x64 PASS. Lokalny pełny zestaw źródłowego A-D: 2/2 CTest, łącznie 318 s. Syntetyczny rendering poprzedniej i nowej wersji w stałym MONO, POLY i fuzz: maksymalna różnica próbek 0 w każdym przypadku.
 
 ## Preview 13 — wizualne wskaźniki IN/OUT
 

@@ -74,6 +74,34 @@ int main() {
         require(restored.state.values == project.state.values && restored.irL == project.irL &&
                     restored.irR == project.irR && restored.irName == project.irName,
                 "Exact parameter/MIDI/IR restore");
+        auto makeupId = [&](const std::string &key) {
+            for (size_t i = 0; i < lay.parameters.size(); ++i)
+                if (lay.parameters[i].key == key)
+                    return int(i);
+            throw std::runtime_error("Missing makeup parameter");
+        };
+        const std::array<std::string, 5> makeupKeys{"comp.makeup", "delayA.oil.icmakeup",
+                                                     "delayA.oil.ocmakeup", "delayB.oil.icmakeup",
+                                                     "delayB.oil.ocmakeup"};
+        multifx::Project legacy;
+        for (const auto &key : makeupKeys)
+            legacy.state.values[makeupId(key)] = .25f; // 6 dB in project v2
+        auto oldBytes = multifx::encode(legacy);
+        oldBytes[4] = 2;
+        const auto oldCrc = multifx::crc32(oldBytes.data(), oldBytes.size() - 4);
+        for (int i = 0; i < 4; ++i)
+            oldBytes[oldBytes.size() - 4 + i] = uint8_t(oldCrc >> (8 * i));
+        multifx::Project migrated;
+        require(multifx::decode(oldBytes, migrated), "Read project v2 with positive-only makeup");
+        for (const auto &key : makeupKeys) {
+            const int id = makeupId(key);
+            require(std::abs(multifx::plain(id, migrated.state.values[id]) - 6.f) < 1.e-5f,
+                    "Old preset makeup gain must remain unchanged");
+            require(lay.parameters[id].minimum == -24 && lay.parameters[id].maximum == 24 &&
+                        std::abs(multifx::plain(id, .5f)) < 1.e-5f &&
+                        std::abs(multifx::plain(id, 0.f) + 24.f) < 1.e-5f,
+                    "Every compressor makeup must attenuate, centre at zero, and boost");
+        }
         bytes[50] ^= 1;
         require(!multifx::decode(bytes, restored), "Corrupt state rejected");
         bytes.resize(12);

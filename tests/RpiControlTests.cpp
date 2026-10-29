@@ -24,6 +24,14 @@ int main() try {
     require(controlTitle(id("delayB.mx.slot0_time")).starts_with("DELAY B / MX 1:"),"DELAY B must not show DELAY A for its first MX engine");
     require(controlTitle(id("delayB.mx.slot1_time")).starts_with("DELAY B / MX 2:"),"DELAY B second MX engine label");
     require(std::string_view(ui[id("drive.gate.on")].control)=="switch","Noise gate has an ON/OFF switch");
+    require(parameterText(id("td.optoMakeup"),0)=="-12.0 dB" &&
+            parameterText(id("td.optoMakeup"),.5f)=="+0.0 dB" &&
+            parameterText(id("td.optoMakeup"),1)=="+12.0 dB", "Tape optical makeup uses bipolar dB labels");
+    for(const char *key:{"comp.makeup","delayA.oil.icmakeup","delayA.oil.ocmakeup",
+                         "delayB.oil.icmakeup","delayB.oil.ocmakeup"})
+        require(parameterText(id(key),0)=="-24.0 dB" &&
+                parameterText(id(key),.5f)=="+0.0 dB" &&
+                parameterText(id(key),1)=="+24.0 dB", "Makeup labels show the full bipolar range");
     {
         State state;
         auto controls=panelParameters(PanelSelection{0,2},state);

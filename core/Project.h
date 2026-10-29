@@ -34,7 +34,7 @@ inline void u32(std::vector<uint8_t> &b, uint32_t x) {
 inline std::vector<uint8_t> encode(const Project &p) {
     std::vector<uint8_t> b;
     u32(b, 0x31464d4a);
-    u32(b, 2);
+    u32(b, 3);
     const auto &l = layout();
     u32(b, uint32_t(l.parameters.size()));
     for (size_t i = 0; i < l.parameters.size(); ++i) {
@@ -69,7 +69,7 @@ inline bool decode(const std::vector<uint8_t> &b, Project &result) {
     if (read() != 0x31464d4a)
         return false;
     const auto version = read();
-    if (version != 1 && version != 2)
+    if (version != 1 && version != 2 && version != 3)
         return false;
     auto count = read();
     if (count > maxParameters)
@@ -85,6 +85,16 @@ inline bool decode(const std::vector<uint8_t> &b, Project &result) {
             if (keyHash(l.parameters[k].key) == hash)
                 p.state.values[k] = value;
     }
+    // Versions 1/2 stored 0..+24 dB makeup at normalized 0..1.
+    // Preserve the audible gain when restoring those projects into -24..+24 dB.
+    if (version < 3)
+        for (const char *key : {"comp.makeup", "delayA.oil.icmakeup", "delayA.oil.ocmakeup",
+                                "delayB.oil.icmakeup", "delayB.oil.ocmakeup"})
+            for (size_t k = 0; k < l.parameters.size(); ++k)
+                if (l.parameters[k].key == key) {
+                    p.state.values[k] = .5f + .5f * p.state.values[k];
+                    break;
+                }
     if (version == 1) {
         p.state.values[l.midiLearn] = std::round(p.state.values[l.midiLearn] * l.midiLearn) / l.controlCount;
         for (int cc = 0; cc < 128; ++cc)

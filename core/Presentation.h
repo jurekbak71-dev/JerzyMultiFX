@@ -227,6 +227,10 @@ inline std::string parameterText(int id, float value, bool poly = false) {
         snprintf(b, sizeof(b), "%+.1f dB", 39 * v - 26);
     else if (k == "attack.hvol")
         snprintf(b, sizeof(b), "%+.1f dB", 36 * v - 24);
+    else if (k == "td.optoMakeup")
+        snprintf(b, sizeof(b), "%+.1f dB", 24 * v - 12);
+    else if (k == "comp.makeup" || k.ends_with(".oil.icmakeup") || k.ends_with(".oil.ocmakeup"))
+        snprintf(b, sizeof(b), "%+.1f dB", plain(id, float(v)));
     else if (k == "attack.attack" || k == "attack.decay") {
         if ((k == "attack.attack" && v <= .00001) || (k == "attack.decay" && v >= .99999))
             return "OFF";

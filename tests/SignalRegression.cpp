@@ -5,6 +5,7 @@
 #include "vendor/attack/Engine.h"
 #include "vendor/clone/Dsp.h"
 #include "vendor/tape/tapedrive_dsp.h"
+#include "vendor/oil/Engine.h"
 #include "effects/Native.h"
 #include <array>
 #include <cmath>
@@ -52,6 +53,34 @@ void impulse(State s, int expected, float amplitude = 1) {
 }
 int main() try {
     auto &lay = layout();
+    {
+        State s;
+        s.values[parameterId("comp.bypass")] = 0;
+        s.values[parameterId("comp.limiter")] = 0;
+        s.values[parameterId("comp.amount")] = 0; // Ratio 1: isolate makeup gain.
+        auto analog = std::make_unique<Analog>();
+        analog->prepare(48000);
+        for (const auto [control, expected] :
+             {std::pair{0.f, db(-24.f)}, std::pair{.5f, 1.f}, std::pair{1.f, db(24.f)}}) {
+            s.values[parameterId("comp.makeup")] = control;
+            analog->configure(s);
+            float l = .01f, r = .01f;
+            for (int n = 0; n < 2000; ++n) {
+                l = r = .01f;
+                analog->comp(l, r, s);
+            }
+            require(std::abs(l / .01f - expected) < .002f,
+                    "Main compressor makeup must attenuate, centre and boost actual audio");
+        }
+        mf_oil::Compressor oil;
+        for (float amount : {-24.f, 0.f, 24.f}) {
+            oil.configure(48000, 2, 0, 1, 10, 100, 0, amount);
+            float l = .01f, r = .01f;
+            oil.process(l, r);
+            require(std::abs(l / .01f - db(amount)) < .0001f,
+                    "Oil input/output compressor applies signed makeup in DSP");
+        }
+    }
     {
         Project old;
         std::vector<uint8_t> bytes;

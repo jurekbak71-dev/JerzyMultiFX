@@ -33,6 +33,20 @@ function panel(local=storage(),session=storage(),options={}){
  return {nodes,requests,timers,context,options,document,values,timeouts};
 }
 const settle=()=>new Promise(r=>setImmediate(r));
+test('compressor MAKEUP displays attenuation, zero and boost on both panels',()=>{
+ const a=panel();
+ for(const key of ['comp.makeup','delayA.oil.icmakeup','delayA.oil.ocmakeup',
+                   'delayB.oil.icmakeup','delayB.oil.ocmakeup']){
+  const p={key,min:-24,max:24};
+  for(const [value,label] of [[0,'-24.0 dB'],[.5,'+0.0 dB'],[1,'+24.0 dB']]){
+   a.context.p=p;a.context.v=value;
+   assert.equal(vm.runInContext('formatted(p,v)',a.context),label);
+  }
+ }
+ a.context.p={key:'td.optoMakeup',min:0,max:1};
+ a.context.v=0;assert.equal(vm.runInContext('formatted(p,v)',a.context),'-12.0 dB');
+ a.context.v=.5;assert.equal(vm.runInContext('formatted(p,v)',a.context),'+0.0 dB');
+});
 test('panel opens automatically without a token or browser storage',async()=>{
  const a=panel();await settle();await settle();
  assert.equal(a.requests[0].url,'/');assert.equal(a.nodes.get('error').textContent,'');

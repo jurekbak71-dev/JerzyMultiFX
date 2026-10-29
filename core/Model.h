@@ -69,7 +69,7 @@ struct Layout {
         add("comp.amount", "COMP Compression", .3);
         add("comp.knee", "COMP Knee", .5, 0, 18);
         add("comp.input", "COMP Input", .5, -24, 24);
-        add("comp.makeup", "COMP Makeup", 0, 0, 24);
+        add("comp.makeup", "COMP Makeup", .5, -24, 24, 0, "", "dB");
         add("comp.limiter", "COMP Limiter -1 dBFS", 1, 0, 1, 1);
         add("comp.bypass", "COMP Bypass", 1, 0, 1, 1);
         processors[1] = module("clone", module_clone());
