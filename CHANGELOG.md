@@ -1,3 +1,9 @@
+## 0.1.0-preview.5 — diagnostyka MIDI RPi
+
+- Panel MIDI pokazuje, czy rdzeń faktycznie odebrał komunikat, numer CC, wartość 0/127 i przypisany efekt.
+- Zachowuje poprawki DSP, GUI, MIDI, autostartu i instalatora preview 4.
+- To wydanie diagnostyczne; fizycznego Ampero/HeadRush nie zweryfikowano.
+
 ## 0.1.0-preview.4 — RPi
 
 - Czytelne ON/OFF: zielone WŁĄCZONY, czerwone WYŁĄCZONY/BYPASS; stan MIDI i natychmiastowa reakcja panelu, wysyłanie zmian podczas ruchu gałek.

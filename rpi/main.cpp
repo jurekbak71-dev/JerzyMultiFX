@@ -196,6 +196,7 @@ struct Host {
     std::atomic<int> inputMode{0};
     std::atomic<int> program{-1};
     std::atomic<uint32_t> pendingMidi{0};
+    std::atomic<uint32_t> lastMidi{0}, midiEvents{0};
     std::atomic<bool> dirty{false};
     Host() {
         (void)multifx::factoryPresets();
@@ -226,6 +227,8 @@ struct Host {
         for (uint32_t i = 0; i < h.jack.midi_get_event_count(buffer) && nm < 128; ++i) {
             Jack::MidiEvent e{};
             if (!h.jack.midi_event_get(&e, buffer, i) && e.size >= 1 && e.size <= 3) {
+                h.lastMidi.store(uint32_t(e.buffer[0])<<16 | uint32_t(e.size>1?e.buffer[1]:0)<<8 | uint32_t(e.size>2?e.buffer[2]:0));
+                h.midiEvents.fetch_add(1);
                 midi[nm++] = {e.time,
                               uint32_t(e.size),
                               {e.buffer[0], uint8_t(e.size > 1 ? e.buffer[1] : 0),
@@ -427,6 +430,8 @@ struct Host {
                 << ",\"latencySamples\":" << engine.currentLatency() << ",\"bpm\":" << bpm.load()
                 << ",\"inputMode\":" << inputMode.load()
                 << ",\"realtime\":" << (jack.client && jack.is_realtime(jack.client) ? "true" : "false")
+                << ",\"midiEvents\":" << midiEvents.load()
+                << ",\"lastMidi\":" << lastMidi.load()
                 << ",\"xruns\":" << xruns.load()
                 << ",\"cpu\":" << (jack.client ? jack.cpu_load(jack.client) : 0)
                 << ",\"in\":" << engine.inputPeak.load() << ",\"out\":" << engine.outputPeak.load()
@@ -510,6 +515,8 @@ struct Host {
             in >> b;
             if (b < 0 || b > 127)
                 return "{\"ok\":false}";
+            lastMidi.store(uint32_t(status)<<16 | uint32_t(a)<<8 | uint32_t(b));
+            midiEvents.fetch_add(1);
             auto &lay = multifx::layout();
             if ((status & 240) == 176) {
                 int target = int(multifx::plain(lay.midiLearn, values[lay.midiLearn].load()));

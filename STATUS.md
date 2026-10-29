@@ -206,3 +206,20 @@ Instalator zachowuje sieć/JACK/presety, dodaje autostart/recovery oraz rollback
 Nie instalowano zdalnie na fizycznym bassambient. Radio Bluetooth/USB kontroler
 właściciela, odsłuch i rzeczywista latencja HeadRush nadal wymagają odbioru na
 sprzęcie. Nie potwierdzono identyczności Cloud z urządzeniami Strymon.
+
+## Master prompt 29.10.2026 — aktualny zakres i MIDI
+
+Właściciel dołączył rozszerzony master prompt obejmujący pełny produkt,
+instalatory EXE/DEB, diagnostykę i AUTO LATENCY TUNE. Prace i kryteria otwarte
+są w `TASKS.md`. Istniejące preview 3/4 pozostają rzeczywistymi binariami,
+ale nie spełniają wszystkich nowych kryteriów, w szczególności fizycznego odbioru,
+graficznych EXE i pakietu DEB.
+
+Po zgłoszeniu niedziałających bypassów MIDI dodano do STATE licznik komunikatów
+i ostatni odebrany status/CC/wartość z rzeczywistego callbacku JACK, także w
+panelu MIDI. Dzięki temu panel pokaże, czy CC 0/127 dotarł do rdzenia i czy ma
+przypisany parametr. Logika CC nadal stosuje 0=ON i 127=BYPASS; sama nazwa
+trybu Toggle w kontrolerze nie jest dowodem, że rdzeń odbiera komunikaty.
+Fizyczny Ampero/Pi nadal nie został sprawdzony; weryfikacja kompilacji i testów
+tej zmiany zostanie podana po ich ukończeniu. Dotychczasowy instalator preview 4
+nie zawiera nowego wskaźnika MIDI.

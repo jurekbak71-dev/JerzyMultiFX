@@ -106,7 +106,8 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
             assert control(f'MIDI 176 {cc} 127')['ok']
             assert request('/api/state')['values'][p['id']]==1,p['key']
             assert control(f'MIDI 176 {cc} 0')['ok']
-            assert request('/api/state')['values'][p['id']]==0,p['key']
+            midi_state=request('/api/state');assert midi_state['values'][p['id']]==0,p['key']
+            assert midi_state['midiEvents']>=2 and (midi_state['lastMidi']>>8)&127==cc
         # Graceful restart is the same state restore path used at boot.
         before=request('/api/state')['values']
         processes[-1].terminate();processes[-1].wait(timeout=5)
