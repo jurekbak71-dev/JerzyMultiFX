@@ -108,6 +108,56 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
             assert control(f'MIDI 176 {cc} 0')['ok']
             midi_state=request('/api/state');assert midi_state['values'][p['id']]==0,p['key']
             assert midi_state['midiEvents']>=2 and (midi_state['lastMidi']>>8)&127==cc
+        # One CC address per musical control follows every engine within a bank.
+        for bank in ('delayA','delayB'):
+            for kind,cc in (('time',90),('feedback',91),('mix',92)):
+                cc+=3*(bank=='delayB')
+                canonical=find(bank+'.'+kind)
+                request('/api/set',{'id':find('midi.learn'),'value':(canonical+1)/metadata['controlCount']})
+                assert control(f'MIDI 176 {cc} 64')['ok']
+                for engine,target in enumerate((kind, 'mx.slot0_'+kind,
+                    {'time':'memory.delay','feedback':'memory.feedback','mix':'mix'}[kind],
+                    'reel.'+kind,'oil.'+kind)):
+                    request('/api/set',{'id':find(bank+'.type'),'value':engine/4})
+                    assert control(f'MIDI 176 {cc} 96')['ok']
+                    key=bank+'.'+(target if kind!='mix' or engine==0 else 'mix')
+                    if engine==1 and kind=='mix':key=bank+'.mix'
+                    value=request('/api/state')['values'][find(key)]
+                    assert abs(value-96/127)<1e-5,(bank,kind,engine,key,value)
+        request('/api/set',{'id':find('delayA.type'),'value':.25})
+        request('/api/set',{'id':find('delayA.mx.slot1_enable'),'value':1})
+        assert control('MIDI 176 90 32')['ok']
+        state=request('/api/state')
+        for key in ('delayA.mx.slot0_time','delayA.mx.slot1_time'):
+            assert abs(state['values'][find(key)]-32/127)<1e-5,key
+        # Program Change selects a complete global sound including its CC map.
+        first=find('delayA.feedback');second=find('delayB.feedback');cc=100
+        request('/api/set',{'id':find('midi.learn'),'value':(first+1)/metadata['controlCount']})
+        assert control(f'MIDI 176 {cc} 64')['ok']
+        assert request('/api/save',{'name':'program42'})['ok']
+        request('/api/set',{'id':find('midi.learn'),'value':(second+1)/metadata['controlCount']})
+        assert control(f'MIDI 176 {cc} 64')['ok']
+        assert request('/api/save',{'name':'program43'})['ok']
+        for program,target in ((42,first),(43,second)):
+            assert control(f'MIDI 192 {program}')['ok']
+            for _ in range(60):
+                state=request('/api/state')
+                mapped=round(-1+metadata['controlCount']*state['values'][find('midi.cc.100')])
+                if mapped==target:break
+                time.sleep(.02)
+            else:raise AssertionError('PC did not load its own complete MIDI mapping')
+        assert control('MIDI 192 0')['ok']
+        for _ in range(60):
+            state=request('/api/state')
+            if state['values'][find('midi.cc.100')]==0:break
+            time.sleep(.02)
+        else:raise AssertionError('Factory preset must reset its individual MIDI map')
+        assert control('MIDI 192 43')['ok']
+        for _ in range(60):
+            state=request('/api/state')
+            if round(-1+metadata['controlCount']*state['values'][find('midi.cc.100')])==second:break
+            time.sleep(.02)
+        else:raise AssertionError('Saved global preset did not restore its MIDI map')
         # Graceful restart is the same state restore path used at boot.
         before=request('/api/state')['values']
         processes[-1].terminate();processes[-1].wait(timeout=5)

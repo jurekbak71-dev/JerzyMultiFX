@@ -239,3 +239,21 @@ SHA256 zewnętrzne/wewnętrzne, oba ELF64 AArch64, źródłowy SHA i identyczny 
 instalatora ZIP/TAR.GZ — PASS. Nie instalowano preview 5 na fizycznym Pi. Nowe
 kryteria master prompt (EXE/DEB, AUTO LATENCY TUNE, pomiar fizycznej pętli) nadal
 są otwarte w TASKS.md.
+
+
+## Preview 6 — wspólne MIDI DELAY i globalne presety
+
+Dla każdego banku DELAY A/B dodano trzy jawne cele MIDI Learn: TIME, FEEDBACK,
+POZIOM EFEKTU / MIX. Zachowane adresy `delayA/B.time`, `feedback`, `mix` służą
+jako stabilne cele mapowania; dopiero odebrany CC jest kierowany do aktualnego
+silnika Digital, MX (także drugi slot, jeśli aktywny), Memory, Reel lub Oil.
+Zmiana silnika nie kasuje jego zapamiętanych ustawień. `delayA/B.level` jest już
+wspólnym wyjściowym gainem; MIX oznacza udział efektu, nie gain wyjściowy.
+
+`program0`–`program127.jmfx` zapisują cały globalny preset i jego mapę MIDI.
+Program Change 0–127 wczytuje ten plik, a pusty slot 0–7 wybiera fabryczny
+preset z fabryczną mapą. Zmieniono również selekcję fabryczną z panelu, aby
+przechodziła tą samą ścieżką. Poprzednie `.jmfx` i identyfikatory są zgodne.
+Lokalny CTest 3/3, HTTP/core z rzeczywistym przejściem przez wszystkie pięć
+silników obu banków, drugim slotem MX oraz dwiema różnymi mapami PC — PASS.
+Natywna paczka ARM64 jest w przygotowaniu, nie zainstalowano jej na fizycznym Pi.

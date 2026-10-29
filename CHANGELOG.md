@@ -1,3 +1,10 @@
+## 0.1.0-preview.6 — wspólne MIDI DELAY i mapy w presetach
+
+- Osobne dla DELAY A i DELAY B wspólne MIDI Learn TIME, FEEDBACK i poziomu efektu/MIX. Jedna mapa działa po zmianie Digital/MX/Memory/Reel/Oil; aktywny drugi silnik MX dostaje ten sam CC.
+- Każdy globalny preset program0–program127 zapisuje pełny stan oraz własną mapę CC. Program Change wczytuje dany slot; niewypełnione 0–7 wybierają fabryczne brzmienie z fabryczną mapą.
+- Przy włączonym sync TIME jest określany przez tempo/podział; ruch gałki wolnego czasu nie zmienia słyszalnego delayu do wyłączenia sync.
+- Nie zmieniono identyfikatorów parametrów ani formatu `.jmfx`.
+
 ## 0.1.0-preview.5 — diagnostyka MIDI RPi
 
 - Panel MIDI pokazuje, czy rdzeń faktycznie odebrał komunikat, numer CC, wartość 0/127 i przypisany efekt.

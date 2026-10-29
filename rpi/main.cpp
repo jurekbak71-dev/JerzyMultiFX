@@ -3,6 +3,7 @@
 #include "core/Presets.h"
 #include "core/Project.h"
 #include "ParameterUI.h"
+#include "DelayMidiRoutes.h"
 #include "StateWriter.h"
 #include <chrono>
 #include <csignal>
@@ -190,6 +191,7 @@ struct Host {
     std::array<std::atomic<float>, multifx::maxParameters> values;
     multifx::Project project;
     Jack jack;
+    multifx::rpi::DelayMidiRoutes delayMidi;
     double sr = 48000;
     std::atomic<uint32_t> xruns{0};
     std::atomic<float> bpm{120};
@@ -233,14 +235,8 @@ struct Host {
                               uint32_t(e.size),
                               {e.buffer[0], uint8_t(e.size > 1 ? e.buffer[1] : 0),
                                uint8_t(e.size == 3 ? e.buffer[2] : 0)}};
-                if ((e.buffer[0] & 240) == 192 && e.size > 1) {
-                    if (e.buffer[1] < 8) {
-                        multifx::selectFactory(s, e.buffer[1]);
-                        h.setState(s);
-                        h.dirty.store(true);
-                    } else
-                        h.program.store(e.buffer[1]);
-                }
+                if ((e.buffer[0] & 240) == 192 && e.size > 1)
+                    h.program.store(e.buffer[1]);
                 if ((e.buffer[0] & 240) == 176 && e.size == 3) {
                     int cc = e.buffer[1],
                         target = int(multifx::plain(lay.midiLearn, s.values[lay.midiLearn]));
@@ -252,8 +248,11 @@ struct Host {
                     }
                     int id = int(multifx::plain(lay.midiMap + cc, s.values[lay.midiMap + cc]));
                     if (id >= 0) {
-                        s.values[id] = float(e.buffer[2]) / 127;
-                        h.values[id].store(s.values[id]);
+                        const auto route=h.delayMidi.resolve(s,id);
+                        for(int targetId : {route.first,route.second}) if(targetId>=0){
+                            s.values[targetId]=float(e.buffer[2])/127;
+                            h.values[targetId].store(s.values[targetId]);
+                        }
                         h.dirty.store(true);
                     }
                 }
@@ -500,9 +499,8 @@ struct Host {
                 !std::isfinite(value) || value < 0 || value > 1)
                 return "{\"ok\":false,\"error\":\"Invalid parameter\"}";
             if (id == multifx::layout().factoryProgram) {
-                auto s = state();
-                multifx::selectFactory(s, int(std::round(value * 7)));
-                setState(s);
+                program.store(int(std::round(value*7)));
+                return "{\"ok\":true}";
             }
             values[id].store(multifx::rpi::discreteValue(id, value));
             dirty.store(true);
@@ -526,18 +524,15 @@ struct Host {
                 }
                 int id = int(multifx::plain(lay.midiMap + a, values[lay.midiMap + a].load()));
                 if (id >= 0) {
-                    values[id].store(float(b) / 127);
+                    auto current=state();
+                    const auto route=delayMidi.resolve(current,id);
+                    for(int targetId : {route.first,route.second}) if(targetId>=0)
+                        values[targetId].store(float(b)/127);
                     dirty.store(true);
                 }
                 pendingMidi.store(uint32_t(status << 16 | a << 8 | b));
             } else if ((status & 240) == 192) {
-                if (a < 8) {
-                    auto s = state();
-                    multifx::selectFactory(s, a);
-                    setState(s);
-                    dirty.store(true);
-                } else
-                    program.store(a);
+                program.store(a);
             } else
                 pendingMidi.store(uint32_t(status << 16 | a << 8 | b));
             return "{\"ok\":true}";

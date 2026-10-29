@@ -41,7 +41,7 @@ inline void selectFactory(State &state, int index) {
     index = std::clamp(index, 0, 7);
     const auto &source = factoryPresets()[index];
     for (size_t i = 0; i < l.parameters.size(); ++i)
-        if (int(i) < l.midiLearn || int(i) > l.factoryProgram)
+        if (int(i) != l.factoryProgram)
             state.values[i] = source.values[i];
     state.values[l.factoryProgram] = float(index) / 7;
 }
