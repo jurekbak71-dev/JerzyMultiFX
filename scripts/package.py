@@ -7,7 +7,7 @@ VERSION=(ROOT/'VERSION').read_text().strip()
 SDK_REVISION='3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96'
 PRIVATE_NAMES={'REQUIREMENTS_PL.md','JERZY_MULTIFX_PROMPT_DO_CODEXA.md','Wklejony tekst.txt','JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip','token'}
 CACHE_PARTS={'.git','.build','build','dist','__pycache__','node_modules','.cache','references','attachments'}
-RUNTIME_SCRIPTS=('install.sh','uninstall.sh','rollback.sh','diagnostics.sh')
+RUNTIME_SCRIPTS=('install.sh','uninstall.sh','rollback.sh','diagnostics.sh','collect_rpi_diagnostics.py')
 RUNTIME_RPI=('bluetooth_recovery.py','control.py','hardware.py','bluetooth_relay.py','web.py','ble.py','lcd.py','lcd_service.py','jerzy-multifx.service','jerzy-multifx-web.service','jerzy-multifx-jack.service','jerzy-multifx-ble.service')
 RUNTIME_UI=('index.html','metadata.js','app.js','style.css')
 

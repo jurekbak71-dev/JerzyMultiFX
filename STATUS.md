@@ -272,3 +272,17 @@ ELF64 AArch64, SHA źródeł, prywatność źródeł i identyczny payload instal
 Fizyczny Pi/HeadRush i Hotone nie zostały testowane z preview 6; wcześniejsze
 potwierdzenie działania Ampero dotyczy instalacji właściciela sprzed preview 6.
 Windows VST nie był w tym przebiegu budowany.
+
+
+## Preview 7 — automatyczny raport sprzętu RPi
+
+Aktualizator zapisuje `diagnostyka-przed.json` i `diagnostyka-po.json` w prywatnym
+katalogu instalacji. Nowy, ograniczony czasowo kolektor czyta wyłącznie jawnie
+wymienione dane ALSA/USB/MIDI, model/kernel/CPU/RAM oraz status usług i STATE
+MultiFX. Pomija tokeny, zmienne środowiska, logi, unikatowy Serial/Revision CPU.
+Wynik podaje wyliczone opóźnienie algorytmu i pojedynczego okresu; fizyczny
+round-trip ma wartość null. Szczegóły: AUDIO_LATENCY_ANALYSIS.md.
+
+Wykonano Python 30/30, py_compile oraz diff --check PASS. Nie uruchomiono
+kolektora na fizycznym Pi; jego dostępne urządzenia i realne opóźnienie nie są
+potwierdzone. Natywny ARM64 i paczka są w przygotowaniu.

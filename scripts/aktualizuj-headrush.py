@@ -99,6 +99,15 @@ def main():
     run = base / time.strftime('instalacja-%Y%m%d-%H%M%S')
     run.mkdir(mode=0o700)
     root = unpack(raw, run)
+    collector=root/'scripts/collect_rpi_diagnostics.py'
+    def inventory(phase):
+        if collector.is_file():
+            try:
+                subprocess.run(['python3',str(collector),'--output',str(run/('diagnostyka-'+phase+'.json'))],
+                               timeout=55,check=False)
+            except (OSError,subprocess.TimeoutExpired):
+                print('Raport diagnostyczny nie powstał; instalacja trwa dalej.',flush=True)
+    inventory('przed')
     binary = root/'bin/jerzy-multifx'
     binary.chmod(0o755)
     (root/'bin/jerzy-multifx-midi').chmod(0o755)
@@ -197,6 +206,8 @@ def main():
         try:
             if not rpc('KEEP_MIDI '+str(previous_data/'last-state.jmfx')).get('ok'):print('Poprzednie przypisania MIDI pozostają w kopii starej wersji; można nauczyć je ponownie w panelu.')
         except (OSError,ValueError):print('Poprzednie przypisania MIDI pozostają w kopii starej wersji.')
+    inventory('po')
+    print('Raporty sprzętu: '+str(run/'diagnostyka-przed.json')+' oraz '+str(run/'diagnostyka-po.json'))
     print('\nGOTOWE. Na komputerze otwórz: http://bassambient.local:8097')
     print('Panel otwiera się automatycznie — bez wpisywania klucza.')
     print('Autostart włączony. Po restarcie Pi wraca ostatnie brzmienie i przypisania MIDI. Presety i poprzednia wersja zachowane.')

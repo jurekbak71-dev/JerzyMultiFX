@@ -1,3 +1,9 @@
+## 0.1.0-preview.7 — raport sprzętu RPi
+
+- Aktualizator zapisuje diagnostykę Pi przed i po instalacji: ALSA/USB/MIDI, model, kernel, usługi, xruns/CPU i dane MultiFX. Dane są w prywatnym katalogu instalacji; token, środowisko i logi są pomijane.
+- Raport odróżnia opóźnienie algorytmów i okres JACK od niezmierzonego round-trip. Instalator nie emituje sam sygnału testowego na HeadRush.
+- Wszystkie funkcje preview 6, w tym wspólne mapowanie MIDI DELAY i mapy CC zapisane w globalnych presetach, pozostają.
+
 ## 0.1.0-preview.6 — wspólne MIDI DELAY i mapy w presetach
 
 - Osobne dla DELAY A i DELAY B wspólne MIDI Learn TIME, FEEDBACK i poziomu efektu/MIX. Jedna mapa działa po zmianie Digital/MX/Memory/Reel/Oil; aktywny drugi silnik MX dostaje ten sam CC.

@@ -6,7 +6,7 @@ Status oparty na istniejącym kodzie i testach; nie uznaje testu na runnerze za 
 - [x] RPi instalator ZIP z dwuklikiem CMD, zachowaniem presetów, backupem i rollbackiem; panel bez wpisywania klucza.
 - [x] USB/BT MIDI relay i MIDI Learn; dodany licznik oraz ostatni rzeczywiście odebrany komunikat CC w panelu, aby odróżnić brak MIDI od błędnego przypisania.
 - [x] Właściciel potwierdził 29.10.2026: Ampero już działa i przełącza efekty na jego instalacji. Nie przypisywać tego potwierdzenia nowemu preview 5 bez instalacji.
-- [ ] Automatyczny kolektor sprzętu, opóźnień i stanu usług podczas instalacji z usuwaniem sekretów.
+- [x] Automatyczny kolektor przed/po instalacji: ALSA, USB, MIDI, usługi, model/CPU/RAM, stan MultiFX i rozdzielenie latencji wyliczonej od niezmierzonego round-trip. Nie uruchomiono go jeszcze na fizycznym Pi.
 - [ ] Pomiar round-trip na fizycznej pętli audio; oddzielić od latencji obliczonej z bufora i algorytmów.
 - [ ] AUTO LATENCY TUNE na wspieranym urządzeniu, z wyciszeniem podczas zmian i zachowaniem bezpiecznej konfiguracji.
 - [ ] Uniwersalny manager USB Audio; obecny instalator HeadRush jest celowo dopasowany do istniejącego bassambient.
