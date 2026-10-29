@@ -223,3 +223,19 @@ trybu Toggle w kontrolerze nie jest dowodem, że rdzeń odbiera komunikaty.
 Fizyczny Ampero/Pi nadal nie został sprawdzony; weryfikacja kompilacji i testów
 tej zmiany zostanie podana po ich ukończeniu. Dotychczasowy instalator preview 4
 nie zawiera nowego wskaźnika MIDI.
+
+
+### Preview 5 — diagnostyka MIDI, opublikowana
+
+Właściciel potwierdził, że Ampero już działa. To potwierdzenie dotyczy jego
+bieżącej instalacji, a nie testu fizycznego nowej paczki. Wskaźnik ostatniego
+CC w panelu jest dodatkowym narzędziem na wypadek kolejnej awarii.
+Źródło **cdbceb38c44fada9d107c4dfed09a879d900e4b6**; natywny ARM64 **SUCCESS**:
+https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40834602630 .
+Release: https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.5.ci.40834602630.1 .
+Natywne CTest 3/3, Node 9/9, Python 28/28, HTTP/core z ostatnim CC, JACK dummy/audio
+oraz pakowanie i kontrola prywatności — PASS. Gotowe paczki pobrano z Release:
+SHA256 zewnętrzne/wewnętrzne, oba ELF64 AArch64, źródłowy SHA i identyczny payload
+instalatora ZIP/TAR.GZ — PASS. Nie instalowano preview 5 na fizycznym Pi. Nowe
+kryteria master prompt (EXE/DEB, AUTO LATENCY TUNE, pomiar fizycznej pętli) nadal
+są otwarte w TASKS.md.

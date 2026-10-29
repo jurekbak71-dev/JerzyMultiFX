@@ -5,7 +5,7 @@ Status oparty na istniejącym kodzie i testach; nie uznaje testu na runnerze za 
 - [x] Wspólny DSP, Windows VST3 x64 i natywne ARM64 oraz paczki preview 3/4 w prywatnym GitHub Release.
 - [x] RPi instalator ZIP z dwuklikiem CMD, zachowaniem presetów, backupem i rollbackiem; panel bez wpisywania klucza.
 - [x] USB/BT MIDI relay i MIDI Learn; dodany licznik oraz ostatni rzeczywiście odebrany komunikat CC w panelu, aby odróżnić brak MIDI od błędnego przypisania.
-- [ ] Fizyczne potwierdzenie CC 0/127, połączenia Hotone Ampero Control i HeadRush na Pi. Test programowy JACK dummy nie zastępuje tego odbioru.
+- [x] Właściciel potwierdził 29.10.2026: Ampero już działa i przełącza efekty na jego instalacji. Nie przypisywać tego potwierdzenia nowemu preview 5 bez instalacji.
 - [ ] Automatyczny kolektor sprzętu, opóźnień i stanu usług podczas instalacji z usuwaniem sekretów.
 - [ ] Pomiar round-trip na fizycznej pętli audio; oddzielić od latencji obliczonej z bufora i algorytmów.
 - [ ] AUTO LATENCY TUNE na wspieranym urządzeniu, z wyciszeniem podczas zmian i zachowaniem bezpiecznej konfiguracji.
