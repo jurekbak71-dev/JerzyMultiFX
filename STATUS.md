@@ -368,3 +368,10 @@ Job Windows został świadomie pominięty ze względu na priorytet RPi; wcześni
 preview 10 Windows zakończył się sukcesem CI, ale nie był częścią tego wydania.
 Brak fizycznej instalacji na bassambient, pomiaru round-trip, odsłuchu A/B i
 potwierdzenia reakcji USB/BLE na tym preview.
+
+## Referencje do dalszych prac RPi
+
+Na prośbę właściciela przejrzano `react-guitar`, `brummer10/guitarix` oraz
+`Quinny/GuitarEffects`. Konkretne commity, licencje, przydatne rozwiązania i
+odrzucone wzorce realtime opisuje `docs/REFERENCJE_GITARA_RPI.md`.
+Nie dodano ich kodu do paczki ani nie deklarowano testu na HeadRush.

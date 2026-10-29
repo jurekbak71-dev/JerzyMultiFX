@@ -2,6 +2,8 @@
 
 Status oparty na istniejącym kodzie i testach; nie uznaje testu na runnerze za odbiór sprzętowy.
 
+Referencje wskazane 29.10.2026: [react-guitar, Guitarix, GuitarEffects](docs/REFERENCJE_GITARA_RPI.md). Decyzje dla RPi zapisano tam trwale; kodu tych projektów nie kopiowano. Priorytet właściciela: RPi/HeadRush przed VST.
+
 - [x] Wspólny DSP, Windows VST3 x64 i natywne ARM64 oraz paczki preview 3/4 w prywatnym GitHub Release.
 - [x] RPi instalator ZIP z dwuklikiem CMD, zachowaniem presetów, backupem i rollbackiem; panel bez wpisywania klucza.
 - [x] USB/BT MIDI relay i MIDI Learn; dodany licznik oraz ostatni rzeczywiście odebrany komunikat CC w panelu, aby odróżnić brak MIDI od błędnego przypisania.
