@@ -1,3 +1,7 @@
+# 0.1.0-preview.8
+
+- Dodatkowy pakiet Debian ARM64 z natywnym programem, pełnym payloadem z TAR.GZ i poleceniem `jerzy-multifx-setup`. Instalacja DEB nie przestawia audio automatycznie; konfiguracja świadomie korzysta z dotychczasowego instalatora z backupem.
+
 ## 0.1.0-preview.7 — raport sprzętu RPi
 
 - Aktualizator zapisuje diagnostykę Pi przed i po instalacji: ALSA/USB/MIDI, model, kernel, usługi, xruns/CPU i dane MultiFX. Dane są w prywatnym katalogu instalacji; token, środowisko i logi są pomijane.

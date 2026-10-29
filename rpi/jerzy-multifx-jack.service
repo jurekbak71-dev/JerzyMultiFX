@@ -8,6 +8,7 @@ ExecStart=/usr/bin/jackd --name JerzyMultiFX --realtime --realtime-priority 70 -
 LimitRTPRIO=95
 LimitMEMLOCK=infinity
 Restart=always
+RestartSec=5
 NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target

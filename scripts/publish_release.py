@@ -20,7 +20,7 @@ def asset_names(platform,version):
     if platform=='windows':
         return [f'JerzyMultiFX-VST3-Windows-x64-v{version}.zip','INSTALACJA_VST3_PL.md']
     if platform=='arm64':
-        return [f'JerzyMultiFX-RPi-aarch64-v{version}.tar.gz','JerzyMultiFX-INSTALATOR.zip','INSTALACJA_RPI_PROSTO.txt','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md']
+        return [f'JerzyMultiFX-RPi-aarch64-v{version}.tar.gz',f'JerzyMultiFX-RPi-aarch64-v{version}.deb','JerzyMultiFX-INSTALATOR.zip','INSTALACJA_RPI_PROSTO.txt','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md']
     raise ValueError('Unsupported platform')
 
 def notes(repo,tag,version,sha,run_id,platform=None):
@@ -54,6 +54,7 @@ Cloud to własny algorytm ambientowy, bez deklaracji identyczności ze Strymon.
 
 - `JerzyMultiFX-INSTALATOR.zip` — samowystarczalny instalator z rzeczywistymi binariami AArch64.
 - `JerzyMultiFX-RPi-aarch64-v{version}.tar.gz` — binaria ARM64, aplikacja, odpowiadające źródła i manifest SHA256.
+- `JerzyMultiFX-RPi-aarch64-v{version}.deb` — pakiet Debian ARM64; po instalacji uruchom `sudo jerzy-multifx-setup` i wybierz audio. Samo `dpkg -i` nie przestawia urządzenia.
 - `SHA256SUMS-RPi-aarch64`, `FILES-RPi-aarch64.json` — sumy i rozmiary plików do pobrania.
 - `INSTALACJA_RPI_PROSTO.txt`, `INSTALACJA_RPI_PL.md`, `WIFI_BLUETOOTH_PL.md`, `HARDWARE_TESTS_PL.md` — instrukcje.
 

@@ -299,3 +299,21 @@ Pierwsze lokalne sprawdzenie manifestu użyło błędnie przepisanego SHA jako o
 po podaniu dokładnego SHA z BUILD-INFO cała kontrola przeszła. Nie był to błąd paczki.
 Nie instalowano preview 7 na fizycznym Pi. Realny round-trip i AUTO LATENCY TUNE
 są nadal otwartymi zadaniami.
+
+## Preview 8 — pakiet Debian ARM64
+
+Dodano równoległy `.deb` budowany wyłącznie ze sprawdzonego katalogu paczki
+ARM64. Ma metadane `Architecture: arm64`, zawiera ten sam binarny payload i
+`jerzy-multifx-setup`. `dpkg -i` nie uruchamia usług, nie ma skryptów maintainer
+i nie zmienia JACK. Osobny setup sprawdza SHA256 i wywołuje istniejący
+instalator z kopią zapasową; uruchomienie audio wymaga jawnego `--enable --device`.
+
+Lokalny test struktury `.deb`, zgodności plików z katalogiem źródłowym oraz
+braku automatycznej aktywacji — PASS. Pełny natywny build ARM64, weryfikacja
+gotowego pakietu i publikacja tej rewizji czekają na CI. Fizyczna instalacja,
+odsłuch, round-trip i AUTO LATENCY TUNE nie zostały wykonane.
+
+Analiza patchOS/MODEP: `docs/PATCHOS_ANALYSIS.md`. W dedykowanym wariancie JACK
+dodano 5 s między próbami startu przy odłączonym USB. Nie zmienia to istniejącego
+systemowego JACK na `bassambient`; brak pomiaru, który uzasadniałby kopiowanie
+ustawień ES-8/ES-9 lub Pisound na HeadRush.

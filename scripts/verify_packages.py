@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import hashlib,io,json,struct,tarfile,zipfile
+import hashlib,io,json,struct,subprocess,tarfile,tempfile,zipfile
 from pathlib import Path,PurePosixPath
 from package import architecture,VERSION,PRIVATE_NAMES,CACHE_PARTS
 root=Path(__file__).resolve().parents[1]
@@ -44,3 +44,20 @@ for package in packages:
         assert not any('REQUIREMENTS_PL.md' in n or 'JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip' in n or n.endswith(('.png','.jpeg')) and 'references/' in n for n in names)
         if 'Windows' in package.name:assert 'JerzyMultiFX/dependencies/vst3sdk/REVISION' in names
     print('PASS',package.name,len(files),'files; all internal SHA256, actual architecture, sources, installer or validated VST3 verified')
+deb=root/'dist'/f'JerzyMultiFX-RPi-aarch64-v{VERSION}.deb'
+arm=packages[1]
+if deb.exists():
+    assert arm.exists(),'Debian package requires matching ARM64 tarball'
+    fields=subprocess.check_output(['dpkg-deb','--field',str(deb)],text=True)
+    assert f'Version: {VERSION}' in fields and 'Architecture: arm64' in fields
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(['dpkg-deb','--extract',str(deb),tmp],check=True)
+        payload=Path(tmp)/'usr/share/jerzy-multifx'
+        with tarfile.open(arm) as archive:
+            original={m.name.split('/',1)[1]:archive.extractfile(m).read() for m in archive if m.isfile()}
+        extracted={p.relative_to(payload).as_posix():p.read_bytes() for p in payload.rglob('*') if p.is_file()}
+        assert original==extracted,'DEB payload differs from verified ARM64 tarball'
+        setup=Path(tmp)/'usr/bin/jerzy-multifx-setup'
+        assert setup.stat().st_mode & 0o111 and b'sha256sum -c SHA256SUMS' in setup.read_bytes()
+        assert not (Path(tmp)/'etc').exists(),'DEB must not activate or replace existing audio configuration'
+    print('PASS',deb.name,'ARM64 metadata, identical checked payload, inert install')

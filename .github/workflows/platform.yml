@@ -110,6 +110,7 @@ jobs:
         shell: bash
         run: |
           python3 scripts/package.py arm64 --build build
+          python3 scripts/build_deb.py
           version=$(cat VERSION)
           python3 scripts/make_headrush_installer.py --package "dist/JerzyMultiFX-RPi-aarch64-v${version}.tar.gz" --checksums dist/SHA256SUMS
       - name: Verify packages and privacy allowlist

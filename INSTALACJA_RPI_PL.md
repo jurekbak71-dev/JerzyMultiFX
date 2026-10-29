@@ -2,6 +2,8 @@
 
 # Instalacja Raspberry Pi ARM64
 
+Od preview 8 dostępny jest również `JerzyMultiFX-RPi-aarch64-v…deb` dla Debian/Raspberry Pi OS 13 ARM64. Na **oddzielnym Pi** można wykonać `sudo dpkg -i JerzyMultiFX-RPi-aarch64-v…deb`, a następnie `sudo jerzy-multifx-setup --enable --device hw:NAZWA`. Samo `dpkg -i` jedynie rozpakowuje sprawdzone pliki do `/usr/share/jerzy-multifx` i dodaje polecenie konfiguracji; nie uruchamia usług, nie zmienia JACK ani konfiguracji audio. `sudo jerzy-multifx-setup --help` pokazuje opcje. Dla istniejącego `bassambient` z HeadRush użyj instalatora ZIP, który zachowuje działający JACK i ma własne cofnięcie zmian.
+
 Docelowy system tej paczki: Debian 13 / Raspberry Pi OS 64-bit z glibc >= 2.41, architektura `aarch64`. Nie jest to paczka ARM32 ani Windows. Typowy kandydat: Raspberry Pi 4/5; obciążenie i opóźnienie muszą być zmierzone na fizycznym urządzeniu. Testy QEMU nie potwierdzają czasu rzeczywistego.
 
 1. Przygotuj **oddzielną** kartę w Raspberry Pi Imager; nie nadpisuj działającej karty MultiFX. Skonfiguruj własną sieć, SSH i mocne hasło. Żaden skrypt z repozytorium nie formatuje karty.
