@@ -1,6 +1,7 @@
 #pragma once
 #include "base/source/timer.h"
 #include "core/Engine.h"
+#include "core/DelayMidiRoutes.h"
 #include "core/Project.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "public.sdk/source/vst/vstaudioeffect.h"
@@ -14,6 +15,7 @@ inline const FUID controllerId(0x4A4D4658, 0x710148A5, 0xB81D27AE, 0xC3D64002);
 class Processor final : public AudioEffect {
     std::array<std::atomic<float>, maxParameters> values;
     Engine engine;
+    DelayMidiRoutes delayMidi;
     Project assets;
     std::mutex assetMutex;
     double bpm = 120;

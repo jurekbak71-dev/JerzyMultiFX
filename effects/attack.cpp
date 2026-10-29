@@ -31,6 +31,8 @@ void process(void *p, const JAProcess *b) {
         v.*floats[i] = b->parameters[i];
     for (unsigned i = 0; i < 10; ++i)
         v.*bools[i] = b->parameters[10 + i] >= .5f;
+    if (b->control_parameters)
+        v.makeup = multifx::plain(layout.attackMakeup, b->control_parameters[layout.attackMakeup]);
     v.attackShape = int(b->parameters[20] * 2 + .5f);
     v.decayShape = int(b->parameters[21] * 2 + .5f);
     v.triggerMode = int(b->parameters[22] * 2 + .5f);

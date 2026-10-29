@@ -25,7 +25,7 @@ struct Layout {
     int order, bypass, blockBypass[5], preamp, drive, compressor, delayMode, delayType[2], digital[2], reverb,
         ir, midiLearn, midiMap, controlCount, factoryProgram;
     int cpdBypass, slotBypass[2], masterGain, outputLimiter, fuzzModel, fuzzVolume, attackTrigger,
-        attackExpression, attackExpressionEnabled, gateEnabled, gateThreshold, gateRelease;
+        attackExpression, attackExpressionEnabled, gateEnabled, gateThreshold, gateRelease, attackMakeup;
     std::array<std::array<int, 3>, 8> attackExpressionMap{};
     std::array<int, 4> processorBypass{};
     std::array<std::array<int, 2>, 2> mxAlgorithms{};
@@ -158,6 +158,7 @@ struct Layout {
         gateEnabled = add("drive.gate.on", "Noise Gate ON", 0, 0, 1, 1);
         gateThreshold = add("drive.gate.threshold", "Gate Threshold", .28f, -80, -20, 0, "", "dB");
         gateRelease = add("drive.gate.release", "Gate Release", .2f, 20, 800, 0, "", "ms");
+        attackMakeup = add("attack.makeup", "Attack Compressor Makeup", .5f, -12, 12, 0, "", "dB");
         // Version-2 states use a fixed MIDI address span; appended controls keep their IDs.
         controlCount = maxParameters;
         parameters[midiLearn].maximum = maxParameters - 1;

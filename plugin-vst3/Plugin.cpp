@@ -255,14 +255,20 @@ tresult PLUGIN_API Processor::process(ProcessData &data) {
                     }
                     int mapped = int(plain(layout().midiMap + cc, s.values[layout().midiMap + cc]));
                     if (mapped >= 0) {
-                        id = mapped;
-                        if (data.outputParameterChanges && id < count) {
-                            int32 index = 0, point = 0;
-                            if (auto *out = data.outputParameterChanges->addParameterData(id, index))
-                                out->addPoint(at, value, point);
+                        const auto target = delayMidi.resolve(s, mapped);
+                        for (int destination : {target.first, target.second}) {
+                            if (destination < 0 || destination >= count)
+                                continue;
+                            s.values[destination] = value;
+                            values[destination].store(value, std::memory_order_relaxed);
+                            if (data.outputParameterChanges) {
+                                int32 index = 0, point = 0;
+                                if (auto *out = data.outputParameterChanges->addParameterData(destination, index))
+                                    out->addPoint(at, value, point);
+                            }
                         }
-                    } else
-                        id = -1;
+                    }
+                    id = -1;
                 }
                 if (id >= 0 && id < count) {
                     s.values[id] = value;
@@ -371,7 +377,7 @@ tresult PLUGIN_API Controller::initialize(FUnknown *host) {
     for (size_t i = 0; i < layout().parameters.size(); ++i) {
         if (int(i) == layout().factoryProgram)
             continue;
-        const auto &p = layout().parameters[i];
+        const auto &p = controlUI()[i].definition;
         String128 title{};
         auto wide = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.from_bytes(
             p.key + " / " + p.name);
@@ -454,7 +460,7 @@ tresult PLUGIN_API Controller::getParamValueByString(ParamID id, TChar *input, P
     char text[128]{};
     for (int i = 0; i < 127 && input[i]; ++i)
         text[i] = char(input[i]);
-    auto &definition = layout().parameters[id];
+    const auto &definition = controlUI()[id].definition;
     if (!definition.choices.empty()) {
         std::istringstream choices(definition.choices);
         std::string label;
@@ -477,11 +483,13 @@ tresult PLUGIN_API Controller::getParamValueByString(ParamID id, TChar *input, P
     double n = strtod(text, &end);
     if (end == text || !std::isfinite(n))
         return kResultFalse;
-    auto &p = layout().parameters[id];
+    const auto &p = controlUI()[id].definition;
     const auto &key = p.key;
     double normalized = (n - p.minimum) / (p.maximum - p.minimum);
     if (key == "clone.rate")
         normalized = std::log(std::max(n, .05) / .05) / std::log(160.);
+    else if (key == "td.optoMakeup")
+        normalized = (n + 12) / 24;
     else if (key == "clone.level")
         normalized = (n + 12) / 24;
     else if (key == "atomic.volume")

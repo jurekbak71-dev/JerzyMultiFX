@@ -1,4 +1,5 @@
 #include "rpi/ParameterUI.h"
+#include "core/DelayMidiRoutes.h"
 #include "rpi/StateWriter.h"
 #include "core/Presentation.h"
 #include <filesystem>
@@ -24,6 +25,10 @@ int main() try {
     require(controlTitle(id("delayB.mx.slot0_time")).starts_with("DELAY B / MX 1:"),"DELAY B must not show DELAY A for its first MX engine");
     require(controlTitle(id("delayB.mx.slot1_time")).starts_with("DELAY B / MX 2:"),"DELAY B second MX engine label");
     require(std::string_view(ui[id("drive.gate.on")].control)=="switch","Noise gate has an ON/OFF switch");
+    require(layout().attackMakeup==id("attack.makeup") &&
+            plain(layout().attackMakeup,0)==-12 && plain(layout().attackMakeup,.5f)==0 &&
+            plain(layout().attackMakeup,1)==12,
+            "Attack compressor makeup uses a centred bipolar dB control");
     require(parameterText(id("td.optoMakeup"),0)=="-12.0 dB" &&
             parameterText(id("td.optoMakeup"),.5f)=="+0.0 dB" &&
             parameterText(id("td.optoMakeup"),1)=="+12.0 dB", "Tape optical makeup uses bipolar dB labels");
@@ -37,8 +42,33 @@ int main() try {
         auto controls=panelParameters(PanelSelection{0,2},state);
         require(std::find(controls.begin(),controls.end(),id("drive.gate.on"))!=controls.end(),
                 "Noise gate is present in DRIVE panel");
+        controls=panelParameters(PanelSelection{1,1,0,true},state);
+        require(std::find(controls.begin(),controls.end(),layout().attackMakeup)!=controls.end(),
+                "Attack compressor makeup is present in advanced VST/RPi panel");
     }
     require(rpi::discreteValue(id("td.shift"),.49f)==.5f,"Snap selectors to original DSP model positions");
+    DelayMidiRoutes routes;
+    State routeState;
+    for(int bank=0;bank<2;++bank) {
+        const std::string prefix=bank?"delayB.":"delayA.";
+        for(int engine=0;engine<5;++engine) {
+            routeState.values[layout().delayType[bank]]=float(engine)/4;
+            auto time=routes.resolve(routeState,id((prefix+"time").c_str()));
+            auto feedback=routes.resolve(routeState,id((prefix+"feedback").c_str()));
+            const std::array<const char*,5> timeKeys{"time","mx.slot0_time","memory.delay","reel.time","oil.time"};
+            const std::array<const char*,5> feedbackKeys{"feedback","mx.slot0_feedback","memory.feedback","reel.feedback","oil.feedback"};
+            require(time.first==id((prefix+timeKeys[engine]).c_str()),
+                    "Shared MIDI TIME follows the selected delay engine");
+            require(feedback.first==id((prefix+feedbackKeys[engine]).c_str()),
+                    "Shared MIDI FEEDBACK follows the selected delay engine");
+            require(routes.resolve(routeState,id((prefix+"mix").c_str())).first==id((prefix+"mix").c_str()),
+                    "Shared MIDI MIX retains the bank level");
+        }
+        routeState.values[layout().delayType[bank]]=.25f;
+        routeState.values[id((prefix+"mx.slot1_enable").c_str())]=1;
+        require(routes.resolve(routeState,id((prefix+"time").c_str())).second==id((prefix+"mx.slot1_time").c_str()),
+                "MX second engine receives common MIDI TIME when active");
+    }
     const auto directory=std::filesystem::temp_directory_path()/("multifx-rpi-control-"+std::to_string(getpid()));
     std::filesystem::create_directories(directory);const auto path=(directory/"last-state.jmfx").string();
     Project p;

@@ -54,6 +54,14 @@ void impulse(State s, int expected, float amplitude = 1) {
 int main() try {
     auto &lay = layout();
     {
+        auto settled=[](float trim){mf_attack::Compressor c;c.prepare(48000);float gain=1;
+            for(int n=0;n<48000;++n)gain=c.process(.01f,trim);return gain;};
+        const float neutral=settled(0);
+        require(std::abs(settled(-12)/neutral-db(-12))<.001f &&
+                std::abs(settled(12)/neutral-db(12))<.001f,
+                "Attack compressor makeup changes actual gain symmetrically around 0 dB");
+    }
+    {
         State s;
         s.values[parameterId("comp.bypass")] = 0;
         s.values[parameterId("comp.limiter")] = 0;

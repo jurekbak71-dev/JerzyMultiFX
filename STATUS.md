@@ -1,9 +1,16 @@
 # Jerzy MultiFX — status
 
+## Preview 16 — zgodność VST z obsługą RPi i MAKEUP Attack/Decay
+
+- Ten sam kod DSP w RPi i VST obejmuje wcześniejsze poprawki brzmienia, bramkę, kompresory i mierniki. Wspólne mapowanie MIDI TIME/FEEDBACK/MIX dla DELAY A/B działa teraz także w procesorze VST; aktywny silnik dostaje CC, a w MX opcjonalnie również drugi silnik. Edytor VST pokazuje trzy przyciski MIDI Learn w DELAY i korzysta z tych samych wskazówek przełączników/list co RPi, w tym trybów Tape Drive. Przełączniki otrzymały czytelny status aktywny/zgaszony.
+- Attack/Decay w MultiFX oraz osobne VST mają teraz opcjonalny MAKEUP kompresora −12…+12 dB, domyślnie 0 dB. Dodano go na końcu listy parametrów MultiFX, aby nie zmienić istniejących ID i map MIDI. Parametr jest widoczny w zaawansowanym panelu Attack/Decay. Testy nowego sterowania DSP i migracji stanów są w obu projektach.
+- RPi autostart, USB/BLE MIDI i połączenia JACK są funkcjami urządzenia, nie adaptera DAW. VST korzysta z MIDI i audio dostarczanego przez host; nie uruchamia usług Pi.
+- Testy fizycznego RPi/HeadRush oraz odsłuch w FL Studio pozostają do wykonania.
+
 ## Preview 15 — ujemny MAKEUP kompresorów
 
 - Główny kompresor oraz kompresory wejścia i wyjścia Oil Drum w obu bankach DELAY mają teraz zakres od -24 do +24 dB i 0 dB pośrodku gałki. Zapis projektu w wersji 3 przelicza stare wartości 0..+24 dB z wersji 1/2, zachowując ich faktyczne wzmocnienie i mapowania MIDI. Kompresor optyczny Tape Drive już miał zakres -12..+12 dB w DSP; panel RPi i tekst parametru VST wyświetlają go teraz w dB z właściwym znakiem.
-- Testy obejmują migrację starego presetu, etykiety RPi/VST i przetwarzanie dźwięku przez kompresory. Lokalnie: 3/3 CTest, 33/33 Python i 11/11 Node PASS. Automatykę hosta VST zapisaną poza projektem trzeba ponownie ustawić, bo jej znormalizowane 0..1 ma teraz zakres -24..+24 dB. Paczki dla RPi i Windows będą oznaczone jako preview; fizyczne Pi/HeadRush nadal wymaga weryfikacji.
+- Testy obejmują migrację starego presetu, etykiety RPi/VST i przetwarzanie dźwięku przez kompresory. Lokalnie: 3/3 CTest, 33/33 Python i 11/11 Node PASS. [CI 40947356503](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40947356503) PASS na Windows x64 i ARM64; [wydanie preview 15](https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.15.ci.40947356503.1) pobrano i potwierdzono SHA256, CRC ZIP i architektury PE x64 / ELF AArch64. Automatykę hosta VST zapisaną poza projektem trzeba ponownie ustawić, bo jej znormalizowane 0..1 ma teraz zakres -24..+24 dB. Fizyczne Pi/HeadRush nadal wymaga weryfikacji.
 
 ## Preview 14 — Attack/Decay: odciążenie toru MONO
 

@@ -161,6 +161,10 @@ int main(int argc, char **argv) try {
         pump(); // Reordered MD block is now first.
         HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
         check(family && SendMessage(family, CB_GETCOUNT, 0, 0) == 13, "MD family dropdown");
+        click(child, 70, 720);
+        check(std::abs(c->getParamNormalized(layout().midiLearn) -
+                       double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
+              "DELAY TIME MIDI Learn is available independently of the chosen engine");
         SendMessage(family, CB_SETCURSEL, 5, 0);
         SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + layout().delayType[0], CBN_SELCHANGE),
                     reinterpret_cast<LPARAM>(family));

@@ -19,6 +19,7 @@ inline float seconds(float position, bool poly = false) {
 struct Parameters {
     float attack = .4f, decay = 1, blend = 1, volume = .5f, sens = .5f;
     float harmonix = .3f, tone = .5f, hvol = .25f, hblend = 1, rblend = 1;
+    float makeup = 0; // dB trim after automatic compressor makeup, -12..+12
     bool poly = false, fuzz = false, compMono = true, compPoly = true;
     bool continuousMono = false, continuousPoly = false, bypass = false;
     bool useReturn = false, returnBypass = false, fuzzOnReturn = false;
@@ -114,7 +115,7 @@ private:
 class Compressor {
 public:
     void prepare(float sr) { atk=std::exp(-1/(sr*.008f)); rel=std::exp(-1/(sr*.18f)); gainC=std::exp(-1/(sr*.003f)); level=0; gain=1; }
-    float process(float peak) {
+    float process(float peak, float makeupDb = 0) {
         float c = peak > level ? atk : rel;
         level = c*level+(1-c)*peak;
         float inputDb = 20*std::log10(std::max(level, 1.0e-9f));
@@ -122,7 +123,7 @@ public:
         if (over > 3) reduction = .75f*over;
         else if (over > -3) reduction = .75f*(over+3)*(over+3)/12;
         float makeup = 12*std::clamp((inputDb+70)/20,0.0f,1.0f);
-        float target = db(makeup-reduction);
+        float target = db(makeup+makeupDb-reduction);
         gain=gainC*gain+(1-gainC)*target;
         return gain;
     }
@@ -299,6 +300,7 @@ public:
         if(std::abs(smooth.decay-target.decay)<1e-6f) smooth.decay=target.decay;
         approach(smooth.blend,target.blend); approach(smooth.volume,target.volume); approach(smooth.harmonix,target.harmonix);
         approach(smooth.tone,target.tone); approach(smooth.hvol,target.hvol); approach(smooth.hblend,target.hblend); approach(smooth.rblend,target.rblend);
+        approach(smooth.makeup,target.makeup);
         smooth.sens=target.sens; smooth.attackShape=target.attackShape; smooth.decayShape=target.decayShape;
         smooth.continuousMono=target.continuousMono; smooth.continuousPoly=target.continuousPoly; smooth.triggerMode=target.triggerMode;
         if(target.poly&&!polyRequested){polyRequested=true;polyWarm=Spectrum::hop;}
@@ -319,7 +321,7 @@ public:
         if(monoEvent) envelope.trigger();
         float env=envelope.tick(rate,smooth.attack,smooth.decay,target.attackShape,target.decayShape,target.continuousMono);
         env=envDelay.tick(env);
-        float cg=compressor.process(std::max(std::abs(l),std::abs(r)));
+        float cg=compressor.process(std::max(std::abs(l),std::abs(r)),smooth.makeup);
         approach(compMix,(target.poly?target.compPoly:target.compMono)?1.0f:0.0f);
         float compGain=1+compMix*(cg-1);
         float material[2]={l*compGain,r*compGain};

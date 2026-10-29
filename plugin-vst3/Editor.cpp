@@ -36,9 +36,15 @@ class Editor final : public Steinberg::CPluginView {
             return -1;
         return layout().processorBypass[view.section + 1];
     }
+    int delayMidiTarget(int x, int y) const {
+        if (globalSettings || view.block != 2 || y < 700 || y >= 748 || x < 30 || x >= 780)
+            return -1;
+        const int index = (x - 30) / 250;
+        const std::string bank = view.section ? "delayB." : "delayA.";
+        return parameterId(bank + std::array<const char *, 3>{"time", "feedback", "mix"}[index]);
+    }
     bool isToggle(int id) const {
-        const auto &p=layout().parameters[id];
-        return p.steps==1 || p.key=="atomic.smooth" || p.key=="atomic.flat";
+        return std::string_view(controlUI()[id].control) == "switch";
     }
     double value(int id) const {
         return id >= 0 ? controller->getParamNormalized(id) : 0;
@@ -52,9 +58,13 @@ class Editor final : public Steinberg::CPluginView {
     void change(int id, double v) {
         if (id < 0)
             return;
+        const int steps = controlUI()[id].definition.steps;
+        v = clean(float(v));
+        if (steps > 0)
+            v = std::round(v * steps) / steps;
         controller->beginEdit(id);
-        controller->setParamNormalized(id, clean(float(v)));
-        controller->performEdit(id, clean(float(v)));
+        controller->setParamNormalized(id, v);
+        controller->performEdit(id, v);
         controller->endEdit(id);
         if (window)
             InvalidateRect(window, nullptr, FALSE);
@@ -144,7 +154,7 @@ class Editor final : public Steinberg::CPluginView {
         for (int id : ids) {
             if (id == effectBypass() && !globalSettings)
                 continue;
-            const auto &p = layout().parameters[id];
+            const auto &p = controlUI()[id].definition;
             const bool common =
                 view.block == 2 &&
                 (p.key.starts_with("md.") || p.key == "delayA.type" || p.key == "delayB.type" ||
@@ -170,8 +180,8 @@ class Editor final : public Steinberg::CPluginView {
             controls.push_back({knobs[i], int(i % columns) * cell + 20, y + int(i / columns) * rowHeight,
                                 cell - 40, rowHeight - 8, false});
         for (auto &c : controls) {
-            auto &p = layout().parameters[c.id];
-            if (p.choices.empty())
+            const auto &p = controlUI()[c.id].definition;
+            if (p.choices.empty() && !(p.steps > 1 && p.steps <= 64))
                 continue;
             const int yy = c.y - scroll;
             if (yy < 232 || yy + 55 > controlBottom)
@@ -185,12 +195,22 @@ class Editor final : public Steinberg::CPluginView {
             if (!fonts[fontSize]) fonts[fontSize] = CreateFontA(fontSize,0,0,0,FW_MEDIUM,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,"Segoe UI");
             SendMessage(h, WM_SETFONT, reinterpret_cast<WPARAM>(fonts[fontSize]), TRUE);
             const bool family = p.key == "delayA.type" || p.key == "delayB.type";
-            std::istringstream choices(family ? mdEngineChoices : p.choices);
-            std::string label;
-            while (std::getline(choices, label, '|'))
-                SendMessageA(h, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
+            if (p.choices.empty()) {
+                for (int option = 0; option <= p.steps; ++option) {
+                    char label[32];
+                    snprintf(label, sizeof(label), "%d", int(std::round(p.minimum +
+                             (p.maximum - p.minimum) * option / p.steps)));
+                    SendMessageA(h, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label));
+                }
+            } else {
+                std::istringstream choices(family ? mdEngineChoices : p.choices);
+                std::string label;
+                while (std::getline(choices, label, '|'))
+                    SendMessageA(h, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
+            }
             int choice = int(
-                std::round(value(c.id) * (family ? 4 : std::count(p.choices.begin(), p.choices.end(), '|'))));
+                std::round(value(c.id) * (family ? 4 : p.choices.empty() ? p.steps :
+                            std::count(p.choices.begin(), p.choices.end(), '|'))));
             if (family) {
                 const int bank = p.key == "delayA.type" ? 0 : 1;
                 choice = choice == 0   ? 0
@@ -277,6 +297,14 @@ class Editor final : public Steinberg::CPluginView {
         for(int y=230;y<791;y+=3)
             line(dc,21,y,1259,y,RGB(151,156,151));
         bevel(dc, 24, 674, 1232, 112, RGB(53,57,54));
+        if (view.block == 2 && !globalSettings) {
+            const char *labels[]{"MIDI LEARN / TIME", "MIDI LEARN / FEEDBACK", "MIDI LEARN / MIX"};
+            for (int i = 0; i < 3; ++i) {
+                bevel(dc, 30 + i * 250, 700, 230, 48, RGB(44, 58, 58));
+                text(dc, 35 + i * 250, 713, 220, labels[i], 14, RGB(230, 222, 184));
+            }
+            text(dc, 32, 758, 740, "Same CC follows the selected DELAY engine", 12, RGB(230, 222, 184));
+        }
         if (view.block == 2 && view.advanced && !globalSettings)
             text(dc,40,700,400,view.mxSlot == 0 ? "MX ENGINE A" : "MX ENGINE B",24,RGB(232,221,190));
         for (int x : {30,1248}) for(int y : {238,778}) {
@@ -336,16 +364,16 @@ class Editor final : public Steinberg::CPluginView {
             int y = c.y - scroll;
             if (y + c.h < 232 || y > controlBottom)
                 continue;
-            const auto &p = layout().parameters[c.id];
+            const auto &p = controlUI()[c.id].definition;
             const auto label = controlTitle(c.id);
             if (c.compact) {
                 text(dc, c.x, y, c.w, label.c_str(), 13, RGB(30,34,31));
-                if (!p.choices.empty())
+                if (!p.choices.empty() || (p.steps > 1 && p.steps <= 64))
                     continue;
                 bevel(dc, c.x, y + 23, c.w, 29, RGB(67,71,67));
                 if (isToggle(c.id)) {
                     const bool on=p.key.ends_with(".bypass") ? value(c.id)<.5 : value(c.id)>=.5;
-                    disk(dc,c.x+16,y+38,7,on?RGB(105,220,96):RGB(48,50,43));
+                    disk(dc,c.x+16,y+38,7,on?RGB(105,220,96):RGB(185,62,51));
                     bevel(dc,c.x+35,y+27,12,21,RGB(28,29,26));
                     bevel(dc,c.x+33,y+(on?26:37),16,10,RGB(208,209,195));
                 }
@@ -479,8 +507,10 @@ class Editor final : public Steinberg::CPluginView {
                     } else
                         change(id,
                                double(choice) /
-                                   std::max(1, int(std::count(layout().parameters[id].choices.begin(),
-                                                              layout().parameters[id].choices.end(), '|'))));
+                                   std::max(1, controlUI()[id].definition.choices.empty() ?
+                                       controlUI()[id].definition.steps :
+                                       int(std::count(controlUI()[id].definition.choices.begin(),
+                                                      controlUI()[id].definition.choices.end(), '|'))));
                     scroll = 0;
                     rebuild();
                 }
@@ -488,6 +518,10 @@ class Editor final : public Steinberg::CPluginView {
             return 0;
         case WM_LBUTTONDOWN: {
             SetFocus(window);
+            if (const int id = delayMidiTarget(x, y); id >= 0) {
+                change(layout().midiLearn, double(id + 1) / layout().controlCount);
+                return 0;
+            }
             if (view.block == 1 && !globalSettings && y >= 700 && y <= 768) {
                 const int center = view.section == 1 ? 1080 : W / 2;
                 if (x >= center - 40 && x <= center + 40) {
@@ -556,7 +590,7 @@ class Editor final : public Steinberg::CPluginView {
                     change(id, value(id) >= .5 ? 0 : 1);
                     return 0;
                 }
-                if (layout().parameters[id].steps > 1)
+                if (controlUI()[id].definition.steps > 1 && controlUI()[id].definition.steps <= 64)
                     return 0;
                 drag = id;
                 startY = y;
@@ -587,7 +621,8 @@ class Editor final : public Steinberg::CPluginView {
             ReleaseCapture();
             return 0;
         case WM_RBUTTONUP: {
-            int id = hit(x, y);
+            int id = delayMidiTarget(x, y);
+            if (id < 0) id = hit(x, y);
             if (view.block == 1 && y >= 695 && y <= 785) {
                 const int center = view.section == 1 ? 1080 : W / 2;
                 if (std::abs(x - center) < 60)
@@ -607,7 +642,7 @@ class Editor final : public Steinberg::CPluginView {
             ScreenToClient(window, &pt);
             int xx = int(pt.x * sx), yy = int(pt.y * sy), id = hit(xx, yy);
             if (id >= 0 && (GET_KEYSTATE_WPARAM(w) & MK_CONTROL)) {
-                double step = layout().parameters[id].steps ? 1. / layout().parameters[id].steps : .001;
+                double step = controlUI()[id].definition.steps ? 1. / controlUI()[id].definition.steps : .001;
                 change(id, value(id) + (GET_WHEEL_DELTA_WPARAM(w) > 0 ? step : -step));
             } else {
                 int bottom = 0;

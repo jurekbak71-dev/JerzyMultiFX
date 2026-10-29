@@ -214,6 +214,24 @@ int main(int argc, char **argv) try {
     const double returned = render(220, true);
     check(returned > .01, "Actual sidechain Return reaches Attack Decay audio");
     check(audio->getLatencySamples() == attackLatency, "Attack latency reported by real DLL");
+    handler.changes.clearQueue();
+    handler.performEdit(layout().midiMap + 74, double(parameterId("delayA.time") + 1) / layout().controlCount);
+    handler.performEdit(layout().delayType[0], .5); // Memory Delay
+    handler.performEdit(3000 + 74, .75); // Host-delivered MIDI CC 74
+    ParameterChanges routed(2048);
+    data.outputParameterChanges = &routed;
+    data.numSamples = 0;
+    check(audio->process(data) == kResultOk, "Flush routed MIDI CC into real VST3 processor");
+    bool memoryTimeUpdated = false;
+    for (int i = 0; i < routed.getParameterCount(); ++i) {
+        auto *queue = routed.getParameterData(i);
+        if (queue && queue->getParameterId() == ParamID(parameterId("delayA.memory.delay"))) {
+            int32 offset = 0; ParamValue value = 0;
+            memoryTimeUpdated = queue->getPoint(0, offset, value) == kResultTrue &&
+                                std::abs(value - .75) < 1.e-6;
+        }
+    }
+    check(memoryTimeUpdated, "Shared DELAY TIME MIDI CC follows selected Memory engine in actual VST3");
     audio->setProcessing(false);
     component->setActive(false);
     pc->disconnect(cc);

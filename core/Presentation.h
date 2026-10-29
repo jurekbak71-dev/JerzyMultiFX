@@ -1,5 +1,6 @@
 #pragma once
 #include "Model.h"
+#include "ControlUI.h"
 #include <cstdio>
 #include <string_view>
 namespace multifx {
@@ -68,7 +69,7 @@ inline std::vector<int> panelParameters(PanelSelection view, const State &s) {
                                 "decay", "bypass"});
             if (view.advanced)
                 ordered("attack.",
-                        {"fuzz", "compMono", "compPoly", "continuousMono", "continuousPoly", "attackShape",
+                        {"fuzz", "compMono", "compPoly", "makeup", "continuousMono", "continuousPoly", "attackShape",
                          "decayShape", "triggerMode", "hblend", "useReturn", "returnBypass", "fuzzOnReturn",
                          "rblend", "expressionEnabled", "expression"});
             if (view.advanced)
@@ -129,7 +130,7 @@ inline std::vector<int> panelParameters(PanelSelection view, const State &s) {
     return result;
 }
 inline std::string controlTitle(int id) {
-    const auto &p = layout().parameters[id];
+    const auto &p = controlUI()[id].definition;
     const std::string &k = p.key;
     // MX has two internal engines in each delay bank. "Silnik A" in DELAY B
     // was easily mistaken for the separate DELAY A bank.
@@ -198,7 +199,7 @@ inline std::string controlTitle(int id) {
     return pos == std::string::npos ? p.name : p.name.substr(pos + 3);
 }
 inline std::string parameterText(int id, float value, bool poly = false) {
-    const auto &p = layout().parameters[id];
+    const auto &p = controlUI()[id].definition;
     const auto &k = p.key;
     const double v = clean(value);
     char b[96];
@@ -229,6 +230,8 @@ inline std::string parameterText(int id, float value, bool poly = false) {
         snprintf(b, sizeof(b), "%+.1f dB", 36 * v - 24);
     else if (k == "td.optoMakeup")
         snprintf(b, sizeof(b), "%+.1f dB", 24 * v - 12);
+    else if (k == "attack.makeup")
+        snprintf(b, sizeof(b), "%+.1f dB", plain(id, float(v)));
     else if (k == "comp.makeup" || k.ends_with(".oil.icmakeup") || k.ends_with(".oil.ocmakeup"))
         snprintf(b, sizeof(b), "%+.1f dB", plain(id, float(v)));
     else if (k == "attack.attack" || k == "attack.decay") {
