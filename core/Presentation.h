@@ -86,9 +86,12 @@ inline std::vector<int> panelParameters(PanelSelection view, const State &s) {
         const std::string base = bank ? "delayB." : "delayA.";
         add(base + "type");
         add(base + "bypass");
+        // Bank MIX is the common wet/dry control and MIDI macro for every engine.
+        // Keep it above engine-specific controls in both the basic and advanced views.
+        ordered(base, {"mix", "level"});
         const int type = int(plain(lay.delayType[bank], s.values[lay.delayType[bank]]));
         if (type == 0)
-            ordered(base, {"mix", "level", "time", "feedback", "sync", "division", "filter"});
+            ordered(base, {"time", "feedback", "sync", "division", "filter"});
         else if (type == 1) {
             const std::string mx = base + "mx.";
             ordered(mx, {"mix", "inputTrim", "outputTrim"});
@@ -112,8 +115,6 @@ inline std::vector<int> panelParameters(PanelSelection view, const State &s) {
             group(base + "reel.");
         else
             group(base + "oil.");
-        if (type > 0 && view.advanced)
-            ordered(base, {"mix", "level"});
     } else if (view.block == 3)
         group("reverb.");
     else

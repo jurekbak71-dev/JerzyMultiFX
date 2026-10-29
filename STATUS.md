@@ -1,11 +1,16 @@
 # Jerzy MultiFX — status
 
+## Preview 17 — spójne kontrolki DELAY na RPi i VST
+
+- DELAY A i B pokazują wspólny BANK MIX i poziom u góry w każdym silniku, także w podstawowym widoku Memory, Reel i Oil Drum. MIX jest suwakiem; przełączniki Reel ON, głowice, SYNC, STOP, DUB, SOS, FREEZE, TAILS i AUTO AGE są wyraźnymi przełącznikami, a liczbowy SEED nie jest gałką. Memory i Oil zachowują przełączniki i listy wyboru. Nie zmieniono ID, zakresów DSP ani wartości presetów.
+- Lokalnie test widoku C++ i panelu Node PASS; natywne Windows/ARM64 CI i wydanie preview 17 do potwierdzenia. Fizyczne Pi/HeadRush i FL Studio nadal wymagają testu.
+
 ## Preview 16 — zgodność VST z obsługą RPi i MAKEUP Attack/Decay
 
 - Ten sam kod DSP w RPi i VST obejmuje wcześniejsze poprawki brzmienia, bramkę, kompresory i mierniki. Wspólne mapowanie MIDI TIME/FEEDBACK/MIX dla DELAY A/B działa teraz także w procesorze VST; aktywny silnik dostaje CC, a w MX opcjonalnie również drugi silnik. Edytor VST pokazuje trzy przyciski MIDI Learn w DELAY i korzysta z tych samych wskazówek przełączników/list co RPi, w tym trybów Tape Drive. Przełączniki otrzymały czytelny status aktywny/zgaszony.
 - Attack/Decay w MultiFX oraz osobne VST mają teraz opcjonalny MAKEUP kompresora −12…+12 dB, domyślnie 0 dB. Dodano go na końcu listy parametrów MultiFX, aby nie zmienić istniejących ID i map MIDI. Parametr jest widoczny w zaawansowanym panelu Attack/Decay. Testy nowego sterowania DSP i migracji stanów są w obu projektach.
 - RPi autostart, USB/BLE MIDI i połączenia JACK są funkcjami urządzenia, nie adaptera DAW. VST korzysta z MIDI i audio dostarczanego przez host; nie uruchamia usług Pi.
-- Testy fizycznego RPi/HeadRush oraz odsłuch w FL Studio pozostają do wykonania.
+- [CI 40950484546](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40950484546) przeszło testy Windows x64 i ARM64; [wydanie preview 16](https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.16.ci.40950484546.1) pobrano i sprawdzono SHA256, CRC ZIP, PE x64 oraz ELF AArch64. Testy fizycznego RPi/HeadRush oraz odsłuch w FL Studio pozostają do wykonania.
 
 ## Preview 15 — ujemny MAKEUP kompresorów
 
@@ -72,7 +77,7 @@ Jawne listy plików oraz `.gitattributes export-ignore` wykluczają prywatne pro
 
 Rozpakowano 26 referencji; materiały służą analizie i nie są redystrybuowane. Wspólny core C++20 zawiera pięć przestawialnych bloków, źródłowe silniki DSP, A/B delay, FDN reverb i konwolucję IR. Stan z CRC obejmuje osadzone IR i mapy CC; 919 parametrów. Windows ma edytor GDI, automatyzację i MIDI Learn; RPi ma host JACK, panel HTTP z tokenem, BLE GATT/MIDI, logikę LCD oraz skrypty instalacji/rollback.
 
-Repozytoria źródłowe nie są modyfikowane; pochodzenie kopii i SHA opisuje docs/source-manifest.json.
+Pochodzenie kopii silników i SHA opisuje docs/source-manifest.json. Osobne repozytorium JerzyAttackDecayVST3 zostało zaktualizowane na wyraźną prośbę użytkownika; pozostałe repozytoria referencyjne nie były modyfikowane.
 
 ## Naprawione regresje
 

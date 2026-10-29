@@ -18,6 +18,6 @@ MAKEUP: kompresor główny i cztery kompresory Oil Drum mają już −24…+24 d
 - [ ] Graficzny EXE Windows VST3 i graficzny EXE instalatora RPi. ZIP + CMD i TAR.GZ nadal dostępne; właściciel wskazał RPi jako priorytet.
 - [ ] Fizyczny odsłuch i pomiary CPU/xrun przy reprezentatywnym łańcuchu, w tym Cloud i Tape Warm.
 - [x] Bipolarne MAKEUP w kompresorach MultiFX z migracją starych presetów.
-- [ ] Po wydaniu aktualnych VST: ujednolicić RPi DELAY Memory/Reel/Oil Drum z MX: ON/OFF jako przełączniki, MIX u góry jako suwak, spójne grupowanie i etykiety.
+- [x] Ujednolicić RPi/VST DELAY Memory/Reel/Oil Drum z MX: ON/OFF jako przełączniki, BANK MIX u góry jako suwak w widoku podstawowym i zaawansowanym, opcje jako listy lub pola liczbowe.
 
 Nie oznaczać żadnego z otwartych punktów jako ukończony bez odpowiednich wyników.

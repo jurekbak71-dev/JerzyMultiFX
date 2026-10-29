@@ -32,6 +32,11 @@ inline const std::vector<ParameterUI> &controlUI() {
             choices(bank+".reel.mode", "ORIGINAL|STUDIO|EXPERIMENTAL");
             choices(bank+".reel.cassette", "FRESH TAPE|VINTAGE TAPE|DAMAGED TAPE");
             choices(bank+".reel.division", "1/16|1/8T|1/8|1/4|1/4D|1/2|1/2D|1/1");
+            for (const std::string key : {"enabled", "short", "long", "sync", "wetOnly", "stop",
+                                          "dub", "sos", "freeze", "tails", "autoAge"})
+                toggle(bank+".reel."+key);
+            for (auto &p : out) if (p.definition.key == bank+".reel.seed")
+                p.definition.steps = 65534;
             choices(bank+".memory.wave", "Sine|Triangle");
             for (const std::string key : {"bypass","modEnable","tempoSync"}) toggle(bank+".memory."+key);
             toggle(bank+".mx.spill");

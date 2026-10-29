@@ -25,6 +25,16 @@ int main() try {
     require(controlTitle(id("delayB.mx.slot0_time")).starts_with("DELAY B / MX 1:"),"DELAY B must not show DELAY A for its first MX engine");
     require(controlTitle(id("delayB.mx.slot1_time")).starts_with("DELAY B / MX 2:"),"DELAY B second MX engine label");
     require(std::string_view(ui[id("drive.gate.on")].control)=="switch","Noise gate has an ON/OFF switch");
+    for(const std::string bank:{"delayA.","delayB."}) {
+        for(const char* key:{"reel.enabled","reel.short","reel.long","reel.sync","reel.wetOnly",
+                             "reel.stop","reel.dub","reel.sos","reel.freeze","reel.tails","reel.autoAge",
+                             "memory.bypass","memory.modEnable","memory.tempoSync","oil.h1on","oil.h2on",
+                             "oil.h3on","oil.h4on","oil.mechanicson","oil.springon"})
+            require(std::string_view(ui[id((bank+key).c_str())].control)=="switch",
+                    "Delay binary controls use switches in VST and RPi");
+        require(std::string_view(ui[id((bank+"reel.seed").c_str())].control)=="number",
+                "Reel seed is a numeric field, not a potentiometer");
+    }
     require(layout().attackMakeup==id("attack.makeup") &&
             plain(layout().attackMakeup,0)==-12 && plain(layout().attackMakeup,.5f)==0 &&
             plain(layout().attackMakeup,1)==12,
@@ -45,6 +55,21 @@ int main() try {
         controls=panelParameters(PanelSelection{1,1,0,true},state);
         require(std::find(controls.begin(),controls.end(),layout().attackMakeup)!=controls.end(),
                 "Attack compressor makeup is present in advanced VST/RPi panel");
+        for(int bank=0;bank<2;++bank)for(int engine=0;engine<5;++engine)for(bool advanced:{false,true}) {
+            const std::string prefix=bank?"delayB.":"delayA.";
+            state.values[layout().delayType[bank]]=float(engine)/4;
+            controls=panelParameters(PanelSelection{2,bank,0,advanced},state);
+            const auto position=[&](const std::string& key){
+                return std::find(controls.begin(),controls.end(),id((prefix+key).c_str()));
+            };
+            const std::array<const char*,5> firstEngineKey{"time","mx.mix","memory.model","reel.mode","oil.master"};
+            const auto mix=position("mix"),level=position("level"),first=position(firstEngineKey[engine]);
+            require(mix!=controls.end()&&level!=controls.end()&&first!=controls.end()&&
+                    mix<first&&level<first,
+                    "Bank MIX and LEVEL stay above all delay engines in basic and advanced views");
+            require(std::count(controls.begin(),controls.end(),id((prefix+"mix").c_str()))==1,
+                    "Common delay bank MIX appears once");
+        }
     }
     require(rpi::discreteValue(id("td.shift"),.49f)==.5f,"Snap selectors to original DSP model positions");
     DelayMidiRoutes routes;

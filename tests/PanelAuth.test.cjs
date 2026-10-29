@@ -46,6 +46,10 @@ test('compressor MAKEUP displays attenuation, zero and boost on both panels',()=
  a.context.p={key:'td.optoMakeup',min:0,max:1};
  a.context.v=0;assert.equal(vm.runInContext('formatted(p,v)',a.context),'-12.0 dB');
  a.context.v=.5;assert.equal(vm.runInContext('formatted(p,v)',a.context),'+0.0 dB');
+ a.context.p={key:'attack.makeup',min:-12,max:12};
+ a.context.v=0;assert.equal(vm.runInContext('formatted(p,v)',a.context),'-12.0 dB');
+ a.context.v=.5;assert.equal(vm.runInContext('formatted(p,v)',a.context),'+0.0 dB');
+ a.context.v=1;assert.equal(vm.runInContext('formatted(p,v)',a.context),'+12.0 dB');
 });
 test('panel opens automatically without a token or browser storage',async()=>{
  const a=panel();await settle();await settle();
@@ -106,6 +110,18 @@ test('all discrete parameters render as switches, lists or numeric fields',async
   if(control==='select')assert.equal(element.children[0].tagName,'select');
   if(control==='number')assert.equal(element.children[0].type,'number');
  }
+});
+test('delay bank MIX is a compact slider and Reel ON/OFF is a switch',async()=>{
+ const a=panel();await settle();await settle();
+ const mix={id:20,key:'delayA.mix',name:'Bank mix',label:'BANK MIX',min:0,max:1,default:.5,steps:0,control:'knob'};
+ const enabled={id:21,key:'delayA.reel.enabled',name:'Reel on',min:0,max:1,default:1,steps:1,control:'switch'};
+ vm.runInContext('values[21]=1',a.context);
+ const slider=vm.runInContext(`control(${JSON.stringify(mix)},true)`,a.context);
+ const switchWidget=vm.runInContext(`control(${JSON.stringify(enabled)},true)`,a.context);
+ assert.equal(slider.children[0].type,'range');
+ assert.equal(slider.children[0].dataset.kind,'mini');
+ assert.equal(switchWidget.children[0].tagName,'button');
+ assert.equal(switchWidget.children[0].textContent,'WŁĄCZONY');
 });
 test('DELAY B MX controls identify their bank and internal engine',async()=>{
  const a=panel();await settle();await settle();
