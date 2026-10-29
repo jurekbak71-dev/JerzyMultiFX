@@ -8,6 +8,8 @@ COMMANDS={
  'midi_alsa':['aconnect','-l'], 'midi_raw':['amidi','-l'],
  'kernel_rt':['cat','/sys/kernel/realtime'],
  'jack_ports':['jack_lsp'],
+ 'jack_connections':['jack_lsp','-c'],
+ 'jack_port_latency':['jack_lsp','-l'],
 }
 FILES={'os_release':'/etc/os-release','model':'/proc/device-tree/model',
        'cpu':'/proc/cpuinfo','memory':'/proc/meminfo','alsa_cards':'/proc/asound/cards',

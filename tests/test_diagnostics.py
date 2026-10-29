@@ -15,3 +15,5 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertNotIn('environment',report)
         self.assertNotIn('token',str(report).lower())
         self.assertIsNone(report['latency']['round_trip_measured_ms'])
+        self.assertEqual(module.COMMANDS['jack_connections'],['jack_lsp','-c'])
+        self.assertEqual(module.COMMANDS['jack_port_latency'],['jack_lsp','-l'])

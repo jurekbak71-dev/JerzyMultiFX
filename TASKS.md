@@ -10,7 +10,8 @@ Status oparty na istniejącym kodzie i testach; nie uznaje testu na runnerze za 
 - [ ] Pomiar round-trip na fizycznej pętli audio; oddzielić od latencji obliczonej z bufora i algorytmów.
 - [ ] AUTO LATENCY TUNE na wspieranym urządzeniu, z wyciszeniem podczas zmian i zachowaniem bezpiecznej konfiguracji.
 - [ ] Uniwersalny manager USB Audio; obecny instalator HeadRush jest celowo dopasowany do istniejącego bassambient.
-- [ ] Graficzny EXE Windows VST3 i graficzny EXE instalatora RPi. Pakiet DEB ARM64 jest zaimplementowany, ale wymaga jeszcze natywnej walidacji i publikacji; ZIP + CMD i TAR.GZ nadal dostępne.
+- [x] Pakiet DEB ARM64: natywne CI i pobrana paczka preview 10 potwierdziły architekturę, SHA256, zawartość zgodną z TAR.GZ oraz bezpieczne uprawnienia. Instalacji na fizycznym Pi jeszcze nie wykonano.
+- [ ] Graficzny EXE Windows VST3 i graficzny EXE instalatora RPi. ZIP + CMD i TAR.GZ nadal dostępne; właściciel wskazał RPi jako priorytet.
 - [ ] Fizyczny odsłuch i pomiary CPU/xrun przy reprezentatywnym łańcuchu, w tym Cloud i Tape Warm.
 
 Nie oznaczać żadnego z otwartych punktów jako ukończony bez odpowiednich wyników.

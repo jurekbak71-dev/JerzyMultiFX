@@ -341,3 +341,17 @@ deklarujemy Windows preview 9 jako wydanego.
 
 GitHub CLI jest teraz czytany jawnie jako UTF-8, z testem tej ścieżki.
 Natywny CI, publikacja i ponowne pobranie obu platform nadal oczekują.
+
+RPi ARM64 w preview 10 przeszło natywny build i testy. Pobrano DEB, TAR.GZ
+oraz instalator ZIP; zewnętrzne/wewnętrzne SHA256, źródło
+`103a37ed408a5d753b5695e16a41571d762f43f8`, ELF AArch64,
+identyczność payloadu DEB/TAR i bezpieczne uprawnienia — PASS.
+Windows w chwili tego wpisu nadal trwa; właściciel wskazał RPi jako priorytet.
+Fizyczna instalacja i odsłuch na HeadRush pozostają niewykonane.
+
+## Preview 11 — graf JACK w diagnostyce RPi
+
+Raport przed/po aktualizacji zapisuje `jack_lsp -c` oraz `jack_lsp -l`.
+To pozwala skontrolować połączenia portów HeadRush i zgłaszaną przez JACK
+latencję portów; nie zastępuje fizycznego pomiaru round-trip. Istniejący JACK
+na bassambient nie jest przestawiany. Natywna walidacja i wydanie RPi czekają.

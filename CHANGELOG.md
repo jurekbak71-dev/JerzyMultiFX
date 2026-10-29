@@ -1,4 +1,8 @@
-# 0.1.0-preview.10
+# 0.1.0-preview.11
+
+- Raport RPi przed/po instalacji zawiera połączenia portów JACK i zakresy latencji portów. Ułatwia porównanie działającego toru HeadRush z patchOS bez przestawiania audio.
+
+## 0.1.0-preview.10
 
 - Publikator Windows odczytuje odpowiedź GitHub CLI jako UTF-8 także na runnerze z kodowaniem cp1252. Preview 9 zbudowało VST3, ale jego upload przerwał się przy polskim opisie Release.
 
