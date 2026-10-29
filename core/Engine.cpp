@@ -304,6 +304,7 @@ void Engine::process(const float *left, const float *right, float *outL, float *
                 if (p.plan.processor[0])
                     p.runProcessor(0, l, r, n, s, bpm, beat, playing, nullptr, 0);
                 for (int i = 0; i < n; ++i) {
+                    p.analog.noiseGate(l[i], r[i]);
                     p.analog.drive(l[i], r[i], s);
                     p.analog.comp(l[i], r[i], s);
                 }

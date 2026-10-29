@@ -1,5 +1,6 @@
 #include "rpi/ParameterUI.h"
 #include "rpi/StateWriter.h"
+#include "core/Presentation.h"
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -19,6 +20,16 @@ int main() try {
     auto id=[&](const char *key){for(size_t i=0;i<original.size();++i)if(original[i].key==key)return int(i);throw std::runtime_error(key);};
     require(ui[id("td.shift")].definition.choices=="Neutral|Bright|Thick","Tape mode labels");
     require(std::string_view(ui[id("delayA.memory.boost")].control)=="knob","Continuous boost remains continuous");
+    require(controlTitle(id("delayA.mx.slot0_time")).starts_with("DELAY A / MX 1:"),"DELAY A internal MX label");
+    require(controlTitle(id("delayB.mx.slot0_time")).starts_with("DELAY B / MX 1:"),"DELAY B must not show DELAY A for its first MX engine");
+    require(controlTitle(id("delayB.mx.slot1_time")).starts_with("DELAY B / MX 2:"),"DELAY B second MX engine label");
+    require(std::string_view(ui[id("drive.gate.on")].control)=="switch","Noise gate has an ON/OFF switch");
+    {
+        State state;
+        auto controls=panelParameters(PanelSelection{0,2},state);
+        require(std::find(controls.begin(),controls.end(),id("drive.gate.on"))!=controls.end(),
+                "Noise gate is present in DRIVE panel");
+    }
     require(rpi::discreteValue(id("td.shift"),.49f)==.5f,"Snap selectors to original DSP model positions");
     const auto directory=std::filesystem::temp_directory_path()/("multifx-rpi-control-"+std::to_string(getpid()));
     std::filesystem::create_directories(directory);const auto path=(directory/"last-state.jmfx").string();

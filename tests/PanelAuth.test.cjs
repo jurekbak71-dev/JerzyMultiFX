@@ -93,6 +93,14 @@ test('all discrete parameters render as switches, lists or numeric fields',async
   if(control==='number')assert.equal(element.children[0].type,'number');
  }
 });
+test('DELAY B MX controls identify their bank and internal engine',async()=>{
+ const a=panel();await settle();await settle();
+ const label=(key,name,title=name.split(' / ').pop())=>vm.runInContext(`name(${JSON.stringify({key,name,label:title})})`,a.context);
+ assert.equal(label('delayA.mx.slot0_time','delayA.mx / Silnik A: Czas'),'DELAY A / MX 1: Czas');
+ assert.equal(label('delayB.mx.slot0_time','delayB.mx / Silnik A: Czas'),'DELAY B / MX 1: Czas');
+ assert.equal(label('delayB.mx.slot1_feedback','delayB.mx / Silnik B: Sprzężenie'),'DELAY B / MX 2: Sprzężenie');
+ assert.equal(label('delayB.mx.slot0_time','delayB.mx / Silnik A: Czas','DELAY B / MX 1: Czas'),'DELAY B / MX 1: Czas');
+});
 test('continuous knob and compact slider send during movement, not only on release',async()=>{
  const base=['master.bypass',...Array.from({length:5},(_,i)=>'block.'+i+'.bypass')].map((key,id)=>({id,key,name:key,default:0,min:0,max:1,steps:1,control:'switch'}));
  const gain={id:6,key:'td.sat',name:'Saturation',min:0,max:1,default:0,steps:0,control:'knob'};

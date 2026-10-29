@@ -31,6 +31,10 @@ struct Analog {
     float driveAmount = 0, driveTone = .5f, driveLevel = 1;
     float wantedPreGain = 1, wantedPreOut = 1, compInput = 1, compAttack = 0, compRelease = 0, compKnee = 0,
           compThreshold = 0, compRatio = 1, compMakeup = 0;
+    float gateEnvelope = 0, gateGain = 1, gateThreshold = 0, gateAttack = 0, gateRelease = 0,
+          gateDetectorRelease = 0;
+    int gateHold = 0, gateHoldSamples = 0;
+    bool gateOn = false, gateOpen = true;
     void prepare(double rate) {
         sr = rate;
         gainSmoothing=float(1-std::exp(-1./(.006934*sr)));
@@ -63,6 +67,10 @@ struct Analog {
         slew = float(1 - std::exp(-1 / (sr * .01)));
         env = 0;
         gain = 1;
+        gateEnvelope = 0; gateGain = 1; gateHold = 0; gateOpen = true;
+        gateAttack = float(1-std::exp(-1/(sr*.003)));
+        gateDetectorRelease = float(1-std::exp(-1/(sr*.035)));
+        gateHoldSamples = int(sr*.025);
         driveCut[0] = float(1 - std::exp(-6.2831853 * 720 / (sr * 4)));
         driveCut[1] = float(1 - std::exp(-6.2831853 * 120 / (sr * 4)));
         driveAA = float(1 - std::exp(-6.2831853 * .1));
@@ -87,6 +95,27 @@ struct Analog {
         compThreshold = s.values[comp + 2] * 42;
         compRatio = 1 + 9 * s.values[comp + 2];
         compMakeup = plain(comp + 5, s.values[comp + 5]);
+        gateOn = s.values[layout().gateEnabled] >= .5f;
+        gateThreshold = db(plain(layout().gateThreshold,s.values[layout().gateThreshold]));
+        gateRelease = float(1-std::exp(-1/(sr*.001*plain(layout().gateRelease,s.values[layout().gateRelease]))));
+    }
+    void noiseGate(float &l,float &r) {
+        if(!gateOn){
+            gateOpen=true; gateHold=0; gateEnvelope=0;
+            gateGain+=gateAttack*(1-gateGain);
+            l*=gateGain; r*=gateGain;
+            return;
+        }
+        const float peak=std::max(std::abs(l),std::abs(r));
+        // Fast attack, slower detector release; hysteresis prevents chatter.
+        const float detector=peak>gateEnvelope?gateAttack:gateDetectorRelease;
+        gateEnvelope+=detector*(peak-gateEnvelope);
+        if(gateEnvelope>=gateThreshold){ gateOpen=true; gateHold=gateHoldSamples; }
+        else if(gateEnvelope<gateThreshold*.65f && gateHold>0)--gateHold;
+        else if(gateEnvelope<gateThreshold*.65f)gateOpen=false;
+        const float target=(gateOpen||gateHold>0)?1.f:0.f;
+        gateGain+=(target>gateGain?gateAttack:gateRelease)*(target-gateGain);
+        l*=gateGain; r*=gateGain;
     }
     void preamp(float &l, float &r, const State &s) {
         const int p = layout().preamp;
@@ -278,8 +307,8 @@ struct Reverb {
                 }
             position={};
         }
-        void tick(float (&signal)[2], float gain, uint32_t epoch) {
-            for(int stage=0;stage<6;++stage){
+        void tick(float (&signal)[2], float gain, uint32_t epoch, int stages=6) {
+            for(int stage=0;stage<stages;++stage){
                 // Orthogonal stereo rotation between stages preserves energy
                 // while preventing identical left/right reflection patterns.
                 const float l=signal[0],r=signal[1];
@@ -319,7 +348,7 @@ struct Reverb {
     std::array<float, 8> low{}, high{};
     std::array<std::vector<float>, 2> predelay;
     size_t pp = 0;
-    std::array<float, 4096> pitch{};
+    std::array<std::array<float, 4096>, 2> pitch{};
     size_t pitchPos = 0;
     float lowCoefficient = 0, highCoefficient = 0, outputGain = 1, feedbackGain = 0;
     double pitchRatio = 1;
@@ -347,19 +376,20 @@ struct Reverb {
         high = {};
         pp = pitchPos = 0;
         phase = pitchPhase = 0;
-        pitch.fill(0);
+        for(auto &channel:pitch)channel.fill(0);
     }
     void configure(const State &s) {
         const int p = layout().reverb;
-        const float cutoff = plain(p + 6, s.values[p + 6]) * (1 - .75f * s.values[p + 4]);
+        const int mode = int(plain(p, s.values[p]));
+        const float cutoff = plain(p + 6, s.values[p + 6]) * (1 - .75f * s.values[p + 4]) *
+                             (mode == 0 ? 1.2f : mode == 2 ? .72f : 1.f);
         lowCoefficient = float(1 - std::exp(-6.2831853 * cutoff / sr));
         highCoefficient = float(1 - std::exp(-6.2831853 * plain(p + 5, s.values[p + 5]) / sr));
         outputGain = db(plain(p + 10, s.values[p + 10]));
         pitchRatio = std::pow(2., plain(p + 11, s.values[p + 11]) / 12);
         feedbackGain = float(std::exp(-6.907755 * .65 / (sr * plain(p + 1, s.values[p + 1]))));
         preDelaySamples = int(sr * .001 * plain(p + 2, s.values[p + 2]));
-        const int mode = int(plain(p, s.values[p]));
-        const double factor = (.35 + 1.3 * s.values[p + 3]) * (mode == 1 ? .55 : mode == 2 ? 1.2 : 1.);
+        const double factor = (.35 + 1.3 * s.values[p + 3]) * (mode == 1 ? .48 : mode == 2 ? 1.32 : mode == 0 ? .75 : 1.);
         for (int i = 0; i < 8; ++i) {
             lineBase[i] = (lines[i].size() - 8) * factor * .65;
             if(mode==3)
@@ -386,6 +416,24 @@ struct Reverb {
         pp = (pp + 1) % predelay[0].size();
         if(mode==3)
             cloudDiffuser.tick(in,.55f+.23f*s.values[p+7],epoch);
+        else if(mode==0)
+            cloudDiffuser.tick(in,.62f+.12f*s.values[p+7],epoch,3);
+        else if(mode==2)
+            cloudDiffuser.tick(in,.42f+.20f*s.values[p+7],epoch);
+        const size_t earlyPosition=pp==0?predelay[0].size()-1:pp-1;
+        float early[2]{};
+        if(mode==1){
+            // Room: short, discrete wall reflections precede a sparse late field.
+            constexpr int taps[4]{11,19,31,47};
+            constexpr float gains[4]{.42f,.30f,.21f,.13f};
+            for(int t=0;t<4;++t){
+                const size_t delay=size_t(sr*taps[t]*.001);
+                const size_t at=(earlyPosition+predelay[0].size()-delay)%predelay[0].size();
+                if(preEpoch[at]==epoch)
+                    for(int c=0;c<2;++c)
+                        early[c]+=predelay[(c+t%2)%2][at]*gains[t];
+            }
+        }
         phase += .17 / sr;
         if (phase >= 1)
             phase -= 1;
@@ -411,9 +459,12 @@ struct Reverb {
             v[i] = low[i] - high[i];
             sum += v[i];
         }
-        float shifted = 0;
+        float shifted[2]{};
         if (mode == 4) {
-            pitch[pitchPos] = sum * .125f;
+            // Include the incoming note so the first octave is audible before
+            // the long diffuse tail builds; later reads include the FDN return.
+            pitch[0][pitchPos]=(v[0]+v[2]+v[4]+v[6])*.5f+in[0]*.3f;
+            pitch[1][pitchPos]=(v[1]+v[3]+v[5]+v[7])*.5f+in[1]*.3f;
             pitchEpoch[pitchPos] = epoch;
             double ratio = pitchRatio;
             pitchPhase += (1 - ratio) / 2048;
@@ -423,26 +474,29 @@ struct Reverb {
                 ph -= std::floor(ph);
                 double at = double(pitchPos) - 1 - ph * 2048;
                 while (at < 0)
-                    at += pitch.size();
+                    at += pitch[0].size();
                 size_t k = size_t(at);
-                const size_t next = (k + 1) % pitch.size();
-                const float first = pitchEpoch[k] == epoch ? pitch[k] : 0,
-                            second = pitchEpoch[next] == epoch ? pitch[next] : 0;
-                float x = first + (second - first) * float(at - k);
-                shifted += x * float(.5 - .5 * std::cos(6.2831853 * ph));
+                const size_t next = (k + 1) % pitch[0].size();
+                for(int c=0;c<2;++c){
+                    const float first = pitchEpoch[k] == epoch ? pitch[c][k] : 0,
+                                second = pitchEpoch[next] == epoch ? pitch[c][next] : 0;
+                    const float x = first + (second - first) * float(at - k);
+                    shifted[c] += x * float(.5 - .5 * std::cos(6.2831853 * ph));
+                }
             }
-            pitchPos = (pitchPos + 1) % pitch.size();
+            pitchPos = (pitchPos + 1) % pitch[0].size();
         }
         for (int i = 0; i < 8; ++i) {
             float orth = v[i] - sum * .25f;
             const float feedback = lineFeedback[i];
-            float diffuse = mode==3 ? 1.f : s.values[p + 7];
-            float network = orth * diffuse + v[(i + 3) % 8] * (1 - diffuse);
+            float diffuse = mode==3 ? 1.f : mode==1 ? .18f+.35f*s.values[p+7]
+                            : mode==0 ? .75f+.25f*s.values[p+7] : s.values[p+7];
+            float network = orth * diffuse + v[(i + (mode==2?5:3)) % 8] * (1 - diffuse);
             if (mode == 4) {
                 // Convex injection BEFORE the decay coefficient: pitch feedback
                 // must not create an independent, uncontrolled feedback path.
-                const float amount=plain(p+12,s.values[p+12])*.75f;
-                network=network*(1-amount)+shifted*amount;
+                const float amount=plain(p+12,s.values[p+12]);
+                network=network*(1-amount)+shifted[i%2]*amount;
             }
             const float feed=network*feedback;
             lines[i][pos[i]] = std::clamp((in[i % 2]) * .25f + feed, -8.f, 8.f);
@@ -456,8 +510,18 @@ struct Reverb {
             wetR=(v[1]-v[3]+v[5]-v[7])*.5f;
         }
         if (mode == 0) {
-            wetL += v[1] * .2f;
-            wetR += v[0] * .2f;
+            wetL=(v[0]-v[2]+v[4]-v[6])*.5f;
+            wetR=(v[1]+v[3]-v[5]-v[7])*.5f;
+        } else if(mode==1){
+            wetL=wetL*.55f+early[0];
+            wetR=wetR*.55f+early[1];
+        } else if(mode==2){
+            wetL=(v[0]+v[2]-v[4]+v[6])*.5f;
+            wetR=(v[1]-v[3]+v[5]+v[7])*.5f;
+        } else if(mode==4){
+            const float shimmer=plain(p+12,s.values[p+12]);
+            wetL+=shifted[0]*shimmer;
+            wetR+=shifted[1]*shimmer;
         }
         float gain = outputGain;
         out[0] = (l * (1 - mix) + wetL * mix) * gain;

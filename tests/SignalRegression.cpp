@@ -2,6 +2,7 @@
 #include "core/Presentation.h"
 #include "core/Project.h"
 #include "vendor/atomic/Dsp.h"
+#include "vendor/attack/Engine.h"
 #include "vendor/clone/Dsp.h"
 #include "vendor/tape/tapedrive_dsp.h"
 #include "effects/Native.h"
@@ -75,6 +76,32 @@ int main() try {
     }
     State clean;
     impulse(clean, 0);
+    for(float next:{.15f,.3f,.6f}){
+        mf_attack::PluckDetector detector;detector.prepare(48000);
+        int triggers=0;
+        for(int n=0;n<48000;++n){
+            const float t=n/48000.f;
+            float x=.2f*std::exp(-2*t)*std::sin(2*mf_attack::pi*110*t);
+            if(t>=next){
+                const float u=t-next;
+                x+=.12f*std::exp(-3*u)*std::sin(2*mf_attack::pi*164.8f*u);
+            }
+            triggers+=detector.process(x,.5f);
+        }
+        require(triggers==2,"Attack Decay detects a new overlapping note only once");
+    }
+    {
+        State s;
+        s.values[lay.gateEnabled]=1;
+        Analog gate;gate.prepare(48000);gate.configure(s);
+        float l=.0004f,r=.0004f;
+        for(int n=0;n<48000;++n){l=r=.0004f;gate.noiseGate(l,r);}
+        require(std::abs(l)<1e-5f,"Noise gate attenuates quiet input");
+        for(int n=0;n<4800;++n){l=r=.2f;gate.noiseGate(l,r);}
+        require(l>.15f && r>.15f,"Noise gate opens for a note without lookahead latency");
+        for(int n=0;n<48000;++n){l=r=.0004f;gate.noiseGate(l,r);}
+        require(std::abs(l)<1e-5f,"Noise gate closes smoothly after release");
+    }
     State ir = isolated(4);
     ir.values[lay.ir] = 1;
     impulse(ir, 128, .25);
@@ -136,6 +163,74 @@ int main() try {
                         "Reverb Size must not change nominal decay calibration");
             }
         }
+    // Algorithm identity: the same impulse must produce different wet paths.
+    {
+        std::array<std::array<float, 12000>, 5> renders{};
+        for(int mode=0;mode<5;++mode){
+            State s;
+            s.values[lay.reverb]=float(mode)/4;
+            s.values[lay.reverb+9]=1;
+            Reverb reverb;reverb.prepare(48000);reverb.configure(s);
+            for(int n=0;n<12000;++n){
+                const auto y=reverb.tick(n==0?.5f:0,n==0?.25f:0,s);
+                require(std::isfinite(y[0]) && std::isfinite(y[1]),"Reverb mode finite impulse");
+                renders[mode][n]=y[0];
+            }
+        }
+        for(int a=0;a<5;++a)
+            for(int b=a+1;b<5;++b){
+                double difference=0,energy=0;
+                for(int n=0;n<12000;++n){
+                    const double delta=renders[a][n]-renders[b][n];
+                    difference+=delta*delta;
+                    energy+=renders[a][n]*renders[a][n]+renders[b][n]*renders[b][n];
+                }
+                require(difference>energy*.015,"Reverb engines must have distinct impulse responses");
+            }
+    }
+    // An octave-up shimmer must create 880 Hz energy from a 440 Hz input.
+    {
+        auto overtone=[&](float feedback){
+            State s;
+            s.values[lay.reverb]=1;
+            s.values[lay.reverb+9]=1;
+            s.values[lay.reverb+11]=1;
+            s.values[lay.reverb+12]=feedback;
+            Reverb reverb;reverb.prepare(48000);reverb.configure(s);
+            double energy=0;
+            std::array<float,48000> capture{};
+            for(int n=0;n<144000;++n){
+                const float input=n<96000?.2f*std::sin(6.283185307179586*440*n/48000):0;
+                const auto y=reverb.tick(input,input,s);
+                require(std::isfinite(y[0]) && std::abs(y[0])<2,"Shimmer finite headroom");
+                if(n>=48000 && n<96000){
+                    capture[n-48000]=y[0];
+                    energy+=y[0]*y[0];
+                }
+            }
+            require(energy>1e-5,"Shimmer produces wet output");
+            reverb.reset();
+            for(int n=0;n<24000;++n){
+                const auto y=reverb.tick(0,0,s);
+                require(y[0]==0 && y[1]==0,"Shimmer reset invalidates pitch memory");
+            }
+            double band=0;
+            for(int frequency=840;frequency<=920;frequency+=4){
+                double real=0,imag=0;
+                for(int n=0;n<48000;++n){
+                    const double angle=6.283185307179586*frequency*n/48000;
+                    real+=capture[n]*std::cos(angle);
+                    imag+=capture[n]*std::sin(angle);
+                }
+                band+=real*real+imag*imag;
+            }
+            return std::sqrt(band)/48000;
+        };
+        const double dryOvertone=overtone(0);
+        const double shimmerOvertone=overtone(.8f);
+        require(shimmerOvertone>.0002 && shimmerOvertone>dryOvertone*4,
+                "Shimmer must audibly shift feedback by an octave");
+    }
     // Regression coverage for the new WARM and CLOUD algorithms.
     for(double rate : {44100.,48000.,96000.}) {
         double harmonic[2]{};

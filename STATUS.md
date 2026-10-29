@@ -1,5 +1,15 @@
 # Jerzy MultiFX — status
 
+## Preview 12 — odrębne algorytmy REVERB, Shimmer i etykiety DELAY B
+
+- Plate: krótka kaskada dyfuzorów, gęsty jasny ogon i niezależne wyjściowe odczepy FDN. Room: cztery dyskretne wczesne odbicia 11–47 ms, krótszy/słabiej dyfundowany ogon. Cathedral: dłuższe ciemniejsze linie, sześciostopniowe rozpraszanie i własna topologia odczepów. Cloud pozostaje szeroką kaskadą sześciostopniową; Shimmer ma stereofoniczny pitch-shifter w sprzężeniu i słyszalną bezpośrednią składową przesuniętą.
+- Nowy stan Shimmer domyślnie wybiera +12 półtonów. Identyfikatory parametrów i zapisane mapowania MIDI pozostają bez zmian; zapisane presety zachowują własną wartość pitch.
+- Etykiety wewnętrznych silników MX w DELAY B wskazują teraz bank `DELAY B` oraz `MX 1/2` w panelu i metadanych, bez zmian kluczy lub wartości.
+- Sekcja DRIVE ma bramkę szumów ON, próg i czas zwalniania. Bramka działa przed przesterem, bez lookahead i bez dodanego opóźnienia. Istniejące wskaźniki IN/OUT są wyliczane z próbek audio i odczytywane z atomowych liczników; nie dodają latencji. Stroik wymaga osobnego, opcjonalnego widoku.
+- Attack/Decay: analiza załączonego schematu EHX i instrukcji producenta ujawniła rolę krótkiego impulsu monostabilnego przy detekcji szarpnięcia. Test nakładających się nut wykazał podwójny trigger 22–36 ms po pierwszym; wydłużono okres blokady wtórnego impulsu do 45 ms. Test obejmuje nuty 150/300/600 ms po poprzedniej; osobne VST A-D ma analogiczną poprawkę na osobnej gałęzi repozytorium.
+- Walidacja sygnałowa: osobne odpowiedzi impulsowe pięciu silników, pasmo oktawy Shimmer przy 440 Hz, stabilność i reset pamięci. Testy lokalne oraz paczka ARM64: patrz najnowszy wpis po zakończeniu CI. Fizyczny RPi/HeadRush pozostaje nieweryfikowany.
+- Źródła projektu DSP: [Valhalla — Shimmer](https://valhalladsp.com/2010/05/11/enolanois-shimmer-sound-how-it-is-made/), [Valhalla — charakter algorytmów](https://valhalladsp.com/2014/01/18/naming-reverb-algorithms/), [Valhalla — tryby VintageVerb](https://valhalladsp.com/2023/02/10/valhallavintageverb-the-modes/). To opis zasad akustycznych; implementacja jest własna.
+
 **0.1.0-preview.1 — preview; walidacja sprzętowa nadal wymagana.**
 
 ## Rzeczywiste paczki i publikacja — 27.10.2026

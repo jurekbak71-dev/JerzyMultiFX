@@ -49,7 +49,7 @@ inline std::vector<int> panelParameters(PanelSelection view, const State &s) {
     };
     if (view.block == 0) {
         if (view.section == 2) {
-            ordered("drive.", {"type", "gain", "tone", "level", "bypass"});
+            ordered("drive.", {"type", "gain", "tone", "level", "bypass", "gate.on", "gate.threshold", "gate.release"});
             const int mode = int(plain(lay.drive, s.values[lay.drive]));
             if (mode == 0) {
                 add("fuzz.model");
@@ -131,6 +131,18 @@ inline std::vector<int> panelParameters(PanelSelection view, const State &s) {
 inline std::string controlTitle(int id) {
     const auto &p = layout().parameters[id];
     const std::string &k = p.key;
+    // MX has two internal engines in each delay bank. "Silnik A" in DELAY B
+    // was easily mistaken for the separate DELAY A bank.
+    if (k.starts_with("delayA.mx.slot0_") || k.starts_with("delayA.mx.slot1_") ||
+        k.starts_with("delayB.mx.slot0_") || k.starts_with("delayB.mx.slot1_")) {
+        const auto separator = p.name.find(" / ");
+        std::string detail = separator == std::string::npos ? p.name : p.name.substr(separator + 3);
+        if (detail.starts_with("Silnik A: ") || detail.starts_with("Silnik B: "))
+            detail = detail.substr(std::string("Silnik A: ").size());
+        const std::string bank = k.starts_with("delayB.") ? "DELAY B" : "DELAY A";
+        const std::string engine = k.find(".slot1_") != std::string::npos ? "MX 2" : "MX 1";
+        return bank + " / " + engine + ": " + detail;
+    }
     if (k.ends_with(".bypass"))
         return "EFEKT";
     if (k == "atomic.speed")

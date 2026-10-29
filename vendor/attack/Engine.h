@@ -96,7 +96,9 @@ public:
         // Relative HF content rejects bass zero crossings while detecting that onset.
         bool spectralOnset=highFast>highSlow*(1.4f-.1f*sens)&&highFast>fast*.12f;
         bool event=armed&&cooldown==0&&fast>floor&&(fast>slow*ratio||spectralOnset);
-        if(event){cooldown=static_cast<int>(rate*.020f);armed=false;rearmSamples=0;}
+        // The vintage trigger is a monostable pulse: reject the secondary
+        // rectifier/HF peak after an onset, while preserving 80 ms repeats.
+        if(event){cooldown=static_cast<int>(rate*.045f);armed=false;rearmSamples=0;}
         if(cooldown>0)--cooldown;
         // Require a settled envelope before another rising edge; never re-arm on a
         // single zero crossing or bypass the latch with an individual sample slope.
