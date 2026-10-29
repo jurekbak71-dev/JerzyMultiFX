@@ -23,7 +23,10 @@ def read(path):
     except OSError:return None
 def run(args):
     try:
-        result=subprocess.run(args,capture_output=True,text=True,timeout=3,env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LC_ALL':'C'})
+        environment={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LC_ALL':'C'}
+        runtime=os.environ.get('XDG_RUNTIME_DIR')
+        if runtime==f'/run/user/{os.getuid()}':environment['XDG_RUNTIME_DIR']=runtime
+        result=subprocess.run(args,capture_output=True,text=True,timeout=3,env=environment)
         return {'exit':result.returncode,'output':result.stdout[:16000].strip()}
     except (OSError,subprocess.TimeoutExpired):return {'exit':None,'output':'unavailable'}
 def core_state():
