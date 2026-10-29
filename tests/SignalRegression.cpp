@@ -65,12 +65,13 @@ int main() try {
             s.values[parameterId("comp.makeup")] = control;
             analog->configure(s);
             float l = .01f, r = .01f;
-            for (int n = 0; n < 2000; ++n) {
+            for (int n = 0; n < 4800; ++n) {
                 l = r = .01f;
                 analog->comp(l, r, s);
             }
-            require(std::abs(l / .01f - expected) < .002f,
-                    "Main compressor makeup must attenuate, centre and boost actual audio");
+            if (std::abs(l / .01f - expected) >= .002f)
+                throw std::runtime_error("Main compressor makeup: expected " + std::to_string(expected) +
+                                         ", got " + std::to_string(l / .01f));
         }
         mf_oil::Compressor oil;
         for (float amount : {-24.f, 0.f, 24.f}) {
