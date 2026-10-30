@@ -111,32 +111,32 @@ int main(int argc, char **argv) try {
         for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
         check(meterPixels(child,1054)!=outSilent,"OUT needle follows output");
         message->release();meters->release();
-        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(100,135));
+        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(100,166));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().blockBypass[0]+1)/layout().controlCount)<1e-6,"block bypass MIDI Learn");
         SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(900,820));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
         int gain = layout().preamp + 1;
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(210, 366));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(210, 316));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(210, 316));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(410, 366));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(410, 316));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(410, 316));
         pump();
         check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(210, 366));
+        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(410, 366));
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 95));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(550, 95));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(550, 95));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 105));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(50, 331));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(50, 331));
         pump();
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
         ViewRect size(0, 0, 880, 592);
         check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
         ViewRect normal(0, 0, 1280, 850);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
-        click(child, 300, 95); // Three separate effect panels in block two.
+        click(child, 50, 210); // Three separate effect panels in block two.
         pump();
         int model = -1;
         for (size_t i = 0; i < layout().parameters.size(); ++i)
@@ -145,7 +145,7 @@ int main(int argc, char **argv) try {
         HWND modelList = GetDlgItem(child, 10000 + model);
         check(modelList && SendMessage(modelList, CB_GETCOUNT, 0, 0) == 14, "original Chorus model dropdown");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
-        click(child, 290, 195);
+        click(child, 530, 195);
         pump(); // Attack page.
         check(GetDlgItem(child, 10000 + model) == nullptr, "Chorus controls hidden on Attack page");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-attack.bmp").c_str());
@@ -154,14 +154,14 @@ int main(int argc, char **argv) try {
         check(c->getParamNormalized(attack)==0,"dedicated Attack footswitch");
         SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(1080,735));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(attack+1)/layout().controlCount)<1e-6,"Attack switch MIDI Learn");
-        click(child, 520, 195);
+        click(child, 730, 195);
         pump(); // Atomic page.
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
-        click(child, 90, 95);
+        click(child, 50, 105);
         pump(); // Reordered MD block is now first.
         HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
         check(family && SendMessage(family, CB_GETCOUNT, 0, 0) == 13, "MD family dropdown");
-        click(child, 70, 720);
+        click(child, 320, 720);
         check(std::abs(c->getParamNormalized(layout().midiLearn) -
                        double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
               "DELAY TIME MIDI Learn is available independently of the chosen engine");
@@ -188,7 +188,8 @@ int main(int argc, char **argv) try {
               "Oil original quarter-note enum displayed");
         RECT divisionRect{};GetWindowRect(divisions,&divisionRect);
         POINT divisionTop{divisionRect.left,divisionRect.top};ScreenToClient(child,&divisionTop);
-        check(divisionTop.y<300,"continuous-tagged Oil enums occupy the compact selector row, never a knob");
+        check(divisionTop.x>=232 && divisionTop.y<660,
+              "continuous-tagged Oil enums occupy the compact selector row, never a knob");
         SendMessage(divisions, CB_SETCURSEL, 2, 0);
         SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + division, CBN_SELCHANGE),
                     reinterpret_cast<LPARAM>(divisions));
