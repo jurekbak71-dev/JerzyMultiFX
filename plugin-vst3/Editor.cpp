@@ -330,11 +330,11 @@ class Editor final : public Steinberg::CPluginView {
         if (view.block == 1 && !globalSettings) {
             if (view.section == 1) {
 
-                text(dc, 250, 695, 290, "ATTACK / DECAY", 27, RGB(226, 245, 251));
+                text(dc, 250, 695, 260, "ATTACK / DECAY", 27, RGB(226, 245, 251));
                 fill(dc, 525, 704, 230, 36, RGB(55, 61, 62));
                 text(dc, 525, 711, 230, "TRIGGER", 16, RGB(238, 225, 198));
             } else
-                text(dc, 250, 694, 450, view.section == 0 ? "CLONE COLLECTION" : "ATOMIC CLUSTER", 27,
+                text(dc, 250, 694, 340, view.section == 0 ? "CLONE COLLECTION" : "ATOMIC CLUSTER", 27,
                      RGB(226,245,251));
         }
         if (effectBypass() >= 0 && !globalSettings) {
