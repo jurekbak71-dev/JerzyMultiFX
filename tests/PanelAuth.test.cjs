@@ -156,6 +156,10 @@ test('pressing a physical CC binds its graphic control and assigns the current p
  await vm.runInContext(`consumeMidiCapture(${JSON.stringify({midiEvents:2,lastMidi:(192<<16)|(42<<8)})})`,a.context);
  assert.equal(a.options.controllerLayout.hotone.F2.kind,'pc');
  assert.equal(a.options.controllerLayout.hotone.F2.number,42);
+ a.values[7]=0;await a.timers[0]();
+ assert.doesNotMatch(a.document.querySelectorAll('button').find(b=>b.textContent==='F1').title,/→ DRIVE/);
+ a.values[7]=1;await a.timers[0]();
+ assert.match(a.document.querySelectorAll('button').find(b=>b.textContent==='F1').title,/→ DRIVE/);
 });
 test('one confirmed MIDI reset clears assignments without calling hardware pairing',async()=>{
  const parameters=['master.bypass',...Array.from({length:5},(_,i)=>'block.'+i+'.bypass'),'midi.learn','midi.cc.74','attack.expressionEnabled'].map((key,id)=>({id,key,name:key,label:key,default:key==='midi.cc.74'?.5:0,min:0,max:1,steps:1,control:'switch'}));
