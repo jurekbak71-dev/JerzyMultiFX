@@ -164,6 +164,8 @@ int main() try {
     State spectral = isolated(1);
     spectral.values[lay.processorBypass[2]] = 0;
     spectral.values[parameterId("attack.blend")] = 0;
+    impulse(spectral, attackMonoLatency, -1);
+    spectral.values[parameterId("attack.poly")] = 1;
     impulse(spectral, attackLatency, -1);
     spectral = isolated(1);
     spectral.values[lay.processorBypass[3]] = 0;
@@ -359,7 +361,7 @@ int main() try {
             require(std::abs(x) <= .98001f, "Output limiter ceiling");
         require(e.clips.load() > 0, "Clips before limiter counted");
     }
-    std::cout << "PASS real signal: clean0 / IR128 / Attack2064 / Atomic2048, all block bypasses0; original "
+    std::cout << "PASS real signal: clean0 / IR128 / Attack MONO16 POLY2064 / Atomic2048, all block bypasses0; original "
                  "Chorus/Atomic sample comparison; physical-output limiter\n";
     return 0;
 } catch (const std::exception &e) {

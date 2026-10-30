@@ -1,3 +1,9 @@
+# 0.1.0-preview.19
+
+- Attack/Decay MONO używa 16-próbkowego toru; POLY zachowuje 2064 próbki. Tor MONO omija zbędne oczekiwanie na okno FFT, zachowując te same detektor, obwiednię, kompresor i fuzz. Wtyczka VST3 raportuje zmienioną latencję hostowi.
+- Edytor VST3 ma nowy ciemny układ z pionową listą pięciu bloków, dwoma bankami DELAY w nagłówku, czytelnym ON/BYPASS, suwakami wspólnych parametrów DELAY i wskaźnikami IN/OUT.
+- Atomic Cluster nadal ma własne 2048 próbek opóźnienia analizy. Rzeczywista latencja interfejsu USB/JACK na Pi wymaga pomiaru na urządzeniu.
+
 # 0.1.0-preview.18
 
 - Panel RPi pokazuje schematy Hotone Ampero Control z pedałem ekspresji i WORLDE EASYCONTROL.9; można rozpoznać komunikat każdej kontrolki oraz przypisać CC do parametru bieżącego presetu.

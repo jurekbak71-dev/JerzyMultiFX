@@ -54,7 +54,7 @@ Plan planFor(const State &s) {
     if (p.block[0] && s.values[l.drive + 5] < .5f)
         p.latency += driveLatency;
     if (p.processor[2])
-        p.latency += attackLatency;
+        p.latency += s.values[l.processors[2].start + 10] >= .5f ? attackLatency : attackMonoLatency;
     if (p.processor[3])
         p.latency += atomicLatency;
     if (p.block[4])

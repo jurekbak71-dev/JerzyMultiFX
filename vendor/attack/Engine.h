@@ -279,6 +279,7 @@ private:
 class Engine {
 public:
     static constexpr int latency=Spectrum::size+16;
+    static constexpr int monoLatency=16;
     void prepare(float sr) {
         rate=sr; detector.prepare(sr); compressor.prepare(sr); envelope.reset(); spectral.prepare(sr);
         for(auto& f:fuzz) f.prepare(sr);
@@ -286,6 +287,8 @@ public:
         for(auto& d:returnFuzzDelay) d.reset();
         for(auto& d:dryDelay) d.reset();
         for(auto& d:returnDelay) d.reset();
+        for(auto& d:monoDryDelay) d.reset();
+        for(auto& d:monoReturnDelay) d.reset();
         for(auto& d:monoDelay) d.reset();
         envDelay.reset(); polyMix=fuzzMix=bypassMix=0; smooth={}; initialized=false; compMix=1;
         polyRequested=fuzzRequested=false; polyWarm=fuzzWarm=0;
@@ -335,14 +338,24 @@ public:
         }
         if(target.useReturn&&!target.fuzzOnReturn) { processed[0]=returnFuzzDelay[0].tick(retL); processed[1]=returnFuzzDelay[1].tick(retR); }
         else { returnFuzzDelay[0].tick(retL); returnFuzzDelay[1].tick(retR); }
-        float monoL=monoDelay[0].tick(processed[0]*env), monoR=monoDelay[1].tick(processed[1]*env);
+        const float liveMonoL=processed[0]*env, liveMonoR=processed[1]*env;
+        float monoL=monoDelay[0].tick(liveMonoL), monoR=monoDelay[1].tick(liveMonoR);
         float polyL=0,polyR=0;
         bool polyEvent=spectral.process(processed[0],processed[1],polyL,polyR,smooth,trigger,
                                         target.poly||polyMix>1.e-5f);
         const float dryL=dryDelay[0].tick(inputL),dryR=dryDelay[1].tick(inputR);
         const float returnL=returnDelay[0].tick(retL),returnR=returnDelay[1].tick(retR);
+        const float liveDryL=monoDryDelay[0].tick(inputL),liveDryR=monoDryDelay[1].tick(inputR);
+        const float liveReturnL=monoReturnDelay[0].tick(retL),liveReturnR=monoReturnDelay[1].tick(retR);
+        // MONO needs only the 16-sample fuzz/clean alignment. Keep the old
+        // delayed path for POLY so its overlap-add output remains aligned.
+        if(!target.poly && polyMix<1.e-5f) {
+            monoL=liveMonoL; monoR=liveMonoR;
+        }
+        const bool liveMono=!target.poly && polyMix<1.e-5f;
         float wet[2]={monoL+polyMix*(polyL-monoL),monoR+polyMix*(polyR-monoR)};
-        const float dry[2]={dryL,dryR},ret[2]={returnL,returnR};
+        const float dry[2]={liveMono?liveDryL:dryL,liveMono?liveDryR:dryR};
+        const float ret[2]={liveMono?liveReturnL:returnL,liveMono?liveReturnR:returnR};
         float out[2]{};
         for(int ch=0;ch<2;++ch) {
             if(target.useReturn) wet[ch]=ret[ch]+smooth.rblend*(wet[ch]-ret[ch]);
@@ -362,6 +375,7 @@ private:
     std::array<Fuzz,2> fuzz;
     std::array<Delay<16>,2> cleanDelay,returnFuzzDelay;
     std::array<Delay<latency>,2> dryDelay,returnDelay;
+    std::array<Delay<monoLatency>,2> monoDryDelay,monoReturnDelay;
     std::array<Delay<Spectrum::size>,2> monoDelay;
     Delay<16> envDelay;
 };

@@ -1,5 +1,11 @@
 # Jerzy MultiFX — status
 
+## Preview 19 — mniejsza latencja Attack/Decay i nowe GUI VST3
+
+- Attack/Decay MONO w MultiFX RPi i VST3 ma teraz 16 próbek opóźnienia DSP zamiast 2064 (oszczędność 42,7 ms przy 48 kHz); POLY nadal wymaga 2064 próbek. Zmiana omija wyłącznie bufor wyrównania do FFT, więc zachowuje detekcję, obwiednię, kompresję, fuzz i nastawy referencyjnej wersji A-D. W aktywnym Atomic Cluster pozostaje 2048 próbek; zewnętrzny interfejs USB i konfiguracja JACK mogą dodać opóźnienie.
+- Edytor VST3 przebudowano na ciemny układ z pionową nawigacją, podglądem DELAY A/B, suwakiem MIX/TIME/FEEDBACK, jednoznacznym zielonym ON i czerwonym BYPASS oraz działającymi miernikami IN/OUT. To kierunek wybrany roboczo z trzeciej propozycji; zachowano parametry i obsługę MIDI.
+- Lokalnie: natywny build i 3/3 CTest PASS, 33/33 Python i 16/16 Node PASS; Windows x64 cross-build PASS. Weryfikacja rzeczywistego Windows GUI, ARM64 CI i opublikowanych paczek jest w toku. Nie wykonano pomiaru fizycznego Pi/HeadRush ani odsłuchu A-D na urządzeniu.
+
 ## Preview 18 — mapa kontrolerów i czyszczenie przypisań MIDI na Pi
 
 - W Ustawieniach RPi jest osobne okno z autorskimi schematami Hotone Ampero Control (cztery przełączniki i pedał ekspresji) oraz WORLDE EASYCONTROL.9. Kliknięcie elementu i naciśnięcie fizycznej kontrolki zapamiętuje wysyłany CC/PC; dla CC można wyszukać i wybrać parametr MultiFX. Układ fizycznych kontrolek zapisywany jest na Pi, a CC→parametr nadal jest częścią każdego presetu. PC pokazuje numer slotu `programN`.

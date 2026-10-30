@@ -213,7 +213,7 @@ int main(int argc, char **argv) try {
     audio->setProcessing(true);
     const double returned = render(220, true);
     check(returned > .01, "Actual sidechain Return reaches Attack Decay audio");
-    check(audio->getLatencySamples() == attackLatency, "Attack latency reported by real DLL");
+    check(audio->getLatencySamples() == attackMonoLatency, "MONO Attack latency reported by real DLL");
     handler.changes.clearQueue();
     handler.performEdit(layout().midiMap + 74, double(parameterId("delayA.time") + 1) / layout().controlCount);
     handler.performEdit(layout().delayType[0], .5); // Memory Delay
