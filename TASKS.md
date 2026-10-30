@@ -19,5 +19,7 @@ MAKEUP: kompresor główny i cztery kompresory Oil Drum mają już −24…+24 d
 - [ ] Fizyczny odsłuch i pomiary CPU/xrun przy reprezentatywnym łańcuchu, w tym Cloud i Tape Warm.
 - [x] Bipolarne MAKEUP w kompresorach MultiFX z migracją starych presetów.
 - [x] Ujednolicić RPi/VST DELAY Memory/Reel/Oil Drum z MX: ON/OFF jako przełączniki, BANK MIX u góry jako suwak w widoku podstawowym i zaawansowanym, opcje jako listy lub pola liczbowe.
+- [x] Mapa konkretnych kontrolerów Hotone Ampero Control + EXP i WORLDE EASYCONTROL.9 w ustawieniach RPi; czyszczenie wszystkich przypisań CC/ekspresji i odłączenie własnych slotów PC bez usuwania brzmień ani parowania.
+- [ ] Jeśli potrzebne: rozdzielenie CC po porcie/kanałach urządzeń i osobny zakres/odwrócenie pedału ekspresji w każdym presecie.
 
 Nie oznaczać żadnego z otwartych punktów jako ukończony bez odpowiednich wyników.

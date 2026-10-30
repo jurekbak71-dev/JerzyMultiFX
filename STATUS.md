@@ -1,9 +1,16 @@
 # Jerzy MultiFX — status
 
+## Preview 18 — mapa kontrolerów i czyszczenie przypisań MIDI na Pi
+
+- W Ustawieniach RPi jest osobne okno z autorskimi schematami Hotone Ampero Control (cztery przełączniki i pedał ekspresji) oraz WORLDE EASYCONTROL.9. Kliknięcie elementu i naciśnięcie fizycznej kontrolki zapamiętuje wysyłany CC/PC; dla CC można wyszukać i wybrać parametr MultiFX. Układ fizycznych kontrolek zapisywany jest na Pi, a CC→parametr nadal jest częścią każdego presetu. PC pokazuje numer slotu `programN`.
+- Przycisk „Wyczyść wszystkie przypisania MIDI” po potwierdzeniu usuwa mapy CC i aktywną ekspresję z bieżącego stanu i wszystkich zapisanych presetów. Sloty PC są odłączane przez zmianę nazw presetów na `programN-bez-PC`, dzięki czemu brzmienia i IR pozostają dostępne. Stan autostartu jest zapisywany przed odpowiedzią. Kalibracja graficznego układu, parowanie Bluetooth oraz połączenia USB MIDI pozostają.
+- W tej prostej wersji CC o tym samym numerze z dwóch urządzeń współdzieli funkcję; rdzeń nie rozdziela map według portu/kanału. Zakres pięta–palce i odwrócenie pedału nie mają jeszcze osobnego ustawienia. Schematy są rysowane lokalnie, bez dołączania zdjęć referencyjnych do paczki.
+- Lokalnie: 3/3 CTest, 33/33 Python, 15/15 Node oraz test integracyjny rzeczywistego rdzenia/HTTP PASS. Natywne CI i paczka ARM64 do potwierdzenia. Fizyczny Hotone, EASYCONTROL.9, pedał ekspresji i Pi/HeadRush nie zostały przetestowane na tym buildzie.
+
 ## Preview 17 — spójne kontrolki DELAY na RPi i VST
 
 - DELAY A i B pokazują wspólny BANK MIX i poziom u góry w każdym silniku, także w podstawowym widoku Memory, Reel i Oil Drum. MIX jest suwakiem; przełączniki Reel ON, głowice, SYNC, STOP, DUB, SOS, FREEZE, TAILS i AUTO AGE są wyraźnymi przełącznikami, a liczbowy SEED nie jest gałką. Memory i Oil zachowują przełączniki i listy wyboru. Nie zmieniono ID, zakresów DSP ani wartości presetów.
-- Lokalnie test widoku C++ i panelu Node PASS; natywne Windows/ARM64 CI i wydanie preview 17 do potwierdzenia. Fizyczne Pi/HeadRush i FL Studio nadal wymagają testu.
+- Lokalnie test widoku C++ i panelu Node PASS; [CI 40954739988](https://github.com/jurekbak71-dev/JerzyMultiFX/actions/runs/40954739988) PASS na Windows i ARM64. [Wydanie preview 17](https://github.com/jurekbak71-dev/JerzyMultiFX/releases/tag/v0.1.0-preview.17.ci.40954739988.1) pobrano i sprawdzono SHA256, CRC ZIP oraz architektury PE x64 / DEB ARM64. Fizyczne Pi/HeadRush i FL Studio nadal wymagają testu.
 
 ## Preview 16 — zgodność VST z obsługą RPi i MAKEUP Attack/Decay
 

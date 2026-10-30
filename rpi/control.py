@@ -1,10 +1,10 @@
 """Shared local control protocol, used by HTTP and authenticated BLE."""
 import json, socket, os
 
-def rpc(command):
+def rpc(command,timeout=5):
     if len(command.encode()) > 4095 or '\n' in command or '\r' in command:
         raise ValueError('Invalid command')
-    with socket.create_connection(('127.0.0.1', int(os.environ.get('MULTIFX_CONTROL_PORT', '9817'))), timeout=5) as s:
+    with socket.create_connection(('127.0.0.1', int(os.environ.get('MULTIFX_CONTROL_PORT', '9817'))), timeout=timeout) as s:
         s.sendall((command+'\n').encode())
         response = bytearray()
         while not response.endswith(b'\n'):

@@ -1,6 +1,7 @@
 #include "rpi/ParameterUI.h"
 #include "core/DelayMidiRoutes.h"
 #include "rpi/StateWriter.h"
+#include "rpi/MidiAssignments.h"
 #include "core/Presentation.h"
 #include <filesystem>
 #include <iostream>
@@ -100,6 +101,44 @@ int main() try {
     {rpi::StateWriter writer(path);for(int i=0;i<20;++i){p.state.values[id("cpd.gain")]=float(i)/20;writer.submit(p);}}
     Project restored;require(loadProject(path,restored),"Background state writer flushes at shutdown");
     require(restored.state.values[id("cpd.gain")]==19.f/20,"Most recent snapshot survives coalescing");
+    {
+        const auto presets=directory/"presets";std::filesystem::create_directories(presets);
+        Project midi;
+        midi.irL={.25f};midi.irR={.25f};midi.irName="saved IR";
+        midi.state.values[id("cpd.gain")]=.75f;
+        midi.state.values[layout().midiMap+74]=float(id("delayA.time")+1)/layout().controlCount;
+        midi.state.values[layout().attackExpressionEnabled]=1;
+        midi.state.values[layout().attackExpressionMap[0][0]]=1;
+        require(saveProject((presets/"my tone.jmfx").string(),midi)&&
+                saveProject((presets/"program5.jmfx").string(),midi),"Create mapped preset fixtures");
+        std::vector<rpi::MidiResetFile> staged;
+        require(rpi::stageMidiPresetReset(directory,staged)==2&&rpi::commitMidiPresetReset(staged),
+                "Reset every saved preset without deleting sounds");
+        require(!std::filesystem::exists(presets/"program5.jmfx")&&
+                std::filesystem::exists(presets/"program5-bez-PC.jmfx"),
+                "Custom PC association is removed but its sound remains selectable");
+        Project cleared;
+        require(loadProject((presets/"my tone.jmfx").string(),cleared)&&
+                cleared.state.values[layout().midiMap+74]==0&&
+                cleared.state.values[layout().attackExpressionEnabled]==0&&
+                cleared.state.values[layout().attackExpressionMap[0][0]]==0&&
+                cleared.state.values[id("cpd.gain")]==.75f&&cleared.irName=="saved IR"&&
+                cleared.irL==midi.irL,
+                "MIDI reset preserves audio controls and embedded IR");
+        rpi::StateWriter writer(path);
+        require(writer.flush(cleared),"Urgent MIDI reset is durable before returning");
+        require(loadProject(path,restored)&&restored.state.values[layout().midiMap+74]==0,
+                "Autostart state cannot resurrect erased MIDI assignments");
+        midi.state.values[layout().midiMap+74]=float(id("delayA.time")+1)/layout().controlCount;
+        require(saveProject((presets/"my tone.jmfx").string(),midi),"Create preflight fixture");
+        {std::ofstream bad(presets/"broken.jmfx");bad<<"invalid preset";}
+        staged.clear();
+        require(!rpi::stageMidiPresetReset(directory,staged),
+                "Corrupt saved preset must stop a partial MIDI reset");
+        require(loadProject((presets/"my tone.jmfx").string(),cleared)&&
+                cleared.state.values[layout().midiMap+74]!=0,
+                "Failed preflight leaves other preset mappings untouched");
+    }
     std::filesystem::remove_all(directory);
     std::cout<<"PASS RPi option types, VST IDs/defaults and background state writer\n";
     return 0;

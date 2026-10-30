@@ -20,11 +20,13 @@ function panel(local=storage(),session=storage(),options={}){
  for(const id of ['token','login','logout','status','master','master-learn','connect','error','tabs','main','meter-in','meter-out','meter-cpu','meter-latency','meter-xruns','meter-clips']){const n=new Element();n.id=id;roots.push(n)}
  const requests=[];
  const document={getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),querySelectorAll:selector=>[...new Set(roots.flatMap(r=>[...(matches(r,selector)?[r]:[]),...walk(r,selector)]))],querySelector:()=>null};
- const context=vm.createContext({window:{MF_META:{parameters:[]},localStorage:local,sessionStorage:session},localStorage:local,sessionStorage:session,document,setInterval:f=>timers.push(f),setTimeout:f=>{timeouts.set(++timeoutId,f);return timeoutId},clearTimeout:id=>timeouts.delete(id),console,fetch:async(url,opts)=>{
+ const context=vm.createContext({window:{MF_META:{parameters:[]},localStorage:local,sessionStorage:session,confirm:()=>options.confirm!==false},localStorage:local,sessionStorage:session,document,setInterval:f=>timers.push(f),setTimeout:f=>{timeouts.set(++timeoutId,f);return timeoutId},clearTimeout:id=>timeouts.delete(id),console,fetch:async(url,opts)=>{
   requests.push({url,headers:opts.headers,body:opts.body});
   if(options.offline)throw Error('offline');
   const status=options.reject?503:200;
   if(url.endsWith('/set')){if(options.deferSet)await options.deferSet;if(options.failSet)return {ok:false,status:503,json:async()=>({error:'offline'})};const v=JSON.parse(opts.body);values[v.id]=v.value;}
+  if(url.endsWith('/midi-reset')){for(const p of parameters)if(p.key.startsWith('midi.cc.')||p.key==='midi.learn'||p.key==='attack.expressionEnabled')values[p.id]=0;return {ok:true,status:200,json:async()=>({ok:true,presets:2})}}
+  if(url.endsWith('/controller-layout')){if(opts.body){const {profile,control,message}=JSON.parse(opts.body);options.controllerLayout??={};options.controllerLayout[profile]??={};options.controllerLayout[profile][control]=message}return {ok:true,status:200,json:async()=>({ok:true,layout:options.controllerLayout||{}})}}
   if(url.endsWith('/state')&&options.deferState)await options.deferState;
   const data=url.endsWith('/metadata')?{parameters,controlCount:parameters.length}:url.endsWith('/view')?{ids:options.ids||[]}:{values:[...values],in:0,out:0,cpu:0,latencySamples:0,sampleRate:48000};
   return {ok:status===200,status,json:async()=>status===200?data:{error:'Token required'}};
@@ -122,6 +124,52 @@ test('delay bank MIX is a compact slider and Reel ON/OFF is a switch',async()=>{
  assert.equal(slider.children[0].dataset.kind,'mini');
  assert.equal(switchWidget.children[0].tagName,'button');
  assert.equal(switchWidget.children[0].textContent,'WŁĄCZONY');
+});
+test('settings show concrete Hotone and EASYCONTROL.9 diagrams, including expression pedal',async()=>{
+ const a=panel();await settle();await settle();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Ustawienia').click();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Otwórz mapę kontrolerów').click();
+ let controls=a.document.querySelectorAll('button').filter(b=>b.className?.includes('map-control'));
+ assert.deepEqual(controls.map(b=>b.textContent),['F1','F2','F3','F4','EXP']);
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='WORLDE EASYCONTROL.9').click();
+ controls=a.document.querySelectorAll('button').filter(b=>b.className?.includes('map-control'));
+ assert.equal(controls.length,36);
+ assert.ok(controls.some(b=>b.textContent==='X'));
+ assert.ok(controls.some(b=>b.textContent==='PLAY'));
+});
+test('pressing a physical CC binds its graphic control and assigns the current preset target',async()=>{
+ const keys=['master.bypass',...Array.from({length:5},(_,i)=>'block.'+i+'.bypass'),'midi.learn','midi.cc.74','drive.bypass'];
+ const parameters=keys.map((key,id)=>({id,key,name:key,label:key,default:0,min:key.startsWith('midi.cc.')?-1:0,max:key.startsWith('midi.cc.')?keys.length-1:1,steps:1,control:'switch'}));
+ const a=panel(storage(),storage(),{parameters});await settle();await settle();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Ustawienia').click();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Otwórz mapę kontrolerów').click();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Rozpoznaj kontrolkę').click();
+ const event={midiEvents:1,lastMidi:(176<<16)|(74<<8)|127};
+ await vm.runInContext(`consumeMidiCapture(${JSON.stringify(event)})`,a.context);
+ assert.equal(a.options.controllerLayout.hotone.F1.number,74);
+ const all=(node)=>node.children.flatMap(child=>[child,...all(child)]);
+ const choice=all(a.nodes.get('main')).find(x=>x.tagName==='select'&&x.attributes['aria-label']==='Funkcja MIDI');
+ choice.value='8';await choice.onchange();
+ assert.deepEqual(JSON.parse(a.requests.filter(r=>r.url.endsWith('/set')).at(-1).body),{id:7,value:1});
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='F2').click();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Rozpoznaj kontrolkę').click();
+ await vm.runInContext(`consumeMidiCapture(${JSON.stringify({midiEvents:2,lastMidi:(192<<16)|(42<<8)})})`,a.context);
+ assert.equal(a.options.controllerLayout.hotone.F2.kind,'pc');
+ assert.equal(a.options.controllerLayout.hotone.F2.number,42);
+});
+test('one confirmed MIDI reset clears assignments without calling hardware pairing',async()=>{
+ const parameters=['master.bypass',...Array.from({length:5},(_,i)=>'block.'+i+'.bypass'),'midi.learn','midi.cc.74','attack.expressionEnabled'].map((key,id)=>({id,key,name:key,label:key,default:key==='midi.cc.74'?.5:0,min:0,max:1,steps:1,control:'switch'}));
+ const a=panel(storage(),storage(),{parameters,confirm:false});await settle();await settle();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Ustawienia').click();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Wyczyść wszystkie przypisania MIDI').click();
+ assert.equal(a.requests.some(r=>r.url.endsWith('/midi-reset')),false);
+ a.options.confirm=true;
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Wyczyść wszystkie przypisania MIDI').click();
+ const calls=a.requests.filter(r=>r.url.endsWith('/midi-reset'));
+ assert.equal(calls.length,1);
+ assert.deepEqual(JSON.parse(calls[0].body),{confirm:'CLEAR_ALL_MIDI'});
+ assert.equal(a.values[7],0);
+ assert.equal(a.requests.some(r=>r.url.endsWith('/hardware')&&r.body?.includes('midi-disconnect')),false);
 });
 test('DELAY B MX controls identify their bank and internal engine',async()=>{
  const a=panel();await settle();await settle();

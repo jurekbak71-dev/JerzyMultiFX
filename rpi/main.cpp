@@ -5,6 +5,7 @@
 #include "ParameterUI.h"
 #include "DelayMidiRoutes.h"
 #include "StateWriter.h"
+#include "MidiAssignments.h"
 #include <chrono>
 #include <csignal>
 #include <dlfcn.h>
@@ -200,6 +201,7 @@ struct Host {
     std::atomic<uint32_t> pendingMidi{0};
     std::atomic<uint32_t> lastMidi{0}, midiEvents{0};
     std::atomic<bool> dirty{false};
+    multifx::rpi::StateWriter *stateWriter = nullptr;
     Host() {
         (void)multifx::factoryPresets();
         (void)multifx::rpi::parameterUI();
@@ -572,6 +574,27 @@ struct Host {
             dirty.store(true);
             return "{\"ok\":true}";
         }
+        if (cmd == "CLEAR_MIDI") {
+            const char *data = std::getenv("MULTIFX_DATA");
+            if (!data || !stateWriter)
+                return "{\"ok\":false,\"error\":\"Data directory unavailable\"}";
+            std::vector<multifx::rpi::MidiResetFile> files;
+            const auto count = multifx::rpi::stageMidiPresetReset(data, files);
+            if (!count || !multifx::rpi::commitMidiPresetReset(files))
+                return "{\"ok\":false,\"error\":\"Could not update all saved MIDI assignments\"}";
+            auto clean = state();
+            multifx::rpi::clearMidiAssignments(clean);
+            setState(clean);
+            project.state = clean;
+            program.store(-1);
+            pendingMidi.store(0);
+            dirty.store(false);
+            if (!stateWriter->flush(project)) {
+                dirty.store(true);
+                return "{\"ok\":false,\"error\":\"Could not save current MIDI reset\"}";
+            }
+            return "{\"ok\":true,\"presets\":" + std::to_string(*count) + "}";
+        }
         if (cmd == "SAVE" || cmd == "LOAD" || cmd == "IR") {
             std::string path;
             std::getline(in, path);
@@ -631,6 +654,7 @@ struct Host {
         const char *dataDirectory = std::getenv("MULTIFX_DATA");
         std::unique_ptr<multifx::rpi::StateWriter> stateWriter;
         if (dataDirectory) stateWriter=std::make_unique<multifx::rpi::StateWriter>(std::string(dataDirectory)+"/last-state.jmfx");
+        this->stateWriter = stateWriter.get();
         auto save = [&] {
             if (stateWriter) {
                 project.state = state();

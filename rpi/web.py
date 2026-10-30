@@ -1,10 +1,27 @@
 #!/usr/bin/env python3
-import argparse, hashlib, hmac, http.server, json, os, secrets, urllib.parse
+import argparse, hashlib, hmac, http.server, json, os, secrets, threading, urllib.parse
 from pathlib import Path
 from control import rpc
 import hardware
 import tempfile
 from http.cookies import SimpleCookie
+
+CONTROLLER_KEYS = {
+    'hotone': {'F1','F2','F3','F4','EXP'},
+    'easycontrol9': {*(f'K{i}' for i in range(1,10)),*(f'S{i}' for i in range(1,10)),
+                     *(f'B{i}' for i in range(1,10)),'X','ENC','BANK',
+                     'LOOP','BACK','FORWARD','STOP','PLAY','RECORD'},
+}
+
+def controller_layout(data):
+    path=data/'controller-layout.json'
+    if not path.exists(): return {}
+    raw=path.read_bytes()
+    if len(raw)>16384: raise ValueError('Controller layout is too large')
+    layout=json.loads(raw)
+    if not isinstance(layout,dict) or any(profile not in CONTROLLER_KEYS or not isinstance(controls,dict) for profile,controls in layout.items()):
+        raise ValueError('Invalid controller layout')
+    return layout
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -49,6 +66,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 directory=self.server.data/'presets'
                 names=sorted(p.stem for p in directory.glob('*.jmfx') if p.is_file() and not p.is_symlink() and 1<=len(p.stem)<=64 and all(c.isalnum() or c in ' -_' for c in p.stem))
                 return self.send(200,{'ok':True,'presets':names})
+            if self.path == '/api/controller-layout':
+                return self.send(200,{'ok':True,'layout':controller_layout(self.server.data)})
             if self.path == '/api/hardware': return self.send(200,hardware.status(self.server.data))
             if self.path == '/api/state': return self.send(200,rpc('STATE'))
             if self.path == '/api/metadata': return self.send(200,rpc('METADATA'))
@@ -96,6 +115,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 i,v=p['id'],p['value']
                 if type(i) is not int or not isinstance(v,(float,int)) or not 0<=v<=1: raise ValueError('Parameter')
                 return self.send(200,rpc(f'SET {i} {v}'))
+            if self.path == '/api/midi-reset':
+                if p != {'confirm':'CLEAR_ALL_MIDI'}: raise ValueError('Potwierdź usunięcie wszystkich przypisań MIDI.')
+                result=rpc('CLEAR_MIDI',timeout=30)
+                return self.send(200 if result.get('ok') else 503,result)
+            if self.path == '/api/controller-layout':
+                profile,control,message=p['profile'],p['control'],p['message']
+                if profile not in CONTROLLER_KEYS or control not in CONTROLLER_KEYS[profile]: raise ValueError('Nieznana kontrolka MIDI.')
+                if not isinstance(message,dict) or message.get('kind') not in ('cc','pc') or type(message.get('number')) is not int or not 0<=message['number']<=127 or type(message.get('channel')) is not int or not 1<=message['channel']<=16:
+                    raise ValueError('Niepoprawny komunikat MIDI.')
+                with self.server.layout_lock:
+                    layout=controller_layout(self.server.data)
+                    layout.setdefault(profile,{})[control]={k:message[k] for k in ('kind','number','channel')}
+                    with tempfile.NamedTemporaryFile(dir=self.server.data,suffix='.layout.tmp',delete=False) as f:
+                        f.write(json.dumps(layout,ensure_ascii=False).encode());path=Path(f.name)
+                    try: os.replace(path,self.server.data/'controller-layout.json')
+                    finally: path.unlink(missing_ok=True)
+                return self.send(200,{'ok':True,'layout':layout})
             if self.path in ('/api/save','/api/load'):
                 name=p['name']
                 if not isinstance(name,str) or not name or len(name)>64 or any(not(c.isalnum() or c in ' -_') for c in name) or name!=name.strip(): raise ValueError('Preset name')
@@ -110,7 +146,7 @@ def main():
     if not tokenfile.exists():
         fd=os.open(tokenfile,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'w') as f:f.write(secrets.token_urlsafe(32))
-    server=http.server.ThreadingHTTPServer((a.host,a.port),Handler);server.token=tokenfile.read_text().strip();server.ui=a.ui;server.data=a.data
+    server=http.server.ThreadingHTTPServer((a.host,a.port),Handler);server.token=tokenfile.read_text().strip();server.ui=a.ui;server.data=a.data;server.layout_lock=threading.Lock()
     if len(server.token)<32: raise SystemExit('Invalid token file')
     server.serve_forever()
 if __name__=='__main__':main()

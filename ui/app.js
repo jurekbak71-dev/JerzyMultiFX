@@ -2,6 +2,7 @@
 const $=id=>document.getElementById(id);
 let parameters=window.MF_META.parameters,values=parameters.map(p=>p.default??0),connected=false;
 let tab='Efekty',selected=0,section=0,mxSlot=0,advanced=false,order=[0,1,2,3,4],snapshot={},renderSerial=0,lastSignature='',hardwareSnapshot={},selectedPan='',connectionFailed=false;
+let controllerLayout={},controllerProfile='hotone',selectedControl='F1',midiCapture=null,midiMapOpen=false;
 const mdChoices=['Digital','Volante / MultiHead Reel','El Capistan / Tape Echo','Olivera / Oil Can','EC-1 / Tube Echo','Brig / BBD','Deco / Doubletrack','DIG / Dual Digital','Space Echo 202','DM-101','Memory Delay','Reel Echo','Oil Drum Echo'];
 const blockNames=['ANALOG','CHORUS / ATTACK / ATOMIC','MD MULTIDELAY','REVERB','IR LOADER'];
 const sections=[['PREAMP','TAPE DRIVE','DRIVE','COMPRESSOR'],['CHORUS','ATTACK DECAY','ATOMIC CLUSTER'],['DELAY A','DELAY B'],[],[]];
@@ -74,13 +75,13 @@ function updateControls(){
  const notice=$('signal-status');if(notice){const masterOff=values[find('master.bypass')]>=.5,blockOff=values[find('block.'+selected+'.bypass')]>=.5;notice.hidden=!masterOff&&!blockOff;notice.textContent=masterOff?'CAŁY TOR WYŁĄCZONY / BYPASS — ustawienia efektu są zapamiętane, ale nie przetwarzają sygnału.':blockOff?blockNames[selected]+' WYŁĄCZONY / BYPASS — włącz blok, aby usłyszeć jego efekty.':''}
  document.querySelectorAll('[data-block]').forEach(card=>{const n=Number(card.dataset.block),off=values[find('block.'+n+'.bypass')]>=.5;card.className='block'+(n===selected?' selected':'')+(off?' off':'')});
 }
-function renderShell(){let tabs=$('tabs');tabs.replaceChildren(...['Efekty','Ustawienia','MIDI i Bluetooth','Presety'].map(t=>button(t,()=>{tab=t;lastSignature='';render()},t===tab?'active':'')));}
+function renderShell(){let tabs=$('tabs');tabs.replaceChildren(...['Efekty','Ustawienia','MIDI i Bluetooth','Presety'].map(t=>button(t,()=>{tab=t;if(t!=='Ustawienia'){midiMapOpen=false;midiCapture=null}lastSignature='';render()},t===tab?'active':'')));}
 async function reorder(from,to){const a=[...order],x=a.indexOf(from),y=a.indexOf(to);[a[x],a[y]]=[a[y],a[x]];for(let i=0;i<120;i++)if(permutation(i).every((v,n)=>a[n]===v)){await set(find('chain.order'),i/119);break}await render()}
 async function render(){renderShell();let main=$('main');main.replaceChildren();if(!connected){main.append(el('p','Łączenie z MultiFX…','empty'));return}if(tab==='Efekty'){
  order=permutation(Math.round((values[find('chain.order')]||0)*119));let chain=el('nav',undefined,'chain');chain.id='blocks';
  order.forEach((n,i)=>{const off=values[find('block.'+n+'.bypass')]>=.5,card=el('article',undefined,'block'+(n===selected?' selected':'')+(off?' off':''));card.dataset.block=n;card.draggable=true;card.ondragstart=e=>e.dataTransfer.setData('text/plain',String(n));card.ondragover=e=>e.preventDefault();card.ondrop=e=>{e.preventDefault();reorder(Number(e.dataTransfer.getData('text/plain')),n).catch(error)};card.append(el('small',String(i+1).padStart(2,'0')),button(blockNames[n],()=>{selected=n;section=0;advanced=false;lastSignature='';render()},'choose'),toggleControl(parameters.find(p=>p.key==='block.'+n+'.bypass')),learnButton(find('block.'+n+'.bypass')));chain.append(card)});main.append(chain);
  let subs=el('nav',undefined,'subtabs');sections[selected].forEach((n,i)=>subs.append(button(n,()=>{section=i;advanced=false;renderPanel()},i===section?'active':'')));subs.id='subtabs';main.append(subs,el('section',undefined,'pedal'));main.lastElementChild.id='controls';await renderPanel();
- }else if(tab==='Ustawienia')renderSettings();else if(tab==='MIDI i Bluetooth')await renderHardware();else renderPresets();lastSignature=signature();updateControls()}
+ }else if(tab==='Ustawienia'){if(midiMapOpen)renderMidiMap();else renderSettings()}else if(tab==='MIDI i Bluetooth')await renderHardware();else renderPresets();lastSignature=signature();updateControls()}
 async function renderPanel(){if(tab!=='Efekty'||!$('controls'))return;const serial=++renderSerial;const result=await api('view',{block:selected,section,mxSlot,advanced:advanced?1:0});if(serial!==renderSerial)return;let panel=$('controls');panel.replaceChildren();panel.className='pedal '+(selected===1?['clone','attack','atomic'][section]:selected===2?'md':'');const heading=el('div',undefined,'pedalhead');heading.append(el('h2',sections[selected][section]||blockNames[selected]));let right=el('div',undefined,'row');const ownBypass=selected===1?find(['clone.bypass','attack.bypass','atomic.bypass'][section]):undefined;if(ownBypass!==undefined)right.append(toggleControl(parameters.find(p=>p.id===ownBypass)),learnButton(ownBypass));right.append(button(advanced?'Widok podstawowy':'Ustawienia efektu',()=>{advanced=!advanced;renderPanel()}));heading.append(right);const notice=el('p',undefined,'signal-status');notice.id='signal-status';panel.append(heading,notice);
  $('subtabs').querySelectorAll('button').forEach((b,i)=>b.className=i===section?'active':'');
  if(selected===2&&advanced&&Math.round(values[find((section?'delayB':'delayA')+'.type')]*4)===1){const row=el('div',undefined,'subtabs');row.append(el('span','MX — wybierz silnik wewnętrzny:'),button('MX 1',()=>{mxSlot=0;renderPanel()},mxSlot===0?'active':''),button('MX 2',()=>{mxSlot=1;renderPanel()},mxSlot===1?'active':''));panel.append(row)}
@@ -92,6 +93,100 @@ async function renderPanel(){if(tab!=='Efekty'||!$('controls'))return;const seri
  lastSignature=signature();updateControls();}
 function row(...items){let r=el('div',undefined,'row');r.append(...items);return r}
 function selectControl(label,choices,value,onchange){let box=el('label',label),s=el('select');s.setAttribute('aria-label',label);choices.forEach(([v,t])=>{let o=el('option',t);o.value=v;s.append(o)});s.value=value;s.onchange=()=>onchange(s.value);box.append(s);return box}
+const controllerNames={hotone:'Hotone Ampero Control',easycontrol9:'WORLDE EASYCONTROL.9'};
+function midiBinding(profile,control){return controllerLayout[profile]?.[control]}
+function ccTarget(cc){const map=find('midi.cc.'+cc);return map===undefined?-1:Math.round(-1+window.MF_META.controlCount*(values[map]??0))}
+function controllerButton(profile,id,title){
+ const binding=midiBinding(profile,id),target=binding?.kind==='cc'?ccTarget(binding.number):-1;
+ const p=parameters[target],b=button(id,()=>{selectedControl=id;renderMidiMap()},'map-control'+(selectedControl===id&&controllerProfile===profile?' selected':''));
+ b.title=title+' · '+(binding?binding.kind.toUpperCase()+' '+binding.number+(p?' → '+name(p):''):'naciśnij, aby przypisać komunikat');
+ b.setAttribute('aria-label',b.title);
+ if(binding)b.append(el('small',binding.kind.toUpperCase()+' '+binding.number));
+ if(p)b.append(el('small',name(p)));
+ return b;
+}
+function controllerDrawing(){
+ const shell=el('div',undefined,'controller-shell '+controllerProfile);
+ if(controllerProfile==='hotone'){
+  shell.append(el('div','HOTONE  ·  AMPERO CONTROL','controller-brand'),el('div','MIDI','controller-screen'));
+  const feet=el('div',undefined,'controller-feet');
+  for(let n=1;n<=4;n++)feet.append(controllerButton('hotone','F'+n,'Przełącznik nożny '+n));
+  shell.append(feet,controllerButton('hotone','EXP','Pedał ekspresji podłączony do Hotone'));
+ }else{
+  shell.append(el('div','WORLDE  ·  EASYCONTROL.9','controller-brand'));
+  const channels=el('div',undefined,'controller-channels');
+  for(let n=1;n<=9;n++){
+   const channel=el('div',undefined,'controller-channel');
+   channel.append(controllerButton('easycontrol9','K'+n,'Pokrętło '+n),controllerButton('easycontrol9','S'+n,'Suwak '+n),controllerButton('easycontrol9','B'+n,'Przycisk '+n));
+   channels.append(channel);
+  }
+  shell.append(channels);
+  const extra=el('div',undefined,'controller-extra');
+  for(const [id,title] of [['X','Crossfader'],['ENC','Duże pokrętło'],['BANK','Bank'],['LOOP','Pętla'],['BACK','Wstecz'],['FORWARD','Naprzód'],['STOP','Stop'],['PLAY','Play'],['RECORD','Record']])
+   extra.append(controllerButton('easycontrol9',id,title));
+  shell.append(extra);
+ }
+ return shell;
+}
+function midiMapDetail(){
+ const box=el('section',undefined,'box map-detail'),binding=midiBinding(controllerProfile,selectedControl);
+ box.append(el('h3',controllerNames[controllerProfile]+' · '+selectedControl));
+ if(midiCapture)box.append(el('p','Naciśnij teraz tę kontrolkę na urządzeniu. Oczekuję komunikatu CC lub PC…','notice'));
+ else box.append(el('p',binding?`${binding.kind.toUpperCase()} ${binding.number} · kanał ${binding.channel}`:'Brak rozpoznanego komunikatu.','hint'));
+ box.append(button(binding?'Rozpoznaj ponownie':'Rozpoznaj kontrolkę',()=>{
+  midiCapture={profile:controllerProfile,control:selectedControl,after:snapshot.midiEvents||0};renderMidiMap();
+ },'primary'));
+ if(binding?.kind==='pc')box.append(el('p',`PC ${binding.number} wczytuje slot program${binding.number}. Ustawisz ten slot w zakładce Presety.`, 'hint'));
+ if(binding?.kind==='cc'){
+  const map=find('midi.cc.'+binding.number),target=ccTarget(binding.number),current=parameters[target];
+  box.append(el('p',current?'Steruje: '+name(current):'Ten CC nie ma przypisanej funkcji.','hint'));
+  const search=el('input');search.type='search';search.placeholder='Szukaj efektu lub parametru';search.setAttribute('aria-label','Szukaj parametru MIDI');
+  const choice=el('select');choice.setAttribute('aria-label','Funkcja MIDI');
+  const fill=()=>{
+   const query=search.value.toLocaleLowerCase('pl').trim();
+   const options=parameters.filter(p=>p.id<window.MF_META.controlCount&&!p.key.startsWith('midi.')&&p.key!=='factory.program'&&(!query||(p.key+' '+name(p)).toLocaleLowerCase('pl').includes(query)));
+   if(current&&!options.some(p=>p.id===current.id))options.unshift(current);
+   choice.replaceChildren();const none=el('option','Brak przypisania');none.value='-1';choice.append(none);
+   for(const p of options.slice(0,80)){const option=el('option',name(p)+' · '+p.key);option.value=String(p.id);choice.append(option)}
+   choice.value=String(target);
+  };
+  search.oninput=fill;fill();
+  choice.onchange=async()=>{try{await set(map,(Number(choice.value)+1)/window.MF_META.controlCount);renderMidiMap()}catch(e){error(e)}};
+  box.append(search,choice,el('p','Przypisanie dotyczy bieżącego brzmienia. Zapisz preset, aby je zachować. CC o tym samym numerze z obu kontrolerów używa tej samej funkcji.','hint'));
+ }
+ return box;
+}
+function renderMidiMap(){
+ if(!midiMapOpen)return;
+ const main=$('main');main.replaceChildren();
+ const box=el('section',undefined,'box controller-map');
+ box.append(row(button('← Ustawienia',()=>{midiMapOpen=false;midiCapture=null;renderSettings()}),el('h2','Mapa kontrolerów MIDI')));
+ const tabs=el('nav',undefined,'subtabs');
+ for(const profile of Object.keys(controllerNames))tabs.append(button(controllerNames[profile],()=>{controllerProfile=profile;selectedControl=profile==='hotone'?'F1':'K1';midiCapture=null;renderMidiMap()},profile===controllerProfile?'active':''));
+ const live=el('p',undefined,'notice');live.id='midi-map-live';
+ box.append(tabs,el('p','Kliknij kontrolkę na schemacie, wybierz „Rozpoznaj” i naciśnij ją na urządzeniu. Potem wybierz funkcję MultiFX. Układ jest zapamiętany; mapowanie CC należy do presetu.','hint'),live,controllerDrawing(),midiMapDetail());
+ main.append(box);
+ updateMidiMapLive();
+}
+async function openMidiMap(){const data=await api('controller-layout');controllerLayout=data.layout||{};midiMapOpen=true;renderMidiMap()}
+function updateMidiMapLive(){const x=$('midi-map-live');if(!x)return;const raw=snapshot.lastMidi||0,kind=(raw>>16)&240,number=(raw>>8)&127;if(!snapshot.midiEvents){x.textContent='Nie odebrano jeszcze MIDI.';return}x.textContent='Ostatni komunikat: '+(kind===176?'CC '+number:kind===192?'PC '+number:'MIDI '+((raw>>16)&255))+' · kanał '+(((raw>>16)&15)+1)}
+async function consumeMidiCapture(state){
+ if(!midiCapture||!midiMapOpen||state.midiEvents<=midiCapture.after)return;
+ const status=(state.lastMidi>>16)&255,kind=status&240;
+ if(kind!==176&&kind!==192){midiCapture=null;$('error').textContent='Ta kontrolka wysłała komunikat inny niż CC lub PC. Ustaw ją w kontrolerze na CC/PC i spróbuj ponownie.';renderMidiMap();return}
+ const selected=midiCapture;midiCapture=null;
+ const response=await api('controller-layout',{profile:selected.profile,control:selected.control,message:{kind:kind===176?'cc':'pc',number:(state.lastMidi>>8)&127,channel:(status&15)+1}});
+ controllerLayout=response.layout;renderMidiMap();
+}
+async function resetAllMidi(){
+ if(!window.confirm('Usunąć wszystkie przypisania CC i ekspresji ze wszystkich presetów MultiFX oraz odłączyć sloty PC? Brzmienia i połączenia kontrolerów zostaną zachowane.'))return;
+ if(sending)await drainPromise;
+ const result=await api('midi-reset',{confirm:'CLEAR_ALL_MIDI'});
+ const state=await api('state');snapshot=state;values=state.values;editRevision++;
+ midiCapture=null;
+ renderSettings();
+ $('midi-reset-result').textContent=`Usunięto przypisania MIDI z bieżącego brzmienia i ${result.presets} zapisanych presetów. Sloty PC zachowano jako presety z dopiskiem „bez-PC”.`;
+}
 function renderSettings(){const main=$('main'),audio=el('section',undefined,'box');audio.append(el('h2','Dźwięk i opóźnienie'));let inputMode=String(snapshot.inputMode||0);audio.append(row(selectControl('Wejście instrumentu ',[['0','STEREO — wejście L i R'],['1','MONO — tylko wejście L'],['2','MONO — tylko wejście R']],inputMode,v=>inputMode=v),button('Zastosuj wejście',async()=>{await api('hardware',{operation:'input-mode',mode:Number(inputMode)});await poll()})),el('p','Dla sygnału mono wybierz ten sam kanał co w VST. Nie sumujemy dwóch wejść ani nie dodajemy dodatkowego gainu.','hint'));
  const tempo=el('input');tempo.type='number';tempo.min=20;tempo.max=400;tempo.step=.1;tempo.value=snapshot.bpm||120;tempo.setAttribute('aria-label','Tempo BPM');audio.append(el('p','Dla opóźnień i modulacji zsynchronizowanych ustaw tempo takie samo jak w projekcie VST.','hint'),row(el('span','TEMPO BPM'),tempo,button('Zastosuj tempo',async()=>{await api('hardware',{operation:'tempo',bpm:Number(tempo.value)});await poll()})));
  audio.append(el('p',snapshot.realtime===true?'JACK: tryb czasu rzeczywistego aktywny':snapshot.realtime===false?'JACK: brak trybu czasu rzeczywistego — możliwe przerwy przy dużym obciążeniu':'JACK: tryb czasu rzeczywistego nie został zgłoszony','hint'));
@@ -99,6 +194,7 @@ function renderSettings(){const main=$('main'),audio=el('section',undefined,'box
  const routing=el('section',undefined,'box');routing.append(el('h2','Wejścia i wyjścia HeadRush'),el('p','Domyślnie: wejścia 1–2 i wyjścia 1–2. Return to opcjonalny powrót zewnętrznego efektu dla Attack Decay.','hint'));main.append(routing);
  api('hardware').then(h=>{if(tab!=='Ustawienia')return;const a=h.audio_ports||{},grid=el('div',undefined,'common');['Wejście L','Wejście R','Wyjście L','Wyjście R','Return L','Return R'].forEach((name,index)=>{const ports=index<2||index>3?a.inputs||[]:a.outputs||[];grid.append(selectControl(name,[['',index>3?'Niepodłączony':'Domyślne'],...ports.map(p=>[p,p.replace('system:capture_','Wejście ').replace('system:playback_','Wyjście ')])],a.routing?.[index]||'',async v=>{try{await api('hardware',{operation:'audio-route',index,name:v})}catch(e){error(e)}}))});routing.append(grid)}).catch(error);
  const output=el('section',undefined,'box');output.append(el('h2','Poziom i ochrona wyjścia'));const grid=el('div',undefined,'common');for(const key of ['master.output','master.limiter']){const p=parameters.find(p=>p.key===key);if(p)grid.append(control(p))}output.append(grid,el('p','PRZESTER liczy przekroczenia przed zabezpieczeniem. Gdy rośnie, zmniejsz poziom efektu lub wyjścia.','hint'));main.append(output);
+ const midi=el('section',undefined,'box'),midiResult=el('p',undefined,'notice');midiResult.id='midi-reset-result';midi.append(el('h2','Mapowanie MIDI'),el('p','Graficzna mapa Hotone Ampero Control z pedałem ekspresji i WORLDE EASYCONTROL.9. Przypisania CC zapisują się w presetach.','hint'),button('Otwórz mapę kontrolerów',openMidiMap,'primary'),el('p','Kasowanie usuwa własne mapy CC, aktywną ekspresję i powiązania slotów PC ze wszystkich presetów na Pi. Sparowanie Bluetooth i ustawienia wejść USB zostają.','hint'),button('Wyczyść wszystkie przypisania MIDI',resetAllMidi,'danger'),midiResult);main.append(midi);
  const diag=el('section',undefined,'box');diag.append(el('h2','Diagnostyka'),button('Pobierz raport',async()=>{const h=await api('hardware');const data={audio:snapshot,hardware:h};if(data.hardware.bluetooth?.pairing)delete data.hardware.bluetooth.pairing;const a=el('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='JerzyMultiFX-diagnostyka.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}),el('p','Raport nie zawiera klucza dostępu. Zawiera nazwy i adresy urządzeń — sprawdź go przed udostępnieniem.','hint'));main.append(diag)}
 async function hardwareAction(data,b){if(b)b.disabled=true;try{await api('hardware',data);hardwareSnapshot=await api('hardware');await renderHardware()}finally{if(b)b.disabled=false}}
 async function renderHardware(){if(tab!=='MIDI i Bluetooth')return;const main=$('main');const h=await api('hardware');if(tab!=='MIDI i Bluetooth')return;hardwareSnapshot=h;main.replaceChildren();const bt=h.bluetooth||{};let box=el('section',undefined,'box');box.append(el('h2','Kontroler Bluetooth MIDI'),el('p','Tutaj łączysz pedał MIDI, np. Hotone Ampero Control. To połączenie steruje efektami; nie przesyła dźwięku.','hint'));if(!h.available)box.append(el('p',h.error,'notice'));
@@ -117,7 +213,7 @@ function renderPresets(){const main=$('main'),box=el('section',undefined,'box');
 let factory=parameters.find(p=>p.key==='factory.program');if(factory)box.append(control(factory,true));const program=el('input');program.type='number';program.min=0;program.max=127;program.step=1;program.value=0;program.setAttribute('aria-label','Numer programu MIDI PC');box.append(row(el('span','PROGRAM CHANGE 0–127'),program,button('Zapisz w slocie PC',async()=>{const n=Number(program.value);if(!Number.isInteger(n)||n<0||n>127)throw Error('Numer PC musi być od 0 do 127.');await api('save',{name:'program'+n});await render()}),button('Wczytaj slot PC',async()=>{const n=Number(program.value);if(!Number.isInteger(n)||n<0||n>127)throw Error('Numer PC musi być od 0 do 127.');await api('load',{name:'program'+n});await poll();await render()})),el('p','Każdy slot PC zapisuje cały preset MultiFX wraz z własnym mapowaniem MIDI. PC z kontrolera wczytuje ten sam slot. Sloty 0–7 bez zapisu wybierają presety fabryczne.','hint'));const name=el('input');name.id='preset';name.placeholder='Nazwa, np. moj-bas';name.value='moj-preset';box.append(row(name,button('Zapisz moje brzmienie',async()=>{await api('save',{name:name.value});render()},'primary'),button('Wczytaj',async()=>{await api('load',{name:name.value});await poll();render()})));api('presets').then(data=>{if(tab!=='Presety')return;let chosen=data.presets[0]||'';const list=selectControl('Moje zapisane brzmienia ',[['','Wybierz preset'],...data.presets.map(n=>[n,n])],'',v=>{chosen=v;name.value=v});box.append(row(list,button('Wczytaj wybrany',async()=>{if(!chosen)throw Error('Wybierz preset z listy.');await api('load',{name:chosen});await poll();render()})))}).catch(error);box.append(el('p','Zapis obejmuje cały łańcuch, ustawienia efektów, mapowanie MIDI i wczytany IR.','hint'));main.append(box)}
 function updateMidiLive(){const x=$('midi-live');if(!x)return;const count=snapshot.midiEvents||0;if(!count){x.textContent='Do rdzenia nie dotarł jeszcze żaden komunikat MIDI.';return}const raw=snapshot.lastMidi||0,kind=(raw>>16)&240,cc=(raw>>8)&127,value=raw&127;if(kind===176){const map=find('midi.cc.'+cc),target=map===undefined?-1:Math.round((parameters[map].min+(parameters[map].max-parameters[map].min)*(values[map]??0)));x.textContent='Odebrano: CC '+cc+' · wartość '+value+' · '+(target>=0&&parameters[target]?'steruje '+name(parameters[target]):'brak przypisania MIDI Learn')+' · razem '+count;return}x.textContent='Odebrano komunikat MIDI '+((raw>>16)&255)+' · razem '+count}
 function paintLevelBar(id,amplitude){const bar=$(id);if(!bar)return;const db=20*Math.log10(Math.max(1e-6,amplitude));bar.style.width=Math.max(0,Math.min(100,(db+60)*100/60))+'%';bar.classList.toggle('hot',db>=-3)}
-async function poll(){if(!connected||polling)return;polling=true;const revision=editRevision,editing=sending;try{const s=await api('state');if(!connected)return;if(connectionFailed){$('error').textContent='';connectionFailed=false;}snapshot=s;updateMidiLive();if(!editing&&!sending&&revision===editRevision)values=s.values;$('meter-in').textContent=(20*Math.log10(Math.max(1e-6,s.in))).toFixed(1)+' dB';$('meter-out').textContent=(20*Math.log10(Math.max(1e-6,s.out))).toFixed(1)+' dB';paintLevelBar('meter-in-bar',s.in);paintLevelBar('meter-out-bar',s.out);$('meter-cpu').textContent=s.cpu.toFixed(1)+' %';$('meter-latency').textContent=((s.latencySamples||0)*1000/s.sampleRate).toFixed(2)+' ms';$('meter-xruns').textContent=s.xruns;$('meter-clips').textContent=s.clips||0;$('meter-clips').className=s.clips?'warning':'';$('status').textContent=s.delaysReady===false?'Przygotowywanie efektu…':'● Połączono';if(lastSignature&&signature()!==lastSignature&&document.activeElement?.type!=='range')await renderPanel();updateControls()}catch(e){if(e.status===401){connected=false;setTimeout(connectPanel,1000);return}connectionFailed=true;$('status').textContent='Brak połączenia z audio';error(e)}finally{polling=false}}
+async function poll(){if(!connected||polling)return;polling=true;const revision=editRevision,editing=sending;try{const s=await api('state');if(!connected)return;if(connectionFailed){$('error').textContent='';connectionFailed=false;}snapshot=s;if(!editing&&!sending&&revision===editRevision)values=s.values;updateMidiLive();updateMidiMapLive();await consumeMidiCapture(s);$('meter-in').textContent=(20*Math.log10(Math.max(1e-6,s.in))).toFixed(1)+' dB';$('meter-out').textContent=(20*Math.log10(Math.max(1e-6,s.out))).toFixed(1)+' dB';paintLevelBar('meter-in-bar',s.in);paintLevelBar('meter-out-bar',s.out);$('meter-cpu').textContent=s.cpu.toFixed(1)+' %';$('meter-latency').textContent=((s.latencySamples||0)*1000/s.sampleRate).toFixed(2)+' ms';$('meter-xruns').textContent=s.xruns;$('meter-clips').textContent=s.clips||0;$('meter-clips').className=s.clips?'warning':'';$('status').textContent=s.delaysReady===false?'Przygotowywanie efektu…':'● Połączono';if(lastSignature&&signature()!==lastSignature&&document.activeElement?.type!=='range')await renderPanel();updateControls()}catch(e){if(e.status===401){connected=false;setTimeout(connectPanel,1000);return}connectionFailed=true;$('status').textContent='Brak połączenia z audio';error(e)}finally{polling=false}}
 async function connectPanel(){if(connected)return;try{await fetch('/',{cache:'no-store'});const meta=await api('metadata');parameters=meta.parameters;window.MF_META=meta;connected=true;await poll();if(!connected)return;$('error').textContent='';await render()}catch(e){connected=false;$('status').textContent='Czekam na uruchomienie MultiFX…';error(e);setTimeout(connectPanel,1500)}}
 $('master-learn').onclick=()=>set(find('midi.learn'),(find('master.bypass')+1)/window.MF_META.controlCount).catch(error);
 $('master').onclick=()=>set(find('master.bypass'),values[find('master.bypass')]>=.5?0:1).then(updateControls).catch(error);

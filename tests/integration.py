@@ -33,6 +33,8 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
         assert len(metadata['parameters'])>=924
         try:request('/api/state',auth=False);raise AssertionError('Unauthenticated access')
         except urllib.error.HTTPError as e:assert e.code==401
+        try:request('/api/midi-reset',{'confirm':'CLEAR_ALL_MIDI'},auth=False);raise AssertionError('Unauthenticated MIDI reset')
+        except urllib.error.HTTPError as e:assert e.code==403
         # A normal browser receives an HttpOnly session with the page, no pasted key.
         browser=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         page=browser.open('http://127.0.0.1:18097/')
@@ -158,6 +160,29 @@ with tempfile.TemporaryDirectory(prefix='multifx-test-') as directory:
             if round(-1+metadata['controlCount']*state['values'][find('midi.cc.100')])==second:break
             time.sleep(.02)
         else:raise AssertionError('Saved global preset did not restore its MIDI map')
+        # Physical control layout is calibrated once; MIDI targets still belong to each preset.
+        binding={'profile':'hotone','control':'EXP','message':{'kind':'cc','number':74,'channel':1}}
+        assert request('/api/controller-layout',binding)['layout']['hotone']['EXP']['number']==74
+        assert request('/api/controller-layout')['layout']['hotone']['EXP']['number']==74
+        try:request('/api/controller-layout',{'profile':'hotone','control':'EXP','message':{'kind':'cc','number':200,'channel':1}});raise AssertionError('Invalid CC accepted')
+        except urllib.error.HTTPError as e:assert e.code==400
+        request('/api/set',{'id':find('attack.expressionEnabled'),'value':1})
+        sound_before=request('/api/state')['values'][parameter]
+        ir_before=request('/api/state')['ir']
+        try:request('/api/midi-reset',{'confirm':'no'});raise AssertionError('Unconfirmed reset accepted')
+        except urllib.error.HTTPError as e:assert e.code==400
+        reset=request('/api/midi-reset',{'confirm':'CLEAR_ALL_MIDI'})
+        assert reset['ok'] and reset['presets']>=2
+        cleared=request('/api/state')
+        assert cleared['values'][find('midi.cc.100')]==0 and cleared['values'][find('attack.expressionEnabled')]==0
+        assert cleared['values'][parameter]==sound_before and cleared['ir']==ir_before
+        names=request('/api/presets')['presets']
+        assert 'program42-bez-PC' in names and 'program43-bez-PC' in names and 'program43' not in names
+        assert request('/api/controller-layout')['layout']['hotone']['EXP']['number']==74,'Physical layout survives MIDI assignment reset'
+        assert control('MIDI 192 43')['ok']
+        assert request('/api/state')['values'][find('midi.cc.100')]==0,'Old PC slot cannot restore erased assignments'
+        assert request('/api/load',{'name':'program43-bez-PC'})['ok']
+        assert request('/api/state')['values'][find('midi.cc.100')]==0,'Archived sound keeps its music but has no MIDI map'
         # Graceful restart is the same state restore path used at boot.
         before=request('/api/state')['values']
         processes[-1].terminate();processes[-1].wait(timeout=5)

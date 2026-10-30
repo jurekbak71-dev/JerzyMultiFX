@@ -1,3 +1,8 @@
+# 0.1.0-preview.18
+
+- Panel RPi pokazuje schematy Hotone Ampero Control z pedałem ekspresji i WORLDE EASYCONTROL.9; można rozpoznać komunikat każdej kontrolki oraz przypisać CC do parametru bieżącego presetu.
+- Jedno potwierdzone czyszczenie usuwa własne mapy MIDI z bieżącego brzmienia i zapisanych presetów, odłącza sloty PC, zachowuje brzmienia, IR i połączenia urządzeń.
+
 # 0.1.0-preview.11
 
 - Raport RPi przed/po instalacji zawiera połączenia portów JACK i zakresy latencji portów. Ułatwia porównanie działającego toru HeadRush z patchOS bez przestawiania audio.
