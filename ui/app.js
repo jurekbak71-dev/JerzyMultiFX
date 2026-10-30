@@ -120,9 +120,11 @@ function controllerDrawing(){
    channel.append(controllerButton('easycontrol9','K'+n,'Pokrętło '+n),controllerButton('easycontrol9','S'+n,'Suwak '+n),controllerButton('easycontrol9','B'+n,'Przycisk '+n));
    channels.append(channel);
   }
-  shell.append(channels);
+  const face=el('div',undefined,'easycontrol-face'),left=el('div',undefined,'controller-left');
+  for(const [id,title] of [['ENC','Duże pokrętło'],['X','Crossfader'],['BANK','Bank']])left.append(controllerButton('easycontrol9',id,title));
+  face.append(left,channels);shell.append(face);
   const extra=el('div',undefined,'controller-extra');
-  for(const [id,title] of [['X','Crossfader'],['ENC','Duże pokrętło'],['BANK','Bank'],['LOOP','Pętla'],['BACK','Wstecz'],['FORWARD','Naprzód'],['STOP','Stop'],['PLAY','Play'],['RECORD','Record']])
+  for(const [id,title] of [['LOOP','Pętla'],['BACK','Wstecz'],['FORWARD','Naprzód'],['STOP','Stop'],['PLAY','Play'],['RECORD','Record']])
    extra.append(controllerButton('easycontrol9',id,title));
   shell.append(extra);
  }
@@ -136,6 +138,7 @@ function midiMapDetail(){
  box.append(button(binding?'Rozpoznaj ponownie':'Rozpoznaj kontrolkę',()=>{
   midiCapture={profile:controllerProfile,control:selectedControl,after:snapshot.midiEvents||0};renderMidiMap();
  },'primary'));
+ if(midiCapture)box.append(button('Anuluj rozpoznawanie',()=>{midiCapture=null;renderMidiMap()}));
  if(binding?.kind==='pc')box.append(el('p',`PC ${binding.number} wczytuje slot program${binding.number}. Ustawisz ten slot w zakładce Presety.`, 'hint'));
  if(binding?.kind==='cc'){
   const map=find('midi.cc.'+binding.number),target=ccTarget(binding.number),current=parameters[target];
