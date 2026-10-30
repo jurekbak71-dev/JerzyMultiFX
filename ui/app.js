@@ -149,7 +149,7 @@ function midiMapDetail(){
   const fill=()=>{
    const query=search.value.toLocaleLowerCase('pl').trim();
    const options=parameters.filter(p=>p.id<window.MF_META.controlCount&&!p.key.startsWith('midi.')&&p.key!=='factory.program'&&(!query||(p.key+' '+name(p)).toLocaleLowerCase('pl').includes(query)));
-   if(current&&!options.some(p=>p.id===current.id))options.unshift(current);
+   if(current){const index=options.findIndex(p=>p.id===current.id);if(index>=0)options.splice(index,1);options.unshift(current)}
    choice.replaceChildren();const none=el('option','Brak przypisania');none.value='-1';choice.append(none);
    for(const p of options.slice(0,80)){const option=el('option',name(p)+' · '+p.key);option.value=String(p.id);choice.append(option)}
    choice.value=String(target);

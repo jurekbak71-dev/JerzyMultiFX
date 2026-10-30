@@ -175,6 +175,18 @@ test('one confirmed MIDI reset clears assignments without calling hardware pairi
  assert.equal(a.values[7],0);
  assert.equal(a.requests.some(r=>r.url.endsWith('/hardware')&&r.body?.includes('midi-disconnect')),false);
 });
+test('controller target picker keeps a mapped parameter visible beyond the first 80 choices',async()=>{
+ const keys=['master.bypass',...Array.from({length:5},(_,i)=>'block.'+i+'.bypass'),'midi.cc.74',...Array.from({length:100},(_,i)=>'parameter.'+i)];
+ const target=keys.length-1,map=6;
+ const parameters=keys.map((key,id)=>({id,key,name:key,label:key,default:id===map?(target+1)/keys.length:0,min:id===map?-1:0,max:id===map?keys.length-1:1,steps:0,control:'knob'}));
+ const a=panel(storage(),storage(),{parameters,controllerLayout:{hotone:{F1:{kind:'cc',number:74,channel:1}}}});await settle();await settle();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Ustawienia').click();
+ await a.document.querySelectorAll('button').find(b=>b.textContent==='Otwórz mapę kontrolerów').click();
+ const all=node=>node.children.flatMap(child=>[child,...all(child)]);
+ const choice=all(a.nodes.get('main')).find(x=>x.tagName==='select'&&x.attributes['aria-label']==='Funkcja MIDI');
+ assert.equal(choice.value,String(target));
+ assert.ok(choice.children.some(option=>option.value===String(target)));
+});
 test('DELAY B MX controls identify their bank and internal engine',async()=>{
  const a=panel();await settle();await settle();
  const label=(key,name,title=name.split(' / ').pop())=>vm.runInContext(`name(${JSON.stringify({key,name,label:title})})`,a.context);
