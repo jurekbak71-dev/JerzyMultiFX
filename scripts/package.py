@@ -72,7 +72,8 @@ def main():
         bundle=stage/'Jerzy MultiFX.vst3';destination=bundle/'Contents/x86_64-win/Jerzy MultiFX.vst3';destination.parent.mkdir(parents=True);shutil.copy2(dll,destination)
         (bundle/'Contents/Resources').mkdir()
         validator=next(a.build.rglob('validator.exe'))
-        command=[str(validator),str(bundle)] if os.name=='nt' else [str(ROOT/'scripts/wine-run.sh'),str(validator),'Z:'+str(bundle).replace('/','\\')]
+        wine_runner=os.environ.get('MULTIFX_WINE_RUNNER',str(ROOT/'scripts/wine-run.sh'))
+        command=[str(validator),str(bundle)] if os.name=='nt' else [wine_runner,str(validator),'Z:'+str(bundle).replace('/','\\')]
         result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         (ROOT/'.build/package-validator.log').write_bytes(result.stdout) # Private intermediate, never auto-published.
         matches=re.findall(rb'Result:\s*(\d+) tests passed, (\d+) tests failed',result.stdout)

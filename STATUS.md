@@ -3,7 +3,7 @@
 ## Preview 20 — wierna adaptacja wybranego obrazu VST3
 
 - Windows VST3 używa poziomego łańcucha pięciu bloków, prawych mierników IN/OUT i rozbudowanego pulpitu DELAY A+B w układzie wybranego pierwszego obrazu. Własne rysowanie GDI zachowuje responsywne wartości, stany ON/BYPASS, routing i MIDI Learn; fabryczne presety i identyfikatory parametrów pozostają. Lista w panelu pokazuje rzeczywiste silniki, a routing rzeczywiste trzy tryby DSP, więc część nazw z obrazu koncepcyjnego została zastąpiona nazwami produktu.
-- Weryfikacja GUI: lokalny Windows cross-build PASS; natywny Windows smoke test, przegląd zrzutu ekranu i publikacja paczki w toku. Nie wykonano jeszcze testu w fizycznym FL Studio. DSP RPi bez zmian względem preview 19.
+- Weryfikacja lokalna: Windows x64 cross-build PASS, prawdziwy DLL VST3 w Wine: smoke test GUI (trzy cykle attach/edit/MIDI Learn/reorder/resize/close), test sygnału i latencji PASS, Steinberg validator 47/47 PASS. Zrzut z realnego edytora obejrzany i poprawiony. Natywny DSP/RPi 3/3 PASS. Nie wykonano testu w fizycznym FL Studio ani na Pi; DSP RPi bez zmian względem preview 19. GitHub Actions nie uruchomił jobów z powodu limitu płatności konta, więc wydanie preview 20 budowane jest lokalnie.
 
 ## Preview 19 — mniejsza latencja Attack/Decay i nowe GUI VST3
 

@@ -1,6 +1,7 @@
 #include "Plugin.h"
 #include "core/DelayMidiRoutes.h"
 #include "core/Presentation.h"
+#include "core/Presets.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -231,6 +232,13 @@ class Editor final : public Steinberg::CPluginView {
         bevel(dc,397,36,338,39,RGB(15,29,43));
         text(dc,405,43,18,"<",20,RGB(187,219,230));
         text(dc,706,43,18,">",20,RGB(187,219,230));
+        const int preset=std::clamp(int(std::round(value(layout().factoryProgram)*7)),0,7);
+        char presetLabel[96];
+        snprintf(presetLabel,sizeof(presetLabel),"%02d   %s",preset+1,presetNames[preset]);
+        if(referenceDelay()){
+            text(dc,435,45,245,presetLabel,14,RGB(223,242,248));
+            text(dc,678,45,22,"v",13,RGB(174,210,225));
+        }
         bevel(dc,744,36,40,39,RGB(15,29,43));
         text(dc,746,43,37,"SAVE",11,RGB(194,226,237));
         text(dc,799,8,180,"MIDI MAPOWANIE",12,RGB(198,220,231));
@@ -275,7 +283,12 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,c.x,c.y,c.w,label,radius==40?13:11,RGB(216,236,242));
         disk(dc,cx+2,cy+3,radius+3,RGB(5,13,22));
         disk(dc,cx,cy,radius+1,RGB(54,75,91));
-        disk(dc,cx,cy,radius-4,RGB(23,38,53));
+        disk(dc,cx,cy,radius-4,RGB(12,25,38));
+        for(int ring=radius-5;ring>radius/3;--ring){
+            const int shade=std::clamp(25+(radius-ring)*2,0,85);
+            disk(dc,cx-1,cy-1,ring,RGB(shade,shade+11,shade+20));
+        }
+        disk(dc,cx+radius/5,cy+radius/5,radius/2,RGB(18,31,44));
         for(int i=0;i<10;++i){
             const double a=(-135+i*27)*3.141592653589793/180;
             line(dc,cx+int(std::sin(a)*(radius+3)),cy-int(std::cos(a)*(radius+3)),
@@ -285,11 +298,22 @@ class Editor final : public Steinberg::CPluginView {
         const double a=(-135+270*value(c.id))*3.141592653589793/180;
         line(dc,cx+int(std::sin(a)*(radius-22)),cy-int(std::cos(a)*(radius-22)),
                 cx+int(std::sin(a)*(radius-7)),cy-int(std::cos(a)*(radius-7)),RGB(233,247,250),3);
-        text(dc,c.x,c.y+(radius==40?121:87),c.w,formatted(c.id).c_str(),radius==40?13:11,
+        std::string reading=formatted(c.id);
+        const auto &definition=layout().parameters[c.id];
+        if(radius==40){
+            char display[32];
+            if(std::string_view(label)=="CZAS DELAYA")
+                snprintf(display,sizeof(display),"%.0f ms",plain(c.id,float(value(c.id))));
+            else
+                snprintf(display,sizeof(display),"%.0f %%",100*plain(c.id,float(value(c.id))));
+            reading=display;
+        }
+        if(definition.unit=="ms" && reading.find("ms")==std::string::npos)reading+=" ms";
+        text(dc,c.x,c.y+(radius==40?121:87),c.w,reading.c_str(),radius==40?13:11,
              RGB(228,247,251));
     }
     void referenceDelayPanel(HDC dc) {
-        bevel(dc,11,305,1258,489,RGB(10,25,37));
+        bevel(dc,11,305,1258,529,RGB(10,25,37));
         text(dc,29,318,285,"DELAY A + B",27,RGB(230,250,252));
         text(dc,321,327,390,"DWA NIEZALEŻNE SILNIKI OPÓŹNIENIA",11,RGB(132,178,195));
         const int bank=std::clamp(view.section,0,1);
@@ -324,8 +348,8 @@ class Editor final : public Steinberg::CPluginView {
         bevel(dc,928,413,124,31,bypass?RGB(86,36,48):RGB(18,76,58));
         text(dc,932,420,116,bypass?"BYPASS / OFF":"ON / AKTYWNY",11,RGB(226,247,244));
         line(dc,281,455,1061,455,RGB(31,68,88));
-        text(dc,281,465,45,"A",19,bank==0?RGB(56,220,239):RGB(132,173,195));
-        text(dc,611,465,45,"B",19,bank==1?RGB(177,131,247):RGB(132,173,195));
+        text(dc,281,489,33,"A",19,bank==0?RGB(56,220,239):RGB(132,173,195));
+        text(dc,611,489,33,"B",19,bank==1?RGB(177,131,247):RGB(132,173,195));
         for(size_t i=0;i<controls.size();++i){
             const auto &c=controls[i];
             if(c.y==465) referenceKnob(dc,c,(i%2)?"FEEDBACK":"CZAS DELAYA",40,i<2?RGB(53,215,236):RGB(174,128,247));
@@ -438,7 +462,7 @@ class Editor final : public Steinberg::CPluginView {
             SendMessage(h, CB_SETCURSEL, choice, 0);
             combos.push_back(h);
         }
-        HWND factory = CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, int(430 / sx),
+        HWND factory = referenceDelay() ? nullptr : CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, int(430 / sx),
                                      int(46 / sy), int(300 / sx), 260, window,
                                      reinterpret_cast<HMENU>(INT_PTR(10000 + layout().factoryProgram)),
                                      instance, nullptr);
@@ -778,6 +802,16 @@ class Editor final : public Steinberg::CPluginView {
                 if(y>=36&&y<76){
                     if(x>=397&&x<430){change(layout().factoryProgram,std::max(0.0,value(layout().factoryProgram)-1./7));return 0;}
                     if(x>=704&&x<735){change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;}
+                    if(x>=430&&x<704){
+                        HMENU menu=CreatePopupMenu();
+                        for(int i=0;i<8;++i)AppendMenuA(menu,MF_STRING,20000+i,presetNames[i]);
+                        POINT point{int(430/sx),int(76/sy)};ClientToScreen(window,&point);
+                        const int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_LEFTALIGN|TPM_TOPALIGN,
+                                                       point.x,point.y,0,window,nullptr);
+                        DestroyMenu(menu);
+                        if(choice>=20000&&choice<20008)change(layout().factoryProgram,double(choice-20000)/7);
+                        return 0;
+                    }
                     if(x>=744&&x<784){file("savePreset",true);return 0;}
                     if(x>=962&&x<1118){view.advanced=true;rebuild();return 0;}
                     if(x>=1126&&x<1253){MessageBoxA(window,"Choose a block, then adjust its controls. Right-click any control for MIDI Learn. Use SETTINGS for all parameters.","Jerzy MultiFX",MB_OK|MB_ICONINFORMATION);return 0;}
