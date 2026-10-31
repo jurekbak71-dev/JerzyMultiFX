@@ -72,6 +72,14 @@ jobs:
           if ($LASTEXITCODE) { throw 'VST installer command syntax error' }
           cmd /c scripts\install-from-windows.cmd --help
           if ($LASTEXITCODE) { throw 'RPi installer command syntax error' }
+      - name: Editor screenshot for visual review
+        if: inputs.platform == 'windows' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-preview-${{ github.run_id }}
+          path: build/editor.bmp*
+          retention-days: 1
+          if-no-files-found: ignore
       - name: Toolchain and dummy JACK
         if: inputs.platform == 'arm64'
         shell: bash

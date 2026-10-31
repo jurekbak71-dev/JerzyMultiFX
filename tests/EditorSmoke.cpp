@@ -66,7 +66,7 @@ static unsigned long long meterPixels(HWND h, int x) {
     auto bitmap=CreateCompatibleBitmap(screen,1280,850);auto old=SelectObject(dc,bitmap);
     SendMessage(h,WM_PRINTCLIENT,reinterpret_cast<WPARAM>(dc),PRF_CLIENT);
     unsigned long long hash=1469598103934665603ULL;
-    for(int y=28;y<66;++y)for(int xx=x+10;xx<x+180;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
+    for(int y=122;y<270;++y)for(int xx=x;xx<x+15;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
     SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);ReleaseDC(h,screen);return hash;
 }
 int main(int argc, char **argv) try {
@@ -100,43 +100,69 @@ int main(int argc, char **argv) try {
         // Exercise the real DLL's meter notification and independent needle rendering.
         IConnectionPoint *meters=nullptr;
         check(c->queryInterface(IConnectionPoint::iid,reinterpret_cast<void **>(&meters))==kResultOk,"meter connection");
-        const auto inSilent=meterPixels(child,850),outSilent=meterPixels(child,1054);
+        const auto inSilent=meterPixels(child,1152),outSilent=meterPixels(child,1208);
         auto *message=new HostMessage;message->setMessageID("meters");
         message->getAttributes()->setFloat("in",.5);message->getAttributes()->setFloat("out",0);
         check(meters->notify(message)==kResultOk,"input meter notification");
         for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
-        check(meterPixels(child,850)!=inSilent,"IN needle follows input");
-        check(meterPixels(child,1054)==outSilent,"OUT remains at silence independently");
+        check(meterPixels(child,1152)!=inSilent,"IN meter follows input");
+        check(meterPixels(child,1208)==outSilent,"OUT remains at silence independently");
         message->getAttributes()->setFloat("out",.2);meters->notify(message);
         for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
-        check(meterPixels(child,1054)!=outSilent,"OUT needle follows output");
+        check(meterPixels(child,1208)!=outSilent,"OUT meter follows output");
         message->release();meters->release();
-        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(100,166));
+        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(100,265));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().blockBypass[0]+1)/layout().controlCount)<1e-6,"block bypass MIDI Learn");
+        click(child,100,420); // Select Oil Drum for DELAY A from the visual engine list.
+        click(child,750,390); // Select bank B.
+        click(child,100,420); // Select Oil Drum for DELAY B.
+        click(child,750,390); // Return to bank A.
+        check(c->getParamNormalized(layout().delayType[0]) == 1 &&
+              c->getParamNormalized(layout().delayType[1]) == 1,
+              "visual engine list selects real Oil Drum engines in both banks");
+        click(child,1000,340);
+        check(c->getParamNormalized(layout().digital[0]+2)>.3,
+              "reference top MIX slider controls the selected delay bank");
+        const int oilTime=parameterId("delayA.oil.time");
+        const double oldOilTime=c->getParamNormalized(oilTime);
+        SendMessage(child,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(350,540));
+        SendMessage(child,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(350,500));
+        SendMessage(child,WM_LBUTTONUP,0,MAKELPARAM(350,500));
+        check(c->getParamNormalized(oilTime)>oldOilTime,
+              "reference TIME knob controls the Oil Drum engine");
+        click(child,1140,538);
+        check(std::abs(c->getParamNormalized(layout().delayMode)-.5)<1e-6,
+              "reference routing button selects real parallel DSP mode");
+        click(child,990,428);
+        check(c->getParamNormalized(layout().slotBypass[0])==1,"reference bank bypass switches off");
+        click(child,990,428);
+        check(c->getParamNormalized(layout().slotBypass[0])==0,"reference bank bypass switches on");
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-delay.bmp").c_str());
+        click(child,100,140); // PREAMP / DRIVE in the horizontal chain.
         SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(900,820));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
         int gain = layout().preamp + 1;
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(410, 366));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(410, 316));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(410, 316));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(210, 500));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(210, 450));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(210, 450));
         pump();
         check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(410, 366));
+        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(210, 500));
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 105));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(50, 331));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(50, 331));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 140));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(545, 140));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(545, 140));
         pump();
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
         ViewRect size(0, 0, 880, 592);
         check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
         ViewRect normal(0, 0, 1280, 850);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
-        click(child, 50, 210); // Three separate effect panels in block two.
+        click(child, 330, 140); // Three separate effect panels in block two.
         pump();
         int model = -1;
         for (size_t i = 0; i < layout().parameters.size(); ++i)
@@ -145,7 +171,7 @@ int main(int argc, char **argv) try {
         HWND modelList = GetDlgItem(child, 10000 + model);
         check(modelList && SendMessage(modelList, CB_GETCOUNT, 0, 0) == 14, "original Chorus model dropdown");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
-        click(child, 530, 195);
+        click(child, 340, 334);
         pump(); // Attack page.
         check(GetDlgItem(child, 10000 + model) == nullptr, "Chorus controls hidden on Attack page");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-attack.bmp").c_str());
@@ -154,11 +180,16 @@ int main(int argc, char **argv) try {
         check(c->getParamNormalized(attack)==0,"dedicated Attack footswitch");
         SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(1080,735));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(attack+1)/layout().controlCount)<1e-6,"Attack switch MIDI Learn");
-        click(child, 730, 195);
+        click(child, 555, 334);
         pump(); // Atomic page.
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
-        click(child, 50, 105);
+        click(child, 100, 140);
         pump(); // Reordered MD block is now first.
+        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(350,540));
+        check(std::abs(c->getParamNormalized(layout().midiLearn) -
+                       double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
+              "reference DELAY TIME knob learns the common MIDI macro");
+        click(child,1000,55); // Full parameter list.
         HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
         check(family && SendMessage(family, CB_GETCOUNT, 0, 0) == 13, "MD family dropdown");
         click(child, 320, 720);
@@ -188,7 +219,7 @@ int main(int argc, char **argv) try {
               "Oil original quarter-note enum displayed");
         RECT divisionRect{};GetWindowRect(divisions,&divisionRect);
         POINT divisionTop{divisionRect.left,divisionRect.top};ScreenToClient(child,&divisionTop);
-        check(divisionTop.x>=232 && divisionTop.y<660,
+        check(divisionTop.x>=20 && divisionTop.y>=370 && divisionTop.y<660,
               "continuous-tagged Oil enums occupy the compact selector row, never a knob");
         SendMessage(divisions, CB_SETCURSEL, 2, 0);
         SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + division, CBN_SELCHANGE),

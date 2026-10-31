@@ -1,5 +1,10 @@
 # Jerzy MultiFX — status
 
+## Preview 20 — wierna adaptacja wybranego obrazu VST3
+
+- Windows VST3 używa poziomego łańcucha pięciu bloków, prawych mierników IN/OUT i rozbudowanego pulpitu DELAY A+B w układzie wybranego pierwszego obrazu. Własne rysowanie GDI zachowuje responsywne wartości, stany ON/BYPASS, routing i MIDI Learn; fabryczne presety i identyfikatory parametrów pozostają. Lista w panelu pokazuje rzeczywiste silniki, a routing rzeczywiste trzy tryby DSP, więc część nazw z obrazu koncepcyjnego została zastąpiona nazwami produktu.
+- Weryfikacja GUI: lokalny Windows cross-build PASS; natywny Windows smoke test, przegląd zrzutu ekranu i publikacja paczki w toku. Nie wykonano jeszcze testu w fizycznym FL Studio. DSP RPi bez zmian względem preview 19.
+
 ## Preview 19 — mniejsza latencja Attack/Decay i nowe GUI VST3
 
 - Attack/Decay MONO w MultiFX RPi i VST3 ma teraz 16 próbek opóźnienia DSP zamiast 2064 (oszczędność 42,7 ms przy 48 kHz); POLY nadal wymaga 2064 próbek. Zmiana omija wyłącznie bufor wyrównania do FFT, więc zachowuje detekcję, obwiednię, kompresję, fuzz i nastawy referencyjnej wersji A-D. W aktywnym Atomic Cluster pozostaje 2048 próbek; zewnętrzny interfejs USB i konfiguracja JACK mogą dodać opóźnienie.

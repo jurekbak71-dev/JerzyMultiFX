@@ -1,3 +1,8 @@
+# 0.1.0-preview.20
+
+- Edytor Windows VST3 przebudowano według wybranego pierwszego obrazu: poziomy tor pięciu bloków ze strzałkami i ilustracjami, mierniki IN/OUT po prawej oraz duży panel DELAY A+B z listą silników, wspólnym MIX, czterema głównymi gałkami, dolnym rzędem szczegółowych parametrów i routingiem.
+- Widoczne kontrolki są połączone z rzeczywistymi parametrami; prawy przycisk myszy na TIME/FEEDBACK mapuje wspólny adres MIDI aktywnego silnika. Przycisk USTAWIENIA otwiera pełną listę parametrów DELAY. W panelu widnieją wyłącznie istniejące tryby routingu i silniki.
+
 # 0.1.0-preview.19
 
 - Attack/Decay MONO używa 16-próbkowego toru; POLY zachowuje 2064 próbki. Tor MONO omija zbędne oczekiwanie na okno FFT, zachowując te same detektor, obwiednię, kompresor i fuzz. Wtyczka VST3 raportuje zmienioną latencję hostowi.

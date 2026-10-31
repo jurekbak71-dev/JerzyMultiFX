@@ -1,4 +1,5 @@
 #include "Plugin.h"
+#include "core/DelayMidiRoutes.h"
 #include "core/Presentation.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -15,13 +16,14 @@ class Editor final : public Steinberg::CPluginView {
     Controller *controller;
     HWND window = nullptr;
     HINSTANCE instance = nullptr;
-    PanelSelection view;
+    PanelSelection view{2, 0, 0, false};
     int drag = -1, reorder = -1, startX = 0, startY = 0, scroll = 0;
+    bool reorderHorizontal = false;
     double startValue = 0;
     float needleIn = 0, needleOut = 0;
     static constexpr int controlBottom = 660;
     float sx = 1, sy = 1;
-    static constexpr int W = 1280, H = 850, sidebar = 220;
+    static constexpr int W = 1280, H = 850;
     struct Control {
         int id, x, y, w, h;
         bool compact;
@@ -30,6 +32,29 @@ class Editor final : public Steinberg::CPluginView {
     std::vector<HWND> combos;
     std::string signature;
     bool globalSettings = false;
+    bool referenceDelay() const { return view.block == 2 && !view.advanced && !globalSettings; }
+    int delayControl(int bank, int kind) const {
+        static const DelayMidiRoutes routes;
+        const State s = state();
+        return routes.resolve(s, routes.canonical[bank][kind].first).first;
+    }
+    int delayFeature(int index) const {
+        const int bank = std::clamp(view.section, 0, 1);
+        const int type = std::clamp(int(plain(layout().delayType[bank], float(value(layout().delayType[bank])))), 0, 4);
+        static constexpr const char *keys[5][8] = {
+            {"filter", "level", nullptr, nullptr, nullptr, nullptr, nullptr, nullptr},
+            {"mx.inputTrim", "mx.outputTrim", "mx.machineCondition", "mx.slot0_pan",
+             "mx.fx0_amount", "mx.fx0_rate", "mx.fx0_depth", "mx.slot0_duck"},
+            {"memory.boost", "memory.squelch", "memory.depth", "memory.modRate",
+             "memory.level", "memory.blend", nullptr, nullptr},
+            {"reel.wow", "reel.flutter", "reel.age", "reel.motor",
+             "reel.saturation", "reel.bias", "reel.width", "reel.hiss"},
+            {"oil.intone", "oil.outtone", "oil.depth", "oil.speed",
+             "oil.insat", "oil.outsat", "oil.width", "oil.drift"}
+        };
+        if (index < 0 || index >= 8 || !keys[type][index]) return -1;
+        return parameterId(std::string(bank ? "delayB." : "delayA.") + keys[type][index]);
+    }
     std::array<HFONT, 64> fonts{};
     int effectBypass() const {
         if (view.block != 1)
@@ -37,7 +62,7 @@ class Editor final : public Steinberg::CPluginView {
         return layout().processorBypass[view.section + 1];
     }
     int delayMidiTarget(int x, int y) const {
-        if (globalSettings || view.block != 2 || y < 700 || y >= 748 || x < 250 || x >= 1000)
+        if (referenceDelay() || globalSettings || view.block != 2 || y < 700 || y >= 748 || x < 250 || x >= 1000)
             return -1;
         const int index = (x - 250) / 250;
         const std::string bank = view.section ? "delayB." : "delayA.";
@@ -142,52 +167,242 @@ class Editor final : public Steinberg::CPluginView {
         return parameterText(id, float(value(id)), value(parameterId("attack.poly")) >= .5);
     }
 
+    void levelBar(HDC dc, int x, const char *name, float amplitude) {
+        text(dc, x - 8, 98, 42, name, 12, RGB(236,248,250));
+        const float dbfs = 20.f * std::log10(std::max(amplitude, 1.e-6f));
+        const int lit = std::clamp(int((dbfs + 60) / 3), 0, 20);
+        for (int i = 0; i < 20; ++i) {
+            const int y = 265 - i * 7;
+            fill(dc, x, y, 13, 5, i < lit ? (i > 16 ? RGB(247,119,79) : RGB(65,229,148))
+                                         : RGB(27,52,65));
+        }
+        char reading[28];
+        snprintf(reading, sizeof(reading), "%.1f", dbfs);
+        text(dc, x - 10, 276, 48, reading, 10, RGB(184,211,221));
+    }
+    void cardArt(HDC dc, int block, int x, int y) {
+        bevel(dc, x + 10, y + 48, 163, 85, RGB(8,20,32));
+        const int cx = x + 92, cy = y + 90;
+        if (block == 0) {
+            bevel(dc, x + 20, y + 57, 142, 68, RGB(37,45,51));
+            for (int i = 0; i < 9; ++i) line(dc,x+28,y+64+i*3,x+154,y+64+i*3,RGB(70,88,99));
+            for (int i = 0; i < 3; ++i) disk(dc,x+51+i*40,y+107,10,RGB(16,24,32));
+        } else if (block == 1) {
+            int lastX = x + 16, lastY = cy;
+            for (int i = 1; i <= 138; ++i) {
+                const int xx = x + 16 + i;
+                const int yy = cy - int(24 * std::sin(i*.095) * (.65 + .35*std::sin(i*.024)));
+                line(dc,lastX,lastY,xx,yy,RGB(169,126,246),2); lastX=xx;lastY=yy;
+            }
+        } else if (block == 2) {
+            for (int i = 0; i < 4; ++i) {
+                const int xx = x + 43 + i*30;
+                for (int a = 0; a < 35; ++a) {
+                    const float angle = a*6.2831853f/35;
+                    const int px = xx + int(std::cos(angle)*(11+i*2));
+                    const int py = cy + int(std::sin(angle)*27);
+                    disk(dc,px,py,1,i%2?RGB(31,123,210):RGB(47,217,238));
+                }
+            }
+            line(dc,x+34,cy,x+155,cy,RGB(67,211,238),2);
+        } else if (block == 3) {
+            for (int i = 0; i < 4; ++i) {
+                int lastX=x+13,lastY=cy;
+                for(int j=1;j<150;++j) {
+                    const int xx=x+13+j;
+                    const int yy=cy-int(9*std::sin(j*.045+i*.65)+12*std::sin(j*.013+i*.9));
+                    line(dc,lastX,lastY,xx,yy,i%2?RGB(65,117,215):RGB(149,106,238));
+                    lastX=xx;lastY=yy;
+                }
+            }
+        } else {
+            bevel(dc,x+46,y+56,82,71,RGB(36,43,49));
+            disk(dc,cx,cy,25,RGB(6,14,22)); disk(dc,cx,cy,20,RGB(38,52,62));
+            disk(dc,cx,cy,10,RGB(10,20,32));
+        }
+    }
+    void chrome(HDC dc) {
+        fill(dc,0,0,W,H,RGB(7,17,27));
+        fill(dc,0,0,W,82,RGB(9,22,33));
+        line(dc,0,81,W,81,RGB(38,68,83));
+        text(dc,24,11,360,"JERZY MULTI FX",28,RGB(224,248,252));
+        text(dc,25,47,360,"BASS GUITAR EFFECTS STUDIO",12,RGB(124,172,193));
+        text(dc,395,8,100,"PRESET",12,RGB(199,221,232));
+        bevel(dc,397,36,338,39,RGB(15,29,43));
+        text(dc,405,43,18,"<",20,RGB(187,219,230));
+        text(dc,706,43,18,">",20,RGB(187,219,230));
+        bevel(dc,744,36,40,39,RGB(15,29,43));
+        text(dc,746,43,37,"SAVE",11,RGB(194,226,237));
+        text(dc,799,8,180,"MIDI MAPOWANIE",12,RGB(198,220,231));
+        bevel(dc,797,36,144,39,RGB(8,30,39));
+        bool mapped=false;
+        for (int i=0;i<128;++i) if (value(layout().midiMap+i)>0) {mapped=true;break;}
+        disk(dc,814,55,5,mapped?RGB(55,226,145):RGB(65,198,219));
+        text(dc,823,44,111,mapped?"AKTYWNE":"MIDI LEARN",12,RGB(204,241,246));
+        bevel(dc,962,36,155,39,RGB(14,32,47));
+        text(dc,965,44,149,globalSettings||view.advanced?"WRÓĆ":"USTAWIENIA",12,RGB(204,231,240));
+        bevel(dc,1126,36,127,39,RGB(14,32,47));
+        text(dc,1128,44,123,"POMOC",12,RGB(204,231,240));
+        bevel(dc,10,88,1260,210,RGB(10,25,37));
+        auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
+        for(int i=0;i<5;++i) {
+            const int b=order[i],x=24+i*222;
+            const bool selected=b==view.block;
+            bevel(dc,x,97,183,190,selected?RGB(22,52,68):RGB(20,33,46));
+            if(selected) {
+                line(dc,x,97,x+183,97,RGB(49,224,240),3);
+                line(dc,x,97,x,287,RGB(49,224,240),3);
+                line(dc,x+182,97,x+182,287,RGB(49,224,240),3);
+            }
+            char number[8];snprintf(number,sizeof(number),"%d",i+1);
+            bevel(dc,x+9,108,25,27,RGB(30,48,64));
+            text(dc,x+9,110,25,number,17,selected?RGB(61,227,244):RGB(226,240,245));
+            const char* labels[]{"PREAMP / DRIVE","MODULACJA","DELAY A + B","REVERB","CAB / IR"};
+            text(dc,x+39,112,139,labels[b],13,RGB(231,246,250));
+            cardArt(dc,b,x,97);
+            const bool off=value(layout().blockBypass[b])>=.5;
+            bevel(dc,x+48,250,89,29,off?RGB(65,30,44):RGB(11,50,44));
+            disk(dc,x+111,264,7,off?RGB(236,70,86):RGB(55,232,142));
+            text(dc,x+50,254,48,off?"OFF":"ON",15,off?RGB(244,130,141):RGB(78,244,162));
+            if(i<4){line(dc,x+188,188,x+215,188,RGB(43,207,232),2);line(dc,x+207,183,x+215,188,RGB(43,207,232),2);line(dc,x+207,193,x+215,188,RGB(43,207,232),2);}
+        }
+        bevel(dc,1135,97,126,190,RGB(8,20,32));
+        levelBar(dc,1152,"IN",needleIn);
+        levelBar(dc,1208,"OUT",needleOut);
+    }
+    void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
+        const int cx=c.x+c.w/2,cy=c.y+(radius==40?71:56);
+        text(dc,c.x,c.y,c.w,label,radius==40?13:11,RGB(216,236,242));
+        disk(dc,cx+2,cy+3,radius+3,RGB(5,13,22));
+        disk(dc,cx,cy,radius+1,RGB(54,75,91));
+        disk(dc,cx,cy,radius-4,RGB(23,38,53));
+        for(int i=0;i<10;++i){
+            const double a=(-135+i*27)*3.141592653589793/180;
+            line(dc,cx+int(std::sin(a)*(radius+3)),cy-int(std::cos(a)*(radius+3)),
+                    cx+int(std::sin(a)*(radius+7)),cy-int(std::cos(a)*(radius+7)),
+                    i<=int(value(c.id)*9)?color:RGB(62,86,102),2);
+        }
+        const double a=(-135+270*value(c.id))*3.141592653589793/180;
+        line(dc,cx+int(std::sin(a)*(radius-22)),cy-int(std::cos(a)*(radius-22)),
+                cx+int(std::sin(a)*(radius-7)),cy-int(std::cos(a)*(radius-7)),RGB(233,247,250),3);
+        text(dc,c.x,c.y+(radius==40?121:87),c.w,formatted(c.id).c_str(),radius==40?13:11,
+             RGB(228,247,251));
+    }
+    void referenceDelayPanel(HDC dc) {
+        bevel(dc,11,305,1258,489,RGB(10,25,37));
+        text(dc,29,318,285,"DELAY A + B",27,RGB(230,250,252));
+        text(dc,321,327,390,"DWA NIEZALEŻNE SILNIKI OPÓŹNIENIA",11,RGB(132,178,195));
+        const int bank=std::clamp(view.section,0,1);
+        const int mix=layout().digital[bank]+2;
+        text(dc,797,326,61,"MIX",14,RGB(225,245,249));
+        fill(dc,852,337,340,8,RGB(4,16,26));
+        fill(dc,852,337,int(340*value(mix)),8,RGB(43,210,235));
+        disk(dc,852+int(340*value(mix)),341,9,RGB(223,240,247));
+        char mixText[24];snprintf(mixText,sizeof(mixText),"%d%%",int(std::round(value(mix)*100)));
+        text(dc,1196,324,59,mixText,16,RGB(232,248,250));
+        bevel(dc,26,365,236,416,RGB(8,21,33));
+        text(dc,36,374,212,"SILNIK DELAYA",14,RGB(227,246,249));
+        const int type=int(plain(layout().delayType[bank],float(value(layout().delayType[bank]))));
+        const int model=int(std::round(value(layout().mxAlgorithms[bank][0])*8));
+        const char* names[]{"OIL DRUM","MX ANALOG","REEL / TAPE","DIGITAL","MEMORY","VOLANTE","OLIVERA","BRIG / BBD"};
+        const int families[]{4,1,3,0,2,1,1,1};
+        const int models[]{-1,-1,-1,-1,-1,0,2,4};
+        for(int i=0;i<8;++i){
+            const int y=402+i*44;
+            const bool selected=type==families[i] && (models[i]<0 || model==models[i]) &&
+                (type!=1 || i!=1 || (model!=0&&model!=2&&model!=4));
+            bevel(dc,35,y,218,39,selected?RGB(17,82,101):RGB(11,29,43));
+            if(selected)fill(dc,35,y,3,39,RGB(57,222,240));
+            disk(dc,227,y+19,5,selected?RGB(64,229,238):RGB(37,57,72));
+            text(dc,44,y+10,176,names[i],13,selected?RGB(91,239,249):RGB(184,209,223));
+        }
+        bevel(dc,274,365,990,416,RGB(9,22,35));
+        const char* heading[]{"DIGITAL","MX ANALOG","MEMORY","REEL ECHO","OIL DRUM"};
+        text(dc,291,379,440,heading[std::clamp(type,0,4)],27,RGB(231,249,252));
+        text(dc,735,386,316,bank?"AKTYWNY BANK B":"AKTYWNY BANK A",13,RGB(132,202,216));
+        const bool bypass=value(layout().slotBypass[bank])>=.5;
+        bevel(dc,928,413,124,31,bypass?RGB(86,36,48):RGB(18,76,58));
+        text(dc,932,420,116,bypass?"BYPASS / OFF":"ON / AKTYWNY",11,RGB(226,247,244));
+        line(dc,281,455,1061,455,RGB(31,68,88));
+        text(dc,281,465,45,"A",19,bank==0?RGB(56,220,239):RGB(132,173,195));
+        text(dc,611,465,45,"B",19,bank==1?RGB(177,131,247):RGB(132,173,195));
+        for(size_t i=0;i<controls.size();++i){
+            const auto &c=controls[i];
+            if(c.y==465) referenceKnob(dc,c,(i%2)?"FEEDBACK":"CZAS DELAYA",40,i<2?RGB(53,215,236):RGB(174,128,247));
+        }
+        line(dc,281,648,1061,648,RGB(31,68,88));
+        const char* labels[5][8]={{"FILTER","LEVEL"},{"IN TRIM","OUT TRIM","MACHINE","PAN","FX AMOUNT","FX RATE","FX DEPTH","DUCK"},
+          {"BOOST","SQUELCH","DEPTH","MOD RATE","LEVEL","BLEND"},
+          {"WOW","FLUTTER","AGE","MOTOR","SATURATION","BIAS","WIDTH","HISS"},
+          {"IN TONE","OUT TONE","DEPTH","SPEED","IN SAT","OUT SAT","WIDTH","DRIFT"}};
+        for(const auto &c:controls) if(c.y==666) {
+            for(int i=0;i<8;++i)if(delayFeature(i)==c.id) {
+                referenceKnob(dc,c,labels[std::clamp(type,0,4)][i],26,i<2?RGB(64,212,231):RGB(173,126,236));break;
+            }
+        }
+        bevel(dc,1074,459,181,186,RGB(12,27,40));
+        text(dc,1080,467,169,"TRYB PRACY",13,RGB(217,236,243));
+        const char* routes[]{"SZEREGOWY A > B","RÓWNOLEGŁY","MIX A / B"};
+        const int routing=int(plain(layout().delayMode,float(value(layout().delayMode))));
+        for(int i=0;i<3;++i){
+            const int y=493+i*45;
+            bevel(dc,1082,y,165,39,routing==i?RGB(23,124,153):RGB(15,36,52));
+            disk(dc,1096,y+19,7,routing==i?RGB(75,231,246):RGB(36,56,70));
+            text(dc,1104,y+10,137,routes[i],11,RGB(223,240,246));
+        }
+        text(dc,285,783,675,"Prawy klik na regulatorze: MIDI Learn. Wszystkie parametry: USTAWIENIA.",10,RGB(123,171,191));
+    }
+
     void rebuild() {
         if (!window)
             return;
         destroyCombos();
         controls.clear();
-        State s = state();
-        auto ids = globalSettings ? std::vector<int>{layout().masterGain, layout().outputLimiter}
-                                  : panelParameters(view, s);
-        std::vector<int> compact, knobs;
-        for (int id : ids) {
-            if (id == effectBypass() && !globalSettings)
-                continue;
-            const auto &p = controlUI()[id].definition;
-            const bool common =
-                view.block == 2 &&
-                (p.key.starts_with("md.") || p.key == "delayA.type" || p.key == "delayB.type" ||
-                 p.key == "delayA.mix" || p.key == "delayB.mix" ||
-                 p.key == "delayA.time" || p.key == "delayB.time" ||
-                 p.key == "delayA.feedback" || p.key == "delayB.feedback" ||
-                 p.key.ends_with(".bypass") ||
-                 (p.key.find(".mx.") != std::string::npos && p.key.find("_algo") == std::string::npos));
-            (common || p.steps > 0 || !p.choices.empty() || isToggle(id) || p.key == "atomic.stereo" ? compact : knobs).push_back(id);
+        if (referenceDelay()) {
+            for (int bank = 0; bank < 2; ++bank)
+                for (int kind = 0; kind < 2; ++kind) {
+                    const int id = delayControl(bank, kind);
+                    if (id >= 0) controls.push_back({id, 278 + bank * 330 + kind * 157, 465, 145, 150, false});
+                }
+            for (int i = 0; i < 8; ++i) {
+                const int id = delayFeature(i);
+                if (id >= 0) controls.push_back({id, 279 + i * 99, 666, 94, 106, false});
+            }
+        } else {
+            State s = state();
+            auto ids = globalSettings ? std::vector<int>{layout().masterGain, layout().outputLimiter}
+                                      : panelParameters(view, s);
+            std::vector<int> compact, knobs;
+            for (int id : ids) {
+                if (id == effectBypass() && !globalSettings) continue;
+                const auto &p = controlUI()[id].definition;
+                const bool common = view.block == 2 &&
+                    (p.key.starts_with("md.") || p.key == "delayA.type" || p.key == "delayB.type" ||
+                     p.key == "delayA.mix" || p.key == "delayB.mix" || p.key.ends_with(".bypass") ||
+                     (p.key.find(".mx.") != std::string::npos && p.key.find("_algo") == std::string::npos));
+                (common || p.steps > 0 || !p.choices.empty() || isToggle(id) ||
+                 p.key == "atomic.stereo" ? compact : knobs).push_back(id);
+            }
+            int y = 370;
+            for (size_t i = 0; i < compact.size(); ++i) {
+                const int x = 28 + int(i % 6) * 205, cy = y + int(i / 6) * 62;
+                controls.push_back({compact[i], x, cy, 194, 54, true});
+            }
+            y += int((compact.size() + 5) / 6) * 62 + 15;
+            const int columns = view.block == 1 && view.section == 2 ? 2
+                                : view.block == 2 ? 6 : view.block == 1 && view.section == 1 ? 4 : 3;
+            const int cell = W / columns;
+            const int rowHeight = view.block == 2 ? 130 : view.block == 1 && view.section == 1 ? 160 : 145;
+            for (size_t i = 0; i < knobs.size(); ++i)
+                controls.push_back({knobs[i], int(i % columns) * cell + 20,
+                                    y + int(i / columns) * rowHeight, cell - 40, rowHeight - 8, false});
         }
-        int y = 236;
-        for (size_t i = 0; i < compact.size(); ++i) {
-            const int x = 248 + int(i % 5) * 200, cy = y + int(i / 5) * 62;
-            controls.push_back({compact[i], x, cy, 188, 54, true});
-        }
-        y += int((compact.size() + 4) / 5) * 62 + 15;
-        const int columns = view.block == 1 && view.section == 2 ? 2
-                            : view.block == 2                        ? 5
-                            : view.block == 1 && view.section == 1 ? 4
-                                                                   : 3,
-                  cell = (W - sidebar - 28) / columns,
-                  rowHeight = view.block == 2                        ? 130
-                              : view.block == 1 && view.section == 1 ? 160
-                                                                     : 145;
-        for (size_t i = 0; i < knobs.size(); ++i)
-            controls.push_back({knobs[i], 240 + int(i % columns) * cell + 12, y + int(i / columns) * rowHeight,
-                                cell - 24, rowHeight - 8, false});
         for (auto &c : controls) {
             const auto &p = controlUI()[c.id].definition;
             if (p.choices.empty() && !(p.steps > 1 && p.steps <= 64))
                 continue;
             const int yy = c.y - scroll;
-            if (yy < 232 || yy + 55 > controlBottom)
+            if (yy < 370 || yy + 55 > controlBottom)
                 continue;
             HWND h = CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
                                    int(c.x / sx), int((yy + 23) / sy), int(c.w / sx), 240, window,
@@ -224,7 +439,7 @@ class Editor final : public Steinberg::CPluginView {
             combos.push_back(h);
         }
         HWND factory = CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, int(430 / sx),
-                                     int(50 / sy), int(400 / sx), 260, window,
+                                     int(46 / sy), int(300 / sx), 260, window,
                                      reinterpret_cast<HMENU>(INT_PTR(10000 + layout().factoryProgram)),
                                      instance, nullptr);
         if (factory) {
@@ -261,6 +476,17 @@ class Editor final : public Steinberg::CPluginView {
         auto dc = CreateCompatibleDC(target);
         auto bmp = CreateCompatibleBitmap(target, W, H);
         auto old = SelectObject(dc, bmp);
+        if (referenceDelay()) {
+            chrome(dc);
+            referenceDelayPanel(dc);
+            SetStretchBltMode(target, HALFTONE);
+            StretchBlt(target, 0, 0, client.right, client.bottom, dc, 0, 0, W, H, SRCCOPY);
+            SelectObject(dc, old);
+            DeleteObject(bmp);
+            DeleteDC(dc);
+            if (!supplied) EndPaint(window, &ps);
+            return;
+        }
         fill(dc, 0, 0, W, H, RGB(9,19,31));
         fill(dc, 0, 78, W, 2, RGB(32,96,116));
         text(dc, 24, 16, 400, "JERZY MULTIFX", 27, RGB(229,249,252));
@@ -297,22 +523,23 @@ class Editor final : public Steinberg::CPluginView {
                 text(dc, x + 337, 112, 140, mixLabel, 12, RGB(183,215,225));
             }
         }
+        chrome(dc);
         auto sections = sectionNames(view.block);
         for (size_t i = 0; i < sections.size(); ++i) {
-            int x = 248 + int(i) * 200;
-            fill(dc, x, 177, 192, 36, int(i) == view.section ? RGB(32,106,125) : RGB(20,42,59));
-            text(dc, x, 184, 192, sections[i].c_str(), 16,
+            int x = 28 + int(i) * 214;
+            fill(dc, x, 316, 205, 36, int(i) == view.section ? RGB(32,106,125) : RGB(20,42,59));
+            text(dc, x, 323, 205, sections[i].c_str(), 16,
                  int(i) == view.section ? RGB(238, 252, 255) : RGB(157, 187, 202));
         }
         if (view.block == 2 && view.advanced) {
-            fill(dc, 900, 177, 160, 36, RGB(28, 59, 77));
-            text(dc, 900, 184, 160, "MX A / B", 15, RGB(221,244,250));
+            fill(dc, 900, 316, 160, 36, RGB(28, 59, 77));
+            text(dc, 900, 323, 160, "MX A / B", 15, RGB(221,244,250));
         }
-        fill(dc, 1075, 177, 175, 36, RGB(28, 59, 77));
-        text(dc, 1075, 184, 175, view.advanced ? "BASIC" : "SETTINGS", 15, RGB(221,244,250));
-        fill(dc, 232, 229, 1028, 437, RGB(16,31,47));
-        line(dc,232,229,1260,229,RGB(37,85,105));
-        bevel(dc, 232, 674, 1024, 112, RGB(15,33,49));
+        fill(dc, 1075, 316, 175, 36, RGB(28, 59, 77));
+        text(dc, 1075, 323, 175, view.advanced ? "BASIC" : "USTAWIENIA", 15, RGB(221,244,250));
+        fill(dc, 20, 364, 1240, 302, RGB(16,31,47));
+        line(dc,20,364,1260,364,RGB(37,85,105));
+        bevel(dc, 24, 674, 1232, 112, RGB(15,33,49));
         if (view.block == 2 && !globalSettings) {
             const char *labels[]{"MIDI LEARN / TIME", "MIDI LEARN / FEEDBACK", "MIDI LEARN / MIX"};
             for (int i = 0; i < 3; ++i) {
@@ -323,7 +550,7 @@ class Editor final : public Steinberg::CPluginView {
         }
         if (view.block == 2 && view.advanced && !globalSettings)
             text(dc,250,700,400,view.mxSlot == 0 ? "MX ENGINE A" : "MX ENGINE B",24,RGB(226,245,251));
-        for (int x : {30,1248}) for(int y : {238,778}) {
+        for (int x : {30,1248}) for(int y : {374,778}) {
             disk(dc,x,y,5,RGB(198,199,184));
             line(dc,x-3,y,x+3,y,RGB(50,51,46));
         }
@@ -370,15 +597,15 @@ class Editor final : public Steinberg::CPluginView {
         int contentEnd=controlBottom;
         for(const auto &c:controls) contentEnd=std::max(contentEnd,c.y+c.h+10);
         if(contentEnd>controlBottom) {
-            fill(dc,1256,244,3,402,RGB(91,97,90));
-            const int thumb=std::max(24,402*(controlBottom-232)/(contentEnd-232));
-            fill(dc,1256,244+(402-thumb)*scroll/std::max(1,contentEnd-controlBottom),3,thumb,RGB(227,215,177));
+            fill(dc,1256,375,3,275,RGB(91,97,90));
+            const int thumb=std::max(24,275*(controlBottom-370)/(contentEnd-370));
+            fill(dc,1256,375+(275-thumb)*scroll/std::max(1,contentEnd-controlBottom),3,thumb,RGB(227,215,177));
         }
         const int saved = SaveDC(dc);
-        IntersectClipRect(dc, 232, 232, 1260, controlBottom);
+        IntersectClipRect(dc, 20, 370, 1260, controlBottom);
         for (auto &c : controls) {
             int y = c.y - scroll;
-            if (y + c.h < 232 || y > controlBottom)
+            if (y + c.h < 370 || y > controlBottom)
                 continue;
             const auto &p = controlUI()[c.id].definition;
             const auto label = controlTitle(c.id);
@@ -455,8 +682,13 @@ class Editor final : public Steinberg::CPluginView {
         if (!supplied) EndPaint(window, &ps);
     }
     int hit(int x, int y) const {
+        if (referenceDelay()) {
+            for (const auto &c:controls)
+                if (x>=c.x && x<c.x+c.w && y>=c.y && y<c.y+c.h) return c.id;
+            return -1;
+        }
         for (auto &c : controls)
-            if (y >= 232 && y < controlBottom && x >= c.x && x < c.x + c.w && y + scroll >= c.y && y + scroll < c.y + c.h)
+            if (y >= 370 && y < controlBottom && x >= c.x && x < c.x + c.w && y + scroll >= c.y && y + scroll < c.y + c.h)
                 return c.id;
         return -1;
     }
@@ -541,10 +773,52 @@ class Editor final : public Steinberg::CPluginView {
             return 0;
         case WM_LBUTTONDOWN: {
             SetFocus(window);
-            if (view.block == 2 && !globalSettings && y >= 90 && y < 160 && x >= 248 && x < 1248) {
-                view.section = x >= 754 ? 1 : 0;
-                scroll = 0;
-                rebuild();
+            if (referenceDelay()) {
+                const int bank=std::clamp(view.section,0,1);
+                if(y>=36&&y<76){
+                    if(x>=397&&x<430){change(layout().factoryProgram,std::max(0.0,value(layout().factoryProgram)-1./7));return 0;}
+                    if(x>=704&&x<735){change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;}
+                    if(x>=744&&x<784){file("savePreset",true);return 0;}
+                    if(x>=962&&x<1118){view.advanced=true;rebuild();return 0;}
+                    if(x>=1126&&x<1253){MessageBoxA(window,"Choose a block, then adjust its controls. Right-click any control for MIDI Learn. Use SETTINGS for all parameters.","Jerzy MultiFX",MB_OK|MB_ICONINFORMATION);return 0;}
+                }
+                if(y>=97&&y<287&&x>=24&&x<1135){
+                    const int at=std::clamp((x-24)/222,0,4);
+                    const int local=x-(24+at*222);
+                    if(local<183){
+                        auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
+                        if(y>=250){const int id=layout().blockBypass[order[at]];change(id,value(id)>=.5?0:1);}
+                        else {reorder=at;reorderHorizontal=true;view.block=order[at];view.section=0;scroll=0;rebuild();SetCapture(window);}
+                        return 0;
+                    }
+                }
+                if(y>=313&&y<360&&x>=852&&x<1193){
+                    const int id=layout().digital[bank]+2;
+                    change(id,double(x-852)/340);
+                    drag=id;startX=x;startY=y;startValue=value(id);SetCapture(window);return 0;
+                }
+                if(y>=402&&y<754&&x>=35&&x<253){
+                    const int choice=(y-402)/44;
+                    if(choice>=0&&choice<8){
+                        const int families[]{4,1,3,0,2,1,1,1};
+                        const int models[]{-1,-1,-1,-1,-1,0,2,4};
+                        change(layout().delayType[bank],double(families[choice])/4);
+                        if(models[choice]>=0)change(layout().mxAlgorithms[bank][0],double(models[choice])/8);
+                        if(value(layout().digital[bank]+2)<.01)change(layout().digital[bank]+2,.5);
+                        rebuild();return 0;
+                    }
+                }
+                if(y>=493&&y<622&&x>=1082&&x<1247){
+                    const int route=(y-493)/45;
+                    if(route<3)change(layout().delayMode,double(route)/2);
+                    return 0;
+                }
+                if(y>=413&&y<444&&x>=928&&x<1052){
+                    const int id=layout().slotBypass[bank];change(id,value(id)>=.5?0:1);return 0;
+                }
+                if(y>=377&&y<418&&x>=735&&x<1050){view.section=1-bank;rebuild();return 0;}
+                const int id=hit(x,y);
+                if(id>=0){drag=id;startX=x;startY=y;startValue=value(id);SetCapture(window);return 0;}
                 return 0;
             }
             if (const int id = delayMidiTarget(x, y); id >= 0) {
@@ -564,20 +838,30 @@ class Editor final : public Steinberg::CPluginView {
                     return 0;
                 }
             }
-            if (y >= 13 && y < 41 && x >= 430 && x < 830) {
-                globalSettings = !globalSettings;
+            if (y >= 36 && y < 76 && x >= 397 && x < 430) {
+                change(layout().factoryProgram,std::max(0.0,value(layout().factoryProgram)-1./7));return 0;
+            }
+            if (y >= 36 && y < 76 && x >= 704 && x < 735) {
+                change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;
+            }
+            if (y >= 36 && y < 76 && x >= 744 && x < 784) {file("savePreset",true);return 0;}
+            if (y >= 36 && y < 76 && x >= 962 && x < 1118) {
+                if(view.block==2)view.advanced=!view.advanced;
+                else globalSettings=!globalSettings;
                 scroll = 0;
                 rebuild();
                 return 0;
             }
-            if (y >= 90 && y < 90 + 5 * 113 && x >= 20 && x < 222) {
-                int at = std::clamp((y - 90) / 113, 0, 4);
+            if (y >= 97 && y < 287 && x >= 24 && x < 1135) {
+                int at = std::clamp((x - 24) / 222, 0, 4);
                 auto order = permutation(int(plain(layout().order, float(value(layout().order)))));
-                if ((y - 90) % 113 >= 60)
+                if (x - (24 + at * 222) >= 183) return 0;
+                if (y >= 250)
                     change(layout().blockBypass[order[at]],
                            value(layout().blockBypass[order[at]]) >= .5 ? 0 : 1);
                 else {
                     reorder = at;
+                    reorderHorizontal = true;
                     view.block = order[at];
                     view.section = 0;
                     globalSettings = false;
@@ -587,14 +871,14 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 return 0;
             }
-            if (y >= 177 && y < 213) {
+            if (y >= 316 && y < 352) {
                 auto sections = sectionNames(view.block);
                 if (x >= 1075)
                     view.advanced = !view.advanced;
                 else if (view.block == 2 && x >= 900)
                     view.mxSlot = 1 - view.mxSlot;
-                else if (x >= 248 && size_t((x - 248) / 200) < sections.size())
-                    view.section = (x - 248) / 200;
+                else if (x >= 28 && size_t((x - 28) / 214) < sections.size())
+                    view.section = (x - 28) / 214;
                 scroll = 0;
                 rebuild();
                 return 0;
@@ -611,7 +895,7 @@ class Editor final : public Steinberg::CPluginView {
                     change(layout().bypass, value(layout().bypass) >= .5 ? 0 : 1);
                 return 0;
             }
-            if (y < 232 || y > controlBottom)
+            if (y < 370 || y > controlBottom)
                 return 0;
             int id = hit(x, y);
             if (id >= 0) {
@@ -632,17 +916,19 @@ class Editor final : public Steinberg::CPluginView {
         case WM_MOUSEMOVE:
             if (drag >= 0) {
                 const auto &key = layout().parameters[drag].key;
-                const bool delaySlider = view.block == 2 &&
+                const bool delaySlider = (referenceDelay() &&
+                    (key=="delayA.mix"||key=="delayB.mix")) || view.block == 2 &&
                     (key == "delayA.mix" || key == "delayB.mix" ||
                      key == "delayA.time" || key == "delayB.time" ||
                      key == "delayA.feedback" || key == "delayB.feedback");
-                change(drag, startValue + (delaySlider ? (x - startX) / 170.0 :
+                change(drag, startValue + (delaySlider ? (x - startX) / (referenceDelay()?340.0:170.0) :
                     (startY - y) * ((w & MK_SHIFT) ? .0004 : .004)));
             }
             return 0;
         case WM_LBUTTONUP:
             if (reorder >= 0) {
-                int dest = std::clamp((y - 90) / 113, 0, 4);
+                int dest = reorderHorizontal ? std::clamp((x - 24) / 222, 0, 4)
+                                             : std::clamp((y - 90) / 113, 0, 4);
                 auto order = permutation(int(plain(layout().order, float(value(layout().order)))));
                 std::swap(order[reorder], order[dest]);
                 auto a = std::array<int, 5>{0, 1, 2, 3, 4};
@@ -653,11 +939,27 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 change(layout().order, double(rank) / 119);
                 reorder = -1;
+                reorderHorizontal = false;
             }
             drag = -1;
             ReleaseCapture();
             return 0;
         case WM_RBUTTONUP: {
+            if(referenceDelay()){
+                int id=-1;
+                const int bank=std::clamp(view.section,0,1);
+                if(y>=97&&y<287&&x>=24&&x<1135){
+                    const int at=std::clamp((x-24)/222,0,4);
+                    if(x-(24+at*222)<183&&y>=250){auto order=permutation(int(plain(layout().order,float(value(layout().order)))));id=layout().blockBypass[order[at]];}
+                }
+                if(y>=313&&y<360&&x>=852&&x<1193)id=layout().digital[bank]+2;
+                if(y>=413&&y<444&&x>=928&&x<1052)id=layout().slotBypass[bank];
+                if(id<0)id=hit(x,y);
+                for(int b=0;b<2;++b)for(int kind=0;kind<2;++kind)
+                    if(id==delayControl(b,kind))id=parameterId(std::string(b?"delayB.":"delayA.")+(kind?"feedback":"time"));
+                if(id>=0)change(layout().midiLearn,double(id+1)/layout().controlCount);
+                return 0;
+            }
             int id = delayMidiTarget(x, y);
             if (id < 0) id = hit(x, y);
             if (view.block == 1 && y >= 695 && y <= 785) {
@@ -665,9 +967,10 @@ class Editor final : public Steinberg::CPluginView {
                 if (std::abs(x - center) < 60)
                     id = effectBypass();
             }
-            if (y >= 90 && y < 90 + 5 * 113 && x >= 20 && x < 222 && (y - 90) % 113 >= 60) {
+            if (y >= 250 && y < 287 && x >= 24 && x < 1135) {
                 auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
-                id=layout().blockBypass[order[std::clamp((y-90)/113,0,4)]];
+                const int at=std::clamp((x-24)/222,0,4);
+                if(x-(24+at*222)<183)id=layout().blockBypass[order[at]];
             }
             if (y >= 805 && y < 837 && x >= 778 && x < 1016) id=layout().bypass;
             if (id >= 0)
@@ -681,7 +984,7 @@ class Editor final : public Steinberg::CPluginView {
             if (id >= 0 && (GET_KEYSTATE_WPARAM(w) & MK_CONTROL)) {
                 double step = controlUI()[id].definition.steps ? 1. / controlUI()[id].definition.steps : .001;
                 change(id, value(id) + (GET_WHEEL_DELTA_WPARAM(w) > 0 ? step : -step));
-            } else {
+            } else if(!referenceDelay()) {
                 int bottom = 0;
                 for (auto &c : controls)
                     bottom = std::max(bottom, c.y + c.h);
