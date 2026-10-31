@@ -1,5 +1,7 @@
-Windows VST3 preview 20 adapts the selected horizontal Multi FX reference: five effect cards, active IN/OUT meters, and the large DELAY A+B panel with Oil Drum, engine selection, A/B controls, MIX, routing, bypass and MIDI Learn. The ZIP contains the VST3 bundle and the Windows installer scripts. The PNG is a screenshot captured from the actual DLL running in Wine.
+# Jerzy MultiFX VST3 Windows — preview 21
 
-Validation: Windows x64 cross-build; real DLL GUI smoke (attach, edit, bypass, MIDI Learn, reorder, resize, detach); audio/latency regression; Steinberg VST3 validator 47 passed, 0 failed; package SHA256 and structure verified. No physical FL Studio or RPi hardware test for this preview. GitHub Actions could not start because the account billing/spending limit blocked runners; this package was built and validated locally. The RPi package remains preview 19, since this change affects only the Windows editor.
+Bardziej fizyczny wygląd GUI zgodny z wybraną makietą: metalowe panele, śruby, lampki, gałki 3D, szczegółowe karty pięciu bloków i cztery grupy parametrów DELAY A+B. Zachowano działające parametry, MIDI Learn oraz mierniki IN/OUT. Kod: 4fa2a76dfe6d4922c9a2076603059a9921036526.
 
-SHA256 JerzyMultiFX-VST3-Windows-x64-v0.1.0-preview.20.zip: ba2ddcff75bf4ec8da5a6319eb660c1a38a6a3505267608c8d05c35f3235dc16
+Testy lokalne: Windows x64 cross-build; prawdziwy DLL VST3 uruchomiony pod Wine; GUI smoke (trzy cykle), sygnał i latencja PASS; Steinberg validator 47/47 PASS; natywny DSP/RPi 3/3 PASS; zawartość ZIP i sumy SHA256 PASS. Bez fizycznego testu w FL Studio i na Raspberry Pi.
+
+SHA256 ZIP: c8fbdfef3a6fbcc21f4b65b40ead5ef85f2b9a6dd035e8b1a56fd77df440f0d8
