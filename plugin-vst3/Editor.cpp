@@ -19,6 +19,7 @@ class Editor final : public Steinberg::CPluginView {
     HINSTANCE instance = nullptr;
     PanelSelection view{2, 0, 0, false};
     int drag = -1, reorder = -1, startX = 0, startY = 0, scroll = 0;
+    int controlPage = 0, controlPages = 1;
     bool reorderHorizontal = false;
     double startValue = 0;
     float needleIn = 0, needleOut = 0;
@@ -284,9 +285,9 @@ class Editor final : public Steinberg::CPluginView {
         const int preset=std::clamp(int(std::round(value(layout().factoryProgram)*7)),0,7);
         char presetLabel[96];
         snprintf(presetLabel,sizeof(presetLabel),"%02d   %s",preset+1,presetNames[preset]);
+        text(dc,435,45,245,presetLabel,14,RGB(223,242,248));
+        text(dc,678,45,22,"v",13,RGB(174,210,225));
         if(referenceDelay()){
-            text(dc,435,45,245,presetLabel,14,RGB(223,242,248));
-            text(dc,678,45,22,"v",13,RGB(174,210,225));
         }
         bevel(dc,744,36,40,39,RGB(15,29,43));
         text(dc,746,43,37,"SAVE",11,RGB(194,226,237));
@@ -337,7 +338,7 @@ class Editor final : public Steinberg::CPluginView {
         levelBar(dc,1208,"OUT",needleOut);
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
-        const int cx=c.x+c.w/2,cy=c.y+(radius==40?71:56);
+        const int cx=c.x+c.w/2,cy=c.y+(radius==40?71:radius>=34?63:56);
         text(dc,c.x,c.y,c.w,label,radius==40?13:11,RGB(216,236,242));
         disk(dc,cx+3,cy+5,radius+7,RGB(2,8,13));
         disk(dc,cx,cy,radius+5,RGB(110,122,128));
@@ -380,7 +381,7 @@ class Editor final : public Steinberg::CPluginView {
             reading=display;
         }
         if(definition.unit=="ms" && reading.find("ms")==std::string::npos)reading+=" ms";
-        text(dc,c.x,c.y+(radius==40?121:87),c.w,reading.c_str(),radius==40?13:11,
+        text(dc,c.x,c.y+(radius==40?121:radius>=34?109:87),c.w,reading.c_str(),radius>=34?13:11,
              RGB(228,247,251));
     }
     void referenceDelayPanel(HDC dc) {
@@ -487,6 +488,7 @@ class Editor final : public Steinberg::CPluginView {
         destroyCombos();
         controls.clear();
         if (referenceDelay()) {
+            controlPage=0;controlPages=1;
             for (int bank = 0; bank < 2; ++bank)
                 for (int kind = 0; kind < 2; ++kind) {
                     const int id = delayControl(bank, kind);
@@ -511,19 +513,15 @@ class Editor final : public Steinberg::CPluginView {
                 (common || p.steps > 0 || !p.choices.empty() || isToggle(id) ||
                  p.key == "atomic.stereo" ? compact : knobs).push_back(id);
             }
-            int y = 370;
-            for (size_t i = 0; i < compact.size(); ++i) {
-                const int x = 28 + int(i % 6) * 205, cy = y + int(i / 6) * 62;
-                controls.push_back({compact[i], x, cy, 194, 54, true});
+            const int total=int(compact.size()+knobs.size());
+            controlPages=std::max(1,(total+5)/6);
+            controlPage=std::clamp(controlPage,0,controlPages-1);
+            for(int index=controlPage*6;index<std::min(total,(controlPage+1)*6);++index){
+                const bool isCompact=index<int(compact.size());
+                const int id=isCompact?compact[index]:knobs[index-int(compact.size())];
+                const int local=index-controlPage*6;
+                controls.push_back({id,28+(local%3)*411,375+(local/3)*131,388,isCompact?54:126,isCompact});
             }
-            y += int((compact.size() + 5) / 6) * 62 + 15;
-            const int columns = view.block == 1 && view.section == 2 ? 2
-                                : view.block == 2 ? 6 : view.block == 1 && view.section == 1 ? 4 : 3;
-            const int cell = W / columns;
-            const int rowHeight = view.block == 2 ? 130 : view.block == 1 && view.section == 1 ? 160 : 145;
-            for (size_t i = 0; i < knobs.size(); ++i)
-                controls.push_back({knobs[i], int(i % columns) * cell + 20,
-                                    y + int(i / columns) * rowHeight, cell - 40, rowHeight - 8, false});
         }
         for (auto &c : controls) {
             const auto &p = controlUI()[c.id].definition;
@@ -602,13 +600,18 @@ class Editor final : public Steinberg::CPluginView {
         sx = float(W) / std::max(1L, client.right);
         sy = float(H) / std::max(1L, client.bottom);
         auto dc = CreateCompatibleDC(target);
-        auto bmp = CreateCompatibleBitmap(target, W, H);
+        const int pixelsWide=std::max(1L,client.right),pixelsHigh=std::max(1L,client.bottom);
+        auto bmp = CreateCompatibleBitmap(target, pixelsWide, pixelsHigh);
         auto old = SelectObject(dc, bmp);
+        const int mapped=SaveDC(dc);
+        SetMapMode(dc,MM_ANISOTROPIC);
+        SetWindowExtEx(dc,W,H,nullptr);
+        SetViewportExtEx(dc,pixelsWide,pixelsHigh,nullptr);
         if (referenceDelay()) {
             chrome(dc);
             referenceDelayPanel(dc);
-            SetStretchBltMode(target, HALFTONE);
-            StretchBlt(target, 0, 0, client.right, client.bottom, dc, 0, 0, W, H, SRCCOPY);
+            RestoreDC(dc,mapped);
+            BitBlt(target,0,0,pixelsWide,pixelsHigh,dc,0,0,SRCCOPY);
             SelectObject(dc, old);
             DeleteObject(bmp);
             DeleteDC(dc);
@@ -652,6 +655,7 @@ class Editor final : public Steinberg::CPluginView {
             }
         }
         chrome(dc);
+        text(dc,24,297,1190,"KLIKNIJ BLOK U GÓRY → WYBIERZ EFEKT PONIŻEJ → USTAW PARAMETRY    •    PRAWY KLIK: MIDI LEARN",13,RGB(169,211,225));
         auto sections = sectionNames(view.block);
         for (size_t i = 0; i < sections.size(); ++i) {
             int x = 28 + int(i) * 214;
@@ -722,13 +726,6 @@ class Editor final : public Steinberg::CPluginView {
         char status[96];
         snprintf(status,sizeof(status),"GR %.1f dB / PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
         text(dc,1007,682,235,status,12,RGB(166,208,222));
-        int contentEnd=controlBottom;
-        for(const auto &c:controls) contentEnd=std::max(contentEnd,c.y+c.h+10);
-        if(contentEnd>controlBottom) {
-            fill(dc,1256,375,3,275,RGB(91,97,90));
-            const int thumb=std::max(24,275*(controlBottom-370)/(contentEnd-370));
-            fill(dc,1256,375+(275-thumb)*scroll/std::max(1,contentEnd-controlBottom),3,thumb,RGB(227,215,177));
-        }
         const int saved = SaveDC(dc);
         IntersectClipRect(dc, 20, 370, 1260, controlBottom);
         for (auto &c : controls) {
@@ -738,9 +735,14 @@ class Editor final : public Steinberg::CPluginView {
             const auto &p = controlUI()[c.id].definition;
             const auto label = controlTitle(c.id);
             if (c.compact) {
-                text(dc, c.x, y, c.w, label.c_str(), 13, RGB(174,205,218));
-                if (!p.choices.empty() || (p.steps > 1 && p.steps <= 64))
+                fill(dc,c.x+2,y+1,c.w-4,19,RGB(31,64,78));
+                text(dc, c.x+3, y+2, c.w-6, label.c_str(), 13, RGB(227,243,248));
+                if (!p.choices.empty() || (p.steps > 1 && p.steps <= 64)) {
+                    bevel(dc,c.x,y+23,c.w,29,RGB(20,44,59));
+                    text(dc,c.x+10,y+28,c.w-40,formatted(c.id).c_str(),14,RGB(229,247,250));
+                    text(dc,c.x+c.w-32,y+27,22,"▼",13,accent());
                     continue;
+                }
                 bevel(dc, c.x, y + 23, c.w, 29, RGB(26,51,68));
                 if (view.block == 2 && p.steps == 0 && !isToggle(c.id)) {
                     fill(dc,c.x+9,y+39,c.w-18,4,RGB(8,23,36));
@@ -763,38 +765,18 @@ class Editor final : public Steinberg::CPluginView {
                     fill(dc, c.x, y + 51, int(c.w * value(c.id)), 3, accent());
                 }
             } else {
-                const int cx = c.x + c.w / 2, cy = y + 53, r = 39;
-                // Restrained layered knob with a clear cyan value indicator.
-                disk(dc,cx+3,cy+5,r+3,RGB(8,16,27));
-                disk(dc,cx,cy,r+2,RGB(34,76,93));
-                for(int rr=r;rr>=r-7;--rr) {
-                    int shade=69-(r-rr)*4;
-                    disk(dc,cx-1,cy-1,rr,RGB(shade,shade+15,shade+25));
-                }
-                disk(dc,cx,cy,r-9,RGB(12,24,39));
-                disk(dc,cx-2,cy-3,r-13,RGB(27,49,67));
-                for(int i=0;i<32;++i) {
-                    double a=i*6.283185307179586/32;
-                    line(dc,cx+int(std::sin(a)*(r-11)),cy-int(std::cos(a)*(r-11)),
-                            cx+int(std::sin(a)*(r-7)),cy-int(std::cos(a)*(r-7)),RGB(86,126,147));
-                }
-                for(int i=0;i<=10;++i) {
-                    double a=(-135+i*27)*3.141592653589793/180;
-                    line(dc,cx+int(std::sin(a)*(r+8)),cy-int(std::cos(a)*(r+8)),
-                            cx+int(std::sin(a)*(r+12)),cy-int(std::cos(a)*(r+12)),RGB(61,113,133));
-                }
-                double angle = (-135 + 270 * value(c.id)) * 3.141592653589793 / 180;
-                auto pen = CreatePen(PS_SOLID, 3, accent());
-                auto op = SelectObject(dc, pen);
-                MoveToEx(dc, cx + int(std::sin(angle) * 19), cy - int(std::cos(angle) * 19), nullptr);
-                LineTo(dc, cx + int(std::sin(angle) * 32), cy - int(std::cos(angle) * 32));
-                SelectObject(dc, op);
-                DeleteObject(pen);
-                text(dc, c.x, y + 96, c.w, label.c_str(), 14, RGB(216,238,245));
-                text(dc, c.x, y + 114, c.w, formatted(c.id).c_str(), 13, accent());
+                fill(dc,c.x+2,y+1,c.w-4,20,RGB(31,64,78));
+                referenceKnob(dc,c,label.c_str(),34,accent());
             }
         }
         RestoreDC(dc, saved);
+        bevel(dc,1031,638,48,22,RGB(21,51,67));
+        text(dc,1031,639,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
+        bevel(dc,1083,638,100,22,RGB(15,36,50));
+        char pageLabel[32];snprintf(pageLabel,sizeof(pageLabel),"STRONA %d/%d",controlPage+1,controlPages);
+        text(dc,1083,642,100,pageLabel,11,RGB(215,235,244));
+        bevel(dc,1187,638,48,22,RGB(21,51,67));
+        text(dc,1187,639,48,">",14,controlPage+1<controlPages?RGB(229,246,252):RGB(87,117,131));
         const char *buttons[]{"LOAD IR WAV", "LOAD PRESET", "SAVE PRESET", "MASTER BYPASS"};
         buttons[3]=value(layout().bypass)>=.5 ? "MASTER BYPASSED" : "MASTER ACTIVE";
         for (int i = 0; i < 4; ++i) {
@@ -802,8 +784,8 @@ class Editor final : public Steinberg::CPluginView {
             text(dc, 28 + i * 250, 811, 238, buttons[i], 14, RGB(226,248,252));
         }
         text(dc, 1028, 807, 225, "Right click: MIDI Learn", 13, RGB(160, 171, 175));
-        SetStretchBltMode(target, HALFTONE);
-        StretchBlt(target, 0, 0, client.right, client.bottom, dc, 0, 0, W, H, SRCCOPY);
+        RestoreDC(dc,mapped);
+        BitBlt(target,0,0,pixelsWide,pixelsHigh,dc,0,0,SRCCOPY);
         SelectObject(dc, old);
         DeleteObject(bmp);
         DeleteDC(dc);
@@ -894,7 +876,7 @@ class Editor final : public Steinberg::CPluginView {
                                        controlUI()[id].definition.steps :
                                        int(std::count(controlUI()[id].definition.choices.begin(),
                                                       controlUI()[id].definition.choices.end(), '|'))));
-                    scroll = 0;
+                    scroll = 0;controlPage=0;
                     rebuild();
                 }
             }
@@ -926,7 +908,7 @@ class Editor final : public Steinberg::CPluginView {
                     if(local<183){
                         auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
                         if(y>=250){const int id=layout().blockBypass[order[at]];change(id,value(id)>=.5?0:1);}
-                        else {reorder=at;reorderHorizontal=true;view.block=order[at];view.section=0;scroll=0;rebuild();SetCapture(window);}
+                        else {reorder=at;reorderHorizontal=true;view.block=order[at];view.section=0;scroll=0;controlPage=0;rebuild();SetCapture(window);}
                         return 0;
                     }
                 }
@@ -986,7 +968,7 @@ class Editor final : public Steinberg::CPluginView {
             if (y >= 36 && y < 76 && x >= 962 && x < 1118) {
                 if(view.block==2)view.advanced=!view.advanced;
                 else globalSettings=!globalSettings;
-                scroll = 0;
+                scroll = 0;controlPage=0;
                 rebuild();
                 return 0;
             }
@@ -1003,7 +985,7 @@ class Editor final : public Steinberg::CPluginView {
                     view.block = order[at];
                     view.section = 0;
                     globalSettings = false;
-                    scroll = 0;
+                    scroll = 0;controlPage=0;
                     rebuild();
                     SetCapture(window);
                 }
@@ -1017,7 +999,13 @@ class Editor final : public Steinberg::CPluginView {
                     view.mxSlot = 1 - view.mxSlot;
                 else if (x >= 28 && size_t((x - 28) / 214) < sections.size())
                     view.section = (x - 28) / 214;
-                scroll = 0;
+                scroll = 0;controlPage=0;
+                rebuild();
+                return 0;
+            }
+            if(y>=638&&y<661&&x>=1031&&x<1235){
+                if(x<1079&&controlPage>0)--controlPage;
+                if(x>=1187&&controlPage+1<controlPages)++controlPage;
                 rebuild();
                 return 0;
             }
@@ -1123,11 +1111,7 @@ class Editor final : public Steinberg::CPluginView {
                 double step = controlUI()[id].definition.steps ? 1. / controlUI()[id].definition.steps : .001;
                 change(id, value(id) + (GET_WHEEL_DELTA_WPARAM(w) > 0 ? step : -step));
             } else if(!referenceDelay()) {
-                int bottom = 0;
-                for (auto &c : controls)
-                    bottom = std::max(bottom, c.y + c.h);
-                scroll = std::clamp(scroll + (GET_WHEEL_DELTA_WPARAM(w) > 0 ? -100 : 100), 0,
-                                    std::max(0, bottom - (controlBottom - 10)));
+                controlPage=std::clamp(controlPage+(GET_WHEEL_DELTA_WPARAM(w)>0?-1:1),0,controlPages-1);
                 rebuild();
             }
             return 0;

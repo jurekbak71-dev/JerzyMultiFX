@@ -1,3 +1,8 @@
+# 0.1.0-preview.22
+
+- Uporządkowano strony parametrów VST3: kompletne kontrolki, jawna nawigacja między stronami, czytelniejsze wskazówki i widoczny stan list wyboru. Zmniejszone okno renderuje tekst i grafiki wektorowe w docelowej rozdzielczości zamiast rozciągać gotowy obraz.
+- Zachowano paletę MultiFX oraz istniejący DSP, ID parametrów i MIDI.
+
 # 0.1.0-preview.21
 
 - GUI Windows VST3 zachowuje układ wskazanej makiety, ale otrzymuje bardziej materialne wykończenie: metalowe ramki, subtelną fakturę paneli, śruby, podświetlane lampki, czarne gałki z frezowaną krawędzią i metalową wskazówką, bardziej szczegółowe grafiki pięciu bloków oraz podział dolnych kontrolek DELAY na cztery grupy. Elementy są rysowane proceduralnie; obrazu referencyjnego nie dołączono do wtyczki.

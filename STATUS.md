@@ -1,5 +1,11 @@
 # Jerzy MultiFX — status
 
+## Preview 22 — czytelna nawigacja i kontrolki VST3
+
+- Panel FX pokazuje najwyżej sześć całych kontrolek naraz, z widocznymi przyciskami STRONA i strzałkami. Przełączanie bloku, sekcji, silnika lub ustawień wraca do pierwszej strony. Na ekranie są wskazówki nawigacji, a listy wyboru mają widoczny aktualny stan i strzałkę także podczas testowego przechwytywania obrazu.
+- GUI zachowuje ciemnoniebieską i turkusową paletę MultiFX. Teksty rysowane są czcionką systemową, a panel i elementy graficzne wektorowymi prymitywami GDI. Renderowanie odbywa się bezpośrednio w docelowej rozdzielczości, więc zmniejszenie okna nie rozmywa skalowanego obrazu. Nie dodano zasobów bitmapowych.
+- Weryfikacja lokalna: Windows x64 cross-build PASS; rzeczywisty DLL GUI pod Wine PASS (trzy cykle, edycja, bypass, MIDI Learn, kolejność, zmiana rozmiaru, strony i widoczność list); test sygnału i latencji PASS; kompletny bundle w walidatorze Steinberga 47/47 PASS; natywny DSP/RPi 3/3 PASS. DSP, ID parametrów, presety i RPi bez zmian. Fizyczny FL Studio i Pi pozostają nieweryfikowane.
+
 ## Preview 21 — bardziej materialne GUI VST3
 
 - Adaptację wskazanej makiety rozbudowano o aluminiowe i stalowe ramki, fakturę paneli, śruby, lampki, przestrzenne gałki oraz grupy dolnych kontrolek DELAY. Wtyczka nadal rysuje interfejs natywnie, bez dołączania prywatnego obrazu referencyjnego.

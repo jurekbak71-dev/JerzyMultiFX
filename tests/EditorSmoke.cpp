@@ -142,16 +142,16 @@ int main(int argc, char **argv) try {
         SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(900,820));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
         int gain = layout().preamp + 1;
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(210, 500));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(210, 450));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(210, 450));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(1044, 442));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(1044, 392));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(1044, 392));
         pump();
         check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(210, 500));
+        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(1044, 442));
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
         SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 140));
         SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(545, 140));
@@ -160,6 +160,7 @@ int main(int argc, char **argv) try {
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
         ViewRect size(0, 0, 880, 592);
         check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-small.bmp").c_str());
         ViewRect normal(0, 0, 1280, 850);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
         click(child, 330, 140); // Three separate effect panels in block two.
@@ -170,7 +171,19 @@ int main(int argc, char **argv) try {
                 model = int(i);
         HWND modelList = GetDlgItem(child, 10000 + model);
         check(modelList && SendMessage(modelList, CB_GETCOUNT, 0, 0) == 14, "original Chorus model dropdown");
+        check(IsWindowVisible(modelList), "Chorus model dropdown visible");
+        RECT modelRect{},editorRect{};
+        GetWindowRect(modelList,&modelRect);
+        GetWindowRect(child,&editorRect);
+        check(modelRect.left>=editorRect.left && modelRect.right<=editorRect.right &&
+              modelRect.top>=editorRect.top && modelRect.top<editorRect.bottom,
+              "Chorus model dropdown stays inside editor");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
+        click(child,1210,648);
+        check(GetDlgItem(child,10000+model)==nullptr,"next page replaces visible controls");
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone-page2.bmp").c_str());
+        click(child,1055,648);
+        check(GetDlgItem(child,10000+model)!=nullptr,"previous page restores its controls");
         click(child, 340, 334);
         pump(); // Attack page.
         check(GetDlgItem(child, 10000 + model) == nullptr, "Chorus controls hidden on Attack page");
@@ -215,6 +228,10 @@ int main(int argc, char **argv) try {
         pump();
         const int division = parameterId("delayA.oil.division");
         HWND divisions = GetDlgItem(child, 10000 + division);
+        for(int page=0;page<20&&!divisions;++page){
+            click(child,1210,648); // Explicit parameter pages expose the remaining Oil controls.
+            divisions=GetDlgItem(child,10000+division);
+        }
         check(divisions && SendMessage(divisions, CB_GETCURSEL, 0, 0) == 3,
               "Oil original quarter-note enum displayed");
         RECT divisionRect{};GetWindowRect(divisions,&divisionRect);
