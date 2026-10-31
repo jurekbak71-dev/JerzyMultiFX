@@ -1,0 +1,5 @@
+Windows VST3 preview 20 adapts the selected horizontal Multi FX reference: five effect cards, active IN/OUT meters, and the large DELAY A+B panel with Oil Drum, engine selection, A/B controls, MIX, routing, bypass and MIDI Learn. The ZIP contains the VST3 bundle and the Windows installer scripts. The PNG is a screenshot captured from the actual DLL running in Wine.
+
+Validation: Windows x64 cross-build; real DLL GUI smoke (attach, edit, bypass, MIDI Learn, reorder, resize, detach); audio/latency regression; Steinberg VST3 validator 47 passed, 0 failed; package SHA256 and structure verified. No physical FL Studio or RPi hardware test for this preview. GitHub Actions could not start because the account billing/spending limit blocked runners; this package was built and validated locally. The RPi package remains preview 19, since this change affects only the Windows editor.
+
+SHA256 JerzyMultiFX-VST3-Windows-x64-v0.1.0-preview.20.zip: ba2ddcff75bf4ec8da5a6319eb660c1a38a6a3505267608c8d05c35f3235dc16
