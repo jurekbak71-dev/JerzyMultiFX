@@ -1,3 +1,8 @@
+# 0.1.0-preview.21
+
+- GUI Windows VST3 zachowuje układ wskazanej makiety, ale otrzymuje bardziej materialne wykończenie: metalowe ramki, subtelną fakturę paneli, śruby, podświetlane lampki, czarne gałki z frezowaną krawędzią i metalową wskazówką, bardziej szczegółowe grafiki pięciu bloków oraz podział dolnych kontrolek DELAY na cztery grupy. Elementy są rysowane proceduralnie; obrazu referencyjnego nie dołączono do wtyczki.
+- Zmiana dotyczy tylko rysowania i układu kontrolek. DSP, identyfikatory parametrów, presety i mapowanie MIDI są zachowane.
+
 # 0.1.0-preview.20
 
 - Edytor Windows VST3 przebudowano według wybranego pierwszego obrazu: poziomy tor pięciu bloków ze strzałkami i ilustracjami, mierniki IN/OUT po prawej oraz duży panel DELAY A+B z listą silników, wspólnym MIX, czterema głównymi gałkami, dolnym rzędem szczegółowych parametrów i routingiem.

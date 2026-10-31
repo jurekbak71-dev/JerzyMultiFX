@@ -1,5 +1,10 @@
 # Jerzy MultiFX — status
 
+## Preview 21 — bardziej materialne GUI VST3
+
+- Adaptację wskazanej makiety rozbudowano o aluminiowe i stalowe ramki, fakturę paneli, śruby, lampki, przestrzenne gałki oraz grupy dolnych kontrolek DELAY. Wtyczka nadal rysuje interfejs natywnie, bez dołączania prywatnego obrazu referencyjnego.
+- Lokalnie: Windows x64 cross-build PASS; rzeczywisty Windows DLL GUI smoke test pod Wine PASS (trzy cykle otwarcia, parametrów, bypassu, MIDI Learn, kolejności, rozmiaru i zamknięcia); test sygnału i latencji VST3 PASS; walidator Steinberga 47/47 PASS; natywny DSP/RPi 3/3 PASS. Zrzut renderowanego GUI obejrzany. DSP i RPi bez zmian względem preview 20; fizyczne FL Studio, Pi i kontrolery MIDI nie były dostępne do testów.
+
 ## Preview 20 — wierna adaptacja wybranego obrazu VST3
 
 - Windows VST3 używa poziomego łańcucha pięciu bloków, prawych mierników IN/OUT i rozbudowanego pulpitu DELAY A+B w układzie wybranego pierwszego obrazu. Własne rysowanie GDI zachowuje responsywne wartości, stany ON/BYPASS, routing i MIDI Learn; fabryczne presety i identyfikatory parametrów pozostają. Lista w panelu pokazuje rzeczywiste silniki, a routing rzeczywiste trzy tryby DSP, więc część nazw z obrazu koncepcyjnego została zastąpiona nazwami produktu.

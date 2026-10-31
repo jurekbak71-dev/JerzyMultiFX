@@ -142,6 +142,33 @@ class Editor final : public Steinberg::CPluginView {
         line(dc, x, y+h-1, x+w, y+h-1, RGB(10,19,30));
         line(dc, x+w-1, y, x+w-1, y+h, RGB(10,19,30));
     }
+    static void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
+        fill(dc,x+2,y+3,w,h,RGB(2,8,14));
+        for(int i=0;i<10;++i){
+            const int top=(h*i)/10, height=(h*(i+1))/10-top;
+            const int shade=raised ? 31-i*2 : 13+i;
+            fill(dc,x,y+top,w,height,RGB(shade,shade+9,shade+16));
+        }
+        for(int i=0;i<h;i+=5)
+            line(dc,x+3,y+i,x+w-4,y+i,RGB(37,48,55));
+        line(dc,x,y,x+w-1,y,raised?RGB(118,134,141):RGB(53,71,82));
+        line(dc,x,y,x,y+h-1,RGB(80,99,108));
+        line(dc,x,y+h-1,x+w,y+h-1,RGB(3,9,15),2);
+        line(dc,x+w-1,y,x+w-1,y+h,RGB(3,9,15),2);
+    }
+    static void screw(HDC dc,int x,int y){
+        disk(dc,x+1,y+2,5,RGB(3,9,15));
+        disk(dc,x,y,4,RGB(113,126,131));
+        disk(dc,x,y,3,RGB(46,57,63));
+        line(dc,x-2,y+1,x+2,y-1,RGB(157,169,171));
+    }
+    static void lamp(HDC dc,int x,int y,bool on,COLORREF color){
+        disk(dc,x,y,11,RGB(2,8,13));
+        disk(dc,x,y,9,RGB(69,85,91));
+        disk(dc,x,y,7,on?color:RGB(80,43,47));
+        if(on){disk(dc,x-2,y-2,3,RGB(224,253,248));disk(dc,x,y,2,RGB(255,255,255));}
+        else disk(dc,x-2,y-2,2,RGB(133,91,93));
+    }
     void vu(HDC dc, int x, const char *label, float amplitude) {
         bevel(dc, x, 9, 192, 65, RGB(16,30,45));
         fill(dc, x+5, 14, 182, 55, RGB(24,43,59));
@@ -182,18 +209,30 @@ class Editor final : public Steinberg::CPluginView {
         text(dc, x - 10, 276, 48, reading, 10, RGB(184,211,221));
     }
     void cardArt(HDC dc, int block, int x, int y) {
-        bevel(dc, x + 10, y + 48, 163, 85, RGB(8,20,32));
+        metalPanel(dc, x + 10, y + 48, 163, 85, false);
         const int cx = x + 92, cy = y + 90;
         if (block == 0) {
-            bevel(dc, x + 20, y + 57, 142, 68, RGB(37,45,51));
-            for (int i = 0; i < 9; ++i) line(dc,x+28,y+64+i*3,x+154,y+64+i*3,RGB(70,88,99));
-            for (int i = 0; i < 3; ++i) disk(dc,x+51+i*40,y+107,10,RGB(16,24,32));
+            metalPanel(dc, x + 20, y + 56, 142, 70);
+            fill(dc,x+25,y+60,132,28,RGB(4,10,13));
+            for (int row = 0; row < 14; ++row)
+                line(dc,x+27,y+61+row*2,x+155,y+61+row*2,RGB(66,80,85));
+            for (int col = 0; col < 26; ++col)
+                line(dc,x+27+col*5,y+61,x+27+col*5,y+87,RGB(29,41,46));
+            for (int i = 0; i < 3; ++i) {
+                const int knob=x+51+i*40;
+                disk(dc,knob+1,y+108,11,RGB(2,7,11));
+                disk(dc,knob,y+106,10,RGB(135,145,149));
+                disk(dc,knob,y+106,8,RGB(15,24,31));
+                line(dc,knob,y+100,knob+2,y+96,RGB(229,235,235),2);
+            }
+            screw(dc,x+24,y+59);screw(dc,x+158,y+59);
         } else if (block == 1) {
             int lastX = x + 16, lastY = cy;
             for (int i = 1; i <= 138; ++i) {
                 const int xx = x + 16 + i;
                 const int yy = cy - int(24 * std::sin(i*.095) * (.65 + .35*std::sin(i*.024)));
-                line(dc,lastX,lastY,xx,yy,RGB(169,126,246),2); lastX=xx;lastY=yy;
+                line(dc,lastX,lastY+2,xx,yy+2,RGB(79,49,123),4);
+                line(dc,lastX,lastY,xx,yy,RGB(190,145,251),2); lastX=xx;lastY=yy;
             }
         } else if (block == 2) {
             for (int i = 0; i < 4; ++i) {
@@ -205,6 +244,7 @@ class Editor final : public Steinberg::CPluginView {
                     disk(dc,px,py,1,i%2?RGB(31,123,210):RGB(47,217,238));
                 }
             }
+            line(dc,x+34,cy+2,x+155,cy+2,RGB(11,93,119),4);
             line(dc,x+34,cy,x+155,cy,RGB(67,211,238),2);
         } else if (block == 3) {
             for (int i = 0; i < 4; ++i) {
@@ -217,16 +257,25 @@ class Editor final : public Steinberg::CPluginView {
                 }
             }
         } else {
-            bevel(dc,x+46,y+56,82,71,RGB(36,43,49));
-            disk(dc,cx,cy,25,RGB(6,14,22)); disk(dc,cx,cy,20,RGB(38,52,62));
-            disk(dc,cx,cy,10,RGB(10,20,32));
+            metalPanel(dc,x+24,y+54,136,72);
+            fill(dc,x+28,y+58,128,63,RGB(8,16,23));
+            for(int row=0;row<21;++row)
+                line(dc,x+29,y+59+row*3,x+154,y+59+row*3,RGB(44,55,62));
+            for(int col=0;col<32;++col)
+                line(dc,x+29+col*4,y+59,x+29+col*4,y+119,RGB(26,38,44));
+            disk(dc,cx,cy,26,RGB(4,9,14));disk(dc,cx,cy,22,RGB(62,73,80));
+            disk(dc,cx,cy,19,RGB(8,16,24));disk(dc,cx,cy,9,RGB(33,47,56));
+            line(dc,x+125,y+84,x+161,y+83,RGB(4,8,12),7);
+            disk(dc,x+129,y+84,9,RGB(9,16,22));
         }
     }
     void chrome(HDC dc) {
         fill(dc,0,0,W,H,RGB(7,17,27));
-        fill(dc,0,0,W,82,RGB(9,22,33));
+        metalPanel(dc,0,0,W,82);
+        fill(dc,0,0,W,78,RGB(8,19,29));
         line(dc,0,81,W,81,RGB(38,68,83));
-        text(dc,24,11,360,"JERZY MULTI FX",28,RGB(224,248,252));
+        text(dc,39,11,155,"JERZY",28,RGB(224,248,252));
+        text(dc,181,11,210,"MULTI FX",28,RGB(46,196,235));
         text(dc,25,47,360,"BASS GUITAR EFFECTS STUDIO",12,RGB(124,172,193));
         text(dc,395,8,100,"PRESET",12,RGB(199,221,232));
         bevel(dc,397,36,338,39,RGB(15,29,43));
@@ -251,17 +300,24 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,965,44,149,globalSettings||view.advanced?"WRÓĆ":"USTAWIENIA",12,RGB(204,231,240));
         bevel(dc,1126,36,127,39,RGB(14,32,47));
         text(dc,1128,44,123,"POMOC",12,RGB(204,231,240));
-        bevel(dc,10,88,1260,210,RGB(10,25,37));
+        metalPanel(dc,10,88,1260,210,false);
+        fill(dc,13,91,1254,204,RGB(7,18,28));
         auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
         for(int i=0;i<5;++i) {
             const int b=order[i],x=24+i*222;
             const bool selected=b==view.block;
-            bevel(dc,x,97,183,190,selected?RGB(22,52,68):RGB(20,33,46));
+            metalPanel(dc,x,97,183,190);
+            fill(dc,x+3,100,177,184,selected?RGB(22,43,55):RGB(16,30,40));
             if(selected) {
+                line(dc,x-2,95,x+185,95,RGB(15,95,112),2);
+                line(dc,x-2,95,x-2,289,RGB(15,95,112),2);
+                line(dc,x+185,95,x+185,289,RGB(15,95,112),2);
                 line(dc,x,97,x+183,97,RGB(49,224,240),3);
                 line(dc,x,97,x,287,RGB(49,224,240),3);
                 line(dc,x+182,97,x+182,287,RGB(49,224,240),3);
+                line(dc,x+3,101,x+179,101,RGB(28,141,164));
             }
+            screw(dc,x+8,274);screw(dc,x+173,274);
             char number[8];snprintf(number,sizeof(number),"%d",i+1);
             bevel(dc,x+9,108,25,27,RGB(30,48,64));
             text(dc,x+9,110,25,number,17,selected?RGB(61,227,244):RGB(226,240,245));
@@ -269,26 +325,39 @@ class Editor final : public Steinberg::CPluginView {
             text(dc,x+39,112,139,labels[b],13,RGB(231,246,250));
             cardArt(dc,b,x,97);
             const bool off=value(layout().blockBypass[b])>=.5;
-            bevel(dc,x+48,250,89,29,off?RGB(65,30,44):RGB(11,50,44));
-            disk(dc,x+111,264,7,off?RGB(236,70,86):RGB(55,232,142));
+            metalPanel(dc,x+48,250,89,29);
+            fill(dc,x+51,253,83,23,off?RGB(50,21,30):RGB(6,34,29));
+            lamp(dc,x+111,264,true,off?RGB(232,57,75):RGB(43,233,135));
             text(dc,x+50,254,48,off?"OFF":"ON",15,off?RGB(244,130,141):RGB(78,244,162));
             if(i<4){line(dc,x+188,188,x+215,188,RGB(43,207,232),2);line(dc,x+207,183,x+215,188,RGB(43,207,232),2);line(dc,x+207,193,x+215,188,RGB(43,207,232),2);}
         }
-        bevel(dc,1135,97,126,190,RGB(8,20,32));
+        metalPanel(dc,1135,97,126,190);
+        fill(dc,1138,100,120,184,RGB(8,19,28));
         levelBar(dc,1152,"IN",needleIn);
         levelBar(dc,1208,"OUT",needleOut);
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
         const int cx=c.x+c.w/2,cy=c.y+(radius==40?71:56);
         text(dc,c.x,c.y,c.w,label,radius==40?13:11,RGB(216,236,242));
-        disk(dc,cx+2,cy+3,radius+3,RGB(5,13,22));
-        disk(dc,cx,cy,radius+1,RGB(54,75,91));
-        disk(dc,cx,cy,radius-4,RGB(12,25,38));
-        for(int ring=radius-5;ring>radius/3;--ring){
-            const int shade=std::clamp(25+(radius-ring)*2,0,85);
-            disk(dc,cx-1,cy-1,ring,RGB(shade,shade+11,shade+20));
+        disk(dc,cx+3,cy+5,radius+7,RGB(2,8,13));
+        disk(dc,cx,cy,radius+5,RGB(110,122,128));
+        disk(dc,cx,cy,radius+2,RGB(25,37,46));
+        for(int i=0;i<28;++i){
+            const double a=i*6.283185307179586/28;
+            line(dc,cx+int(std::sin(a)*(radius-1)),cy-int(std::cos(a)*(radius-1)),
+                    cx+int(std::sin(a)*(radius+3)),cy-int(std::cos(a)*(radius+3)),
+                    i<14?RGB(117,130,136):RGB(40,52,61));
         }
-        disk(dc,cx+radius/5,cy+radius/5,radius/2,RGB(18,31,44));
+        disk(dc,cx,cy,radius-4,RGB(6,14,21));
+        for(int step=0;step<8;++step){
+            const int ring=radius-6-step*std::max(1,(radius-13)/8);
+            const int shade=33+step*3;
+            disk(dc,cx-1-step/3,cy-2-step/4,ring,RGB(shade,shade+10,shade+17));
+        }
+        const int face=radius-14;
+        line(dc,cx-face+3,cy-face/2,cx-4,cy-face/2-3,RGB(89,105,114));
+        line(dc,cx-face+5,cy-face/2+2,cx-7,cy-face/2,RGB(66,83,93));
+        line(dc,cx+4,cy+face/2,cx+face-3,cy+face/2+3,RGB(29,43,53));
         for(int i=0;i<10;++i){
             const double a=(-135+i*27)*3.141592653589793/180;
             line(dc,cx+int(std::sin(a)*(radius+3)),cy-int(std::cos(a)*(radius+3)),
@@ -296,6 +365,8 @@ class Editor final : public Steinberg::CPluginView {
                     i<=int(value(c.id)*9)?color:RGB(62,86,102),2);
         }
         const double a=(-135+270*value(c.id))*3.141592653589793/180;
+        line(dc,cx+int(std::sin(a)*(radius-22)),cy-int(std::cos(a)*(radius-22)),
+                cx+int(std::sin(a)*(radius-7)),cy-int(std::cos(a)*(radius-7)),RGB(5,12,17),5);
         line(dc,cx+int(std::sin(a)*(radius-22)),cy-int(std::cos(a)*(radius-22)),
                 cx+int(std::sin(a)*(radius-7)),cy-int(std::cos(a)*(radius-7)),RGB(233,247,250),3);
         std::string reading=formatted(c.id);
@@ -313,18 +384,25 @@ class Editor final : public Steinberg::CPluginView {
              RGB(228,247,251));
     }
     void referenceDelayPanel(HDC dc) {
-        bevel(dc,11,305,1258,529,RGB(10,25,37));
+        metalPanel(dc,11,305,1258,529);
+        fill(dc,14,308,1252,522,RGB(11,25,36));
+        screw(dc,21,315);screw(dc,1259,315);
+        screw(dc,21,824);screw(dc,1259,824);
         text(dc,29,318,285,"DELAY A + B",27,RGB(230,250,252));
         text(dc,321,327,390,"DWA NIEZALEŻNE SILNIKI OPÓŹNIENIA",11,RGB(132,178,195));
         const int bank=std::clamp(view.section,0,1);
         const int mix=layout().digital[bank]+2;
         text(dc,797,326,61,"MIX",14,RGB(225,245,249));
-        fill(dc,852,337,340,8,RGB(4,16,26));
-        fill(dc,852,337,int(340*value(mix)),8,RGB(43,210,235));
-        disk(dc,852+int(340*value(mix)),341,9,RGB(223,240,247));
+        metalPanel(dc,850,333,344,14,false);
+        fill(dc,852,337,340,6,RGB(2,9,15));
+        fill(dc,852,337,int(340*value(mix)),6,RGB(43,210,235));
+        disk(dc,852+int(340*value(mix))+1,343,11,RGB(2,9,15));
+        disk(dc,852+int(340*value(mix)),341,9,RGB(154,171,179));
+        disk(dc,852+int(340*value(mix))-2,339,5,RGB(235,244,246));
         char mixText[24];snprintf(mixText,sizeof(mixText),"%d%%",int(std::round(value(mix)*100)));
         text(dc,1196,324,59,mixText,16,RGB(232,248,250));
-        bevel(dc,26,365,236,416,RGB(8,21,33));
+        metalPanel(dc,26,365,236,416,false);
+        fill(dc,29,368,230,410,RGB(8,21,32));
         text(dc,36,374,212,"SILNIK DELAYA",14,RGB(227,246,249));
         const int type=int(plain(layout().delayType[bank],float(value(layout().delayType[bank]))));
         const int model=int(std::round(value(layout().mxAlgorithms[bank][0])*8));
@@ -335,14 +413,31 @@ class Editor final : public Steinberg::CPluginView {
             const int y=402+i*44;
             const bool selected=type==families[i] && (models[i]<0 || model==models[i]) &&
                 (type!=1 || i!=1 || (model!=0&&model!=2&&model!=4));
-            bevel(dc,35,y,218,39,selected?RGB(17,82,101):RGB(11,29,43));
+            metalPanel(dc,35,y,218,39,false);
+            fill(dc,38,y+3,212,33,selected?RGB(12,78,96):RGB(10,26,39));
             if(selected)fill(dc,35,y,3,39,RGB(57,222,240));
             disk(dc,227,y+19,5,selected?RGB(64,229,238):RGB(37,57,72));
-            text(dc,44,y+10,176,names[i],13,selected?RGB(91,239,249):RGB(184,209,223));
+            if(i==0){
+                line(dc,47,y+11,47,y+26,RGB(126,225,234),2);
+                line(dc,47,y+11,58,y+11,RGB(126,225,234),2);
+                line(dc,47,y+26,58,y+26,RGB(126,225,234),2);
+                line(dc,58,y+11,58,y+26,RGB(126,225,234),2);
+            } else {
+                disk(dc,53,y+19,6,selected?RGB(78,214,231):RGB(89,121,140));
+                disk(dc,53,y+19,3,RGB(10,26,39));
+            }
+            text(dc,64,y+10,150,names[i],13,selected?RGB(91,239,249):RGB(184,209,223));
         }
-        bevel(dc,274,365,990,416,RGB(9,22,35));
+        metalPanel(dc,274,365,990,440,false);
+        fill(dc,277,368,984,434,RGB(9,22,34));
         const char* heading[]{"DIGITAL","MX ANALOG","MEMORY","REEL ECHO","OIL DRUM"};
-        text(dc,291,379,440,heading[std::clamp(type,0,4)],27,RGB(231,249,252));
+        disk(dc,307,398,18,RGB(4,14,23));
+        disk(dc,307,398,15,RGB(38,203,226));
+        disk(dc,307,398,11,RGB(5,25,36));
+        line(dc,305,390,311,390,RGB(203,252,255),2);
+        text(dc,327,379,385,heading[std::clamp(type,0,4)],27,RGB(231,249,252));
+        const char* subtitles[]{"PRECYZYJNE POWTÓRZENIA","MODUŁOWE ECHA ANALOGOWE","BARWNE ECHA CYFROWE","MECHANIKA TAŚMY I GŁOWIC","CIEPŁE, ORGANICZNE ECHA"};
+        text(dc,289,419,580,subtitles[std::clamp(type,0,4)],11,RGB(139,178,194));
         text(dc,735,386,316,bank?"AKTYWNY BANK B":"AKTYWNY BANK A",13,RGB(132,202,216));
         const bool bypass=value(layout().slotBypass[bank])>=.5;
         bevel(dc,928,413,124,31,bypass?RGB(86,36,48):RGB(18,76,58));
@@ -355,26 +450,35 @@ class Editor final : public Steinberg::CPluginView {
             if(c.y==465) referenceKnob(dc,c,(i%2)?"FEEDBACK":"CZAS DELAYA",40,i<2?RGB(53,215,236):RGB(174,128,247));
         }
         line(dc,281,648,1061,648,RGB(31,68,88));
+        const char* groups[]{"FILTRACJA","MODULACJA","SATURACJA","STEREO / MECHANIKA"};
+        for(int group=0;group<4;++group){
+            const int gx=279+group*198;
+            metalPanel(dc,gx,652,193,145,false);
+            fill(dc,gx+3,655,187,139,RGB(11,25,37));
+            text(dc,gx+5,658,183,groups[group],12,RGB(202,222,231));
+        }
         const char* labels[5][8]={{"FILTER","LEVEL"},{"IN TRIM","OUT TRIM","MACHINE","PAN","FX AMOUNT","FX RATE","FX DEPTH","DUCK"},
           {"BOOST","SQUELCH","DEPTH","MOD RATE","LEVEL","BLEND"},
           {"WOW","FLUTTER","AGE","MOTOR","SATURATION","BIAS","WIDTH","HISS"},
           {"IN TONE","OUT TONE","DEPTH","SPEED","IN SAT","OUT SAT","WIDTH","DRIFT"}};
-        for(const auto &c:controls) if(c.y==666) {
+        for(const auto &c:controls) if(c.y==689) {
             for(int i=0;i<8;++i)if(delayFeature(i)==c.id) {
                 referenceKnob(dc,c,labels[std::clamp(type,0,4)][i],26,i<2?RGB(64,212,231):RGB(173,126,236));break;
             }
         }
-        bevel(dc,1074,459,181,186,RGB(12,27,40));
+        metalPanel(dc,1074,459,181,186,false);
+        fill(dc,1077,462,175,180,RGB(11,25,38));
         text(dc,1080,467,169,"TRYB PRACY",13,RGB(217,236,243));
         const char* routes[]{"SZEREGOWY A > B","RÓWNOLEGŁY","MIX A / B"};
         const int routing=int(plain(layout().delayMode,float(value(layout().delayMode))));
         for(int i=0;i<3;++i){
             const int y=493+i*45;
-            bevel(dc,1082,y,165,39,routing==i?RGB(23,124,153):RGB(15,36,52));
-            disk(dc,1096,y+19,7,routing==i?RGB(75,231,246):RGB(36,56,70));
+            metalPanel(dc,1082,y,165,39,false);
+            fill(dc,1085,y+3,159,33,routing==i?RGB(23,124,153):RGB(15,36,52));
+            lamp(dc,1096,y+19,routing==i,RGB(75,231,246));
             text(dc,1104,y+10,137,routes[i],11,RGB(223,240,246));
         }
-        text(dc,285,783,675,"Prawy klik na regulatorze: MIDI Learn. Wszystkie parametry: USTAWIENIA.",10,RGB(123,171,191));
+        text(dc,286,808,676,"Prawy klik na regulatorze: MIDI Learn. Wszystkie parametry: USTAWIENIA.",10,RGB(123,171,191));
     }
 
     void rebuild() {
@@ -390,7 +494,7 @@ class Editor final : public Steinberg::CPluginView {
                 }
             for (int i = 0; i < 8; ++i) {
                 const int id = delayFeature(i);
-                if (id >= 0) controls.push_back({id, 279 + i * 99, 666, 94, 106, false});
+                if (id >= 0) controls.push_back({id, 279 + i * 99, 689, 94, 106, false});
             }
         } else {
             State s = state();
