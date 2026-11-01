@@ -12,6 +12,9 @@
 #include <windows.h>
 #include <commdlg.h>
 #include <windowsx.h>
+#include <gdiplus.h>
+#include <memory>
+#include <map>
 namespace multifx {
 class Editor final : public Steinberg::CPluginView {
     Controller *controller;
@@ -58,6 +61,29 @@ class Editor final : public Steinberg::CPluginView {
         return parameterId(std::string(bank ? "delayB." : "delayA.") + keys[type][index]);
     }
     std::array<HFONT, 64> fonts{};
+    struct TextOp {int x,y,w,size;COLORREF tint;std::string value;};
+    std::vector<TextOp> textOps;
+    Gdiplus::Graphics *canvas = nullptr;
+    ULONG_PTR gdiplusToken = 0;
+    std::map<COLORREF,std::unique_ptr<Gdiplus::SolidBrush>> vectorBrushes;
+    std::map<uint64_t,std::unique_ptr<Gdiplus::Pen>> vectorPens;
+    static Gdiplus::Color color(COLORREF c) {
+        return Gdiplus::Color(255, GetRValue(c), GetGValue(c), GetBValue(c));
+    }
+    Gdiplus::SolidBrush *brush(COLORREF tint) {
+        auto &b=vectorBrushes[tint];
+        if(!b)b=std::make_unique<Gdiplus::SolidBrush>(color(tint));
+        return b.get();
+    }
+    Gdiplus::Pen *pen(COLORREF tint,int width) {
+        auto &p=vectorPens[(uint64_t(width)<<32)|uint64_t(tint)];
+        if(!p){
+            p=std::make_unique<Gdiplus::Pen>(color(tint),float(width));
+            p->SetStartCap(Gdiplus::LineCapRound);
+            p->SetEndCap(Gdiplus::LineCapRound);
+        }
+        return p.get();
+    }
     int effectBypass() const {
         if (view.block != 1)
             return -1;
@@ -101,74 +127,108 @@ class Editor final : public Steinberg::CPluginView {
             DestroyWindow(h);
         combos.clear();
     }
-    static void fill(HDC dc, int x, int y, int w, int h, COLORREF color) {
-        HBRUSH b = CreateSolidBrush(color);
-        RECT r{x, y, x + w, y + h};
-        FillRect(dc, &r, b);
-        DeleteObject(b);
+    void showChoice(int id,int x,int y) {
+        HWND list=GetDlgItem(window,10000+id);
+        if(!list)return;
+        HMENU menu=CreatePopupMenu();
+        const int count=int(SendMessage(list,CB_GETCOUNT,0,0));
+        const int selected=int(SendMessage(list,CB_GETCURSEL,0,0));
+        std::vector<std::wstring> menuLabels;
+        menuLabels.reserve(std::max(0,count));
+        for(int option=0;option<count;++option){
+            const int length=int(SendMessage(list,CB_GETLBTEXTLEN,option,0));
+            if(length<0||length>4096)continue;
+            std::vector<char> label(size_t(length)+1);
+            SendMessageA(list,CB_GETLBTEXT,option,reinterpret_cast<LPARAM>(label.data()));
+            const int n=MultiByteToWideChar(CP_UTF8,0,label.data(),-1,nullptr,0);
+            std::vector<wchar_t> wide(std::max(1,n));
+            MultiByteToWideChar(CP_UTF8,0,label.data(),-1,wide.data(),n);
+            menuLabels.emplace_back(wide.data());
+            AppendMenuW(menu,MF_OWNERDRAW|(option==selected?MF_CHECKED:0),30000+option,
+                        reinterpret_cast<LPCWSTR>(&menuLabels.back()));
+        }
+        POINT origin{int(x/sx),int(y/sy)};
+        ClientToScreen(window,&origin);
+        const int chosen=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_LEFTALIGN|TPM_TOPALIGN,
+                                        origin.x,origin.y,0,window,nullptr);
+        DestroyMenu(menu);
+        if(chosen>=30000&&chosen<30000+count){
+            SendMessage(list,CB_SETCURSEL,chosen-30000,0);
+            SendMessage(window,WM_COMMAND,MAKEWPARAM(10000+id,CBN_SELCHANGE),reinterpret_cast<LPARAM>(list));
+        }
     }
-    void text(HDC dc, int x, int y, int w, const char *s, int size, COLORREF color) {
-        size = std::clamp(size, 8, 63);
-        if (!fonts[size])
-            fonts[size] = CreateFontA(size, 0, 0, 0, FW_MEDIUM, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
-                                      CLEARTYPE_QUALITY, 0, "Segoe UI");
-        HFONT f = fonts[size] ? fonts[size] : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        auto old = SelectObject(dc, f);
-        SetTextColor(dc, color);
-        SetBkMode(dc, TRANSPARENT);
-        RECT r{x, y, x + w, y + size + 8};
-        int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
-        std::vector<wchar_t> ws(n);
-        MultiByteToWideChar(CP_UTF8, 0, s, -1, ws.data(), n);
-        DrawTextW(dc, ws.data(), -1, &r, DT_SINGLELINE | DT_END_ELLIPSIS | DT_CENTER);
-        SelectObject(dc, old);
+    void fill(HDC, int x, int y, int w, int h, COLORREF tint) {
+        canvas->FillRectangle(brush(tint), Gdiplus::RectF(float(x), float(y), float(w), float(h)));
     }
-    static void line(HDC dc, int x, int y, int xx, int yy, COLORREF color, int width = 1) {
-        auto pen = CreatePen(PS_SOLID, width, color);
-        auto old = SelectObject(dc, pen);
-        MoveToEx(dc, x, y, nullptr); LineTo(dc, xx, yy);
-        SelectObject(dc, old); DeleteObject(pen);
+    void text(HDC, int x, int y, int w, const char *s, int size, COLORREF tint) {
+        textOps.push_back({x,y,w,size,tint,s});
     }
-    static void disk(HDC dc, int x, int y, int r, COLORREF color) {
-        auto brush = CreateSolidBrush(color);
-        auto old = SelectObject(dc, brush);
-        auto pen = SelectObject(dc, GetStockObject(NULL_PEN));
-        Ellipse(dc, x-r, y-r, x+r, y+r);
-        SelectObject(dc, pen); SelectObject(dc, old); DeleteObject(brush);
+    void drawTextPass(HDC dc) {
+        for(const auto &op:textOps) {
+            const int fontSize=std::clamp(int(std::round(op.size/sy)),10,63);
+            if(!fonts[fontSize])fonts[fontSize]=CreateFontA(fontSize,0,0,0,FW_SEMIBOLD,0,0,0,
+                DEFAULT_CHARSET,0,0,ANTIALIASED_QUALITY,DEFAULT_PITCH|FF_SWISS,"Segoe UI");
+            const auto old=SelectObject(dc,fonts[fontSize]?fonts[fontSize]:GetStockObject(DEFAULT_GUI_FONT));
+            const int n=MultiByteToWideChar(CP_UTF8,0,op.value.c_str(),-1,nullptr,0);
+            if(n>0){
+                std::vector<wchar_t> wide(n);
+                MultiByteToWideChar(CP_UTF8,0,op.value.c_str(),-1,wide.data(),n);
+                RECT box{int(std::round(op.x/sx)),int(std::round(op.y/sy)),
+                    int(std::round((op.x+op.w)/sx)),int(std::round((op.y+op.size+8)/sy))};
+                SetTextColor(dc,op.tint);SetBkMode(dc,TRANSPARENT);
+                DrawTextW(dc,wide.data(),-1,&box,DT_SINGLELINE|DT_END_ELLIPSIS|DT_CENTER|DT_VCENTER);
+            }
+            SelectObject(dc,old);
+        }
+        textOps.clear();
     }
-    static void bevel(HDC dc, int x, int y, int w, int h, COLORREF color) {
-        fill(dc, x, y, w, h, color);
+    void line(HDC, int x, int y, int xx, int yy, COLORREF tint, int width = 1) {
+        canvas->DrawLine(pen(tint,width), float(x), float(y), float(xx), float(yy));
+    }
+    void disk(HDC, int x, int y, int r, COLORREF tint) {
+        canvas->FillEllipse(brush(tint), float(x-r), float(y-r), float(r*2), float(r*2));
+    }
+    void bevel(HDC dc, int x, int y, int w, int h, COLORREF tint) {
+        fill(dc, x, y, w, h, tint);
         line(dc, x, y, x+w-1, y, RGB(69,88,103));
         line(dc, x, y, x, y+h-1, RGB(51,69,84));
         line(dc, x, y+h-1, x+w, y+h-1, RGB(10,19,30));
         line(dc, x+w-1, y, x+w-1, y+h, RGB(10,19,30));
     }
-    static void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
+    void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
         fill(dc,x+2,y+3,w,h,RGB(2,8,14));
-        for(int i=0;i<10;++i){
-            const int top=(h*i)/10, height=(h*(i+1))/10-top;
-            const int shade=raised ? 31-i*2 : 13+i;
-            fill(dc,x,y+top,w,height,RGB(shade,shade+9,shade+16));
-        }
-        for(int i=0;i<h;i+=5)
-            line(dc,x+3,y+i,x+w-4,y+i,RGB(37,48,55));
+        Gdiplus::LinearGradientBrush gradient(Gdiplus::Point(x,y),Gdiplus::Point(x,y+std::max(h,1)),
+            color(raised?RGB(37,47,53):RGB(12,25,35)),color(raised?RGB(13,26,34):RGB(28,44,54)));
+        canvas->FillRectangle(&gradient,Gdiplus::Rect(x,y,w,h));
         line(dc,x,y,x+w-1,y,raised?RGB(118,134,141):RGB(53,71,82));
         line(dc,x,y,x,y+h-1,RGB(80,99,108));
         line(dc,x,y+h-1,x+w,y+h-1,RGB(3,9,15),2);
         line(dc,x+w-1,y,x+w-1,y+h,RGB(3,9,15),2);
     }
-    static void screw(HDC dc,int x,int y){
+    void screw(HDC dc,int x,int y){
         disk(dc,x+1,y+2,5,RGB(3,9,15));
         disk(dc,x,y,4,RGB(113,126,131));
         disk(dc,x,y,3,RGB(46,57,63));
         line(dc,x-2,y+1,x+2,y-1,RGB(157,169,171));
     }
-    static void lamp(HDC dc,int x,int y,bool on,COLORREF color){
+    void lamp(HDC dc,int x,int y,bool on,COLORREF tint){
         disk(dc,x,y,11,RGB(2,8,13));
         disk(dc,x,y,9,RGB(69,85,91));
-        disk(dc,x,y,7,on?color:RGB(80,43,47));
+        disk(dc,x,y,7,on?tint:RGB(80,43,47));
         if(on){disk(dc,x-2,y-2,3,RGB(224,253,248));disk(dc,x,y,2,RGB(255,255,255));}
         else disk(dc,x-2,y-2,2,RGB(133,91,93));
+    }
+    void toggleSwitch(HDC dc,int x,int y,bool on,int scale=1){
+        const int radius=scale==1?13:17;
+        disk(dc,x+1,y+2,radius+2,RGB(1,7,11));
+        Gdiplus::LinearGradientBrush socket(Gdiplus::Point(x-radius,y-radius),Gdiplus::Point(x+radius,y+radius),
+            Gdiplus::Color(255,195,204,204),Gdiplus::Color(255,67,77,80));
+        canvas->FillEllipse(&socket,float(x-radius),float(y-radius),float(radius*2),float(radius*2));
+        disk(dc,x,y,radius-4,RGB(13,26,32));
+        const int tipY=y+(on?-7:7);
+        line(dc,x,y,x,tipY,RGB(9,14,18),7);
+        line(dc,x-1,y,x-1,tipY,RGB(231,236,225),4);
+        disk(dc,x-1,tipY,scale==1?4:5,RGB(217,224,213));
     }
     void vu(HDC dc, int x, const char *label, float amplitude) {
         bevel(dc, x, 9, 192, 65, RGB(16,30,45));
@@ -210,64 +270,22 @@ class Editor final : public Steinberg::CPluginView {
         text(dc, x - 10, 276, 48, reading, 10, RGB(184,211,221));
     }
     void cardArt(HDC dc, int block, int x, int y) {
-        metalPanel(dc, x + 10, y + 48, 163, 85, false);
-        const int cx = x + 92, cy = y + 90;
-        if (block == 0) {
-            metalPanel(dc, x + 20, y + 56, 142, 70);
-            fill(dc,x+25,y+60,132,28,RGB(4,10,13));
-            for (int row = 0; row < 14; ++row)
-                line(dc,x+27,y+61+row*2,x+155,y+61+row*2,RGB(66,80,85));
-            for (int col = 0; col < 26; ++col)
-                line(dc,x+27+col*5,y+61,x+27+col*5,y+87,RGB(29,41,46));
-            for (int i = 0; i < 3; ++i) {
-                const int knob=x+51+i*40;
-                disk(dc,knob+1,y+108,11,RGB(2,7,11));
-                disk(dc,knob,y+106,10,RGB(135,145,149));
-                disk(dc,knob,y+106,8,RGB(15,24,31));
-                line(dc,knob,y+100,knob+2,y+96,RGB(229,235,235),2);
-            }
-            screw(dc,x+24,y+59);screw(dc,x+158,y+59);
-        } else if (block == 1) {
-            int lastX = x + 16, lastY = cy;
-            for (int i = 1; i <= 138; ++i) {
-                const int xx = x + 16 + i;
-                const int yy = cy - int(24 * std::sin(i*.095) * (.65 + .35*std::sin(i*.024)));
-                line(dc,lastX,lastY+2,xx,yy+2,RGB(79,49,123),4);
-                line(dc,lastX,lastY,xx,yy,RGB(190,145,251),2); lastX=xx;lastY=yy;
-            }
-        } else if (block == 2) {
-            for (int i = 0; i < 4; ++i) {
-                const int xx = x + 43 + i*30;
-                for (int a = 0; a < 35; ++a) {
-                    const float angle = a*6.2831853f/35;
-                    const int px = xx + int(std::cos(angle)*(11+i*2));
-                    const int py = cy + int(std::sin(angle)*27);
-                    disk(dc,px,py,1,i%2?RGB(31,123,210):RGB(47,217,238));
-                }
-            }
-            line(dc,x+34,cy+2,x+155,cy+2,RGB(11,93,119),4);
-            line(dc,x+34,cy,x+155,cy,RGB(67,211,238),2);
-        } else if (block == 3) {
-            for (int i = 0; i < 4; ++i) {
-                int lastX=x+13,lastY=cy;
-                for(int j=1;j<150;++j) {
-                    const int xx=x+13+j;
-                    const int yy=cy-int(9*std::sin(j*.045+i*.65)+12*std::sin(j*.013+i*.9));
-                    line(dc,lastX,lastY,xx,yy,i%2?RGB(65,117,215):RGB(149,106,238));
-                    lastX=xx;lastY=yy;
-                }
-            }
-        } else {
-            metalPanel(dc,x+24,y+54,136,72);
-            fill(dc,x+28,y+58,128,63,RGB(8,16,23));
-            for(int row=0;row<21;++row)
-                line(dc,x+29,y+59+row*3,x+154,y+59+row*3,RGB(44,55,62));
-            for(int col=0;col<32;++col)
-                line(dc,x+29+col*4,y+59,x+29+col*4,y+119,RGB(26,38,44));
-            disk(dc,cx,cy,26,RGB(4,9,14));disk(dc,cx,cy,22,RGB(62,73,80));
-            disk(dc,cx,cy,19,RGB(8,16,24));disk(dc,cx,cy,9,RGB(33,47,56));
-            line(dc,x+125,y+84,x+161,y+83,RGB(4,8,12),7);
-            disk(dc,x+129,y+84,9,RGB(9,16,22));
+        // Compact vector drawing of a studio module; all lettering remains font based.
+        metalPanel(dc,x+10,y+48,163,85,false);
+        fill(dc,x+14,y+52,155,77,RGB(24,35,41));
+        bevel(dc,x+21,y+57,141,27,RGB(5,15,20));
+        const char *names[]{"PREAMP", "MODULATION", "DUAL DELAY", "REVERB", "CABINET"};
+        text(dc,x+23,y+61,137,names[std::clamp(block,0,4)],12,RGB(136,219,228));
+        lamp(dc,x+155,y+70,true,RGB(67,222,172));
+        for(int i=0;i<3;++i){
+            const int cx=x+45+i*47,cy=y+107;
+            disk(dc,cx+1,cy+2,13,RGB(3,8,11));
+            Gdiplus::LinearGradientBrush rim(Gdiplus::Point(cx-11,cy-11),Gdiplus::Point(cx+11,cy+11),
+                Gdiplus::Color(255,190,202,203),Gdiplus::Color(255,54,69,76));
+            canvas->FillEllipse(&rim,float(cx-11),float(cy-11),22.0f,22.0f);
+            disk(dc,cx,cy,8,RGB(33,48,54));
+            line(dc,cx,cy,cx+int(std::sin((i-1)*.62)*7),cy-int(std::cos((i-1)*.62)*7),RGB(226,240,240),2);
+            line(dc,cx-14,cy+15,cx+14,cy+15,RGB(73,91,99));
         }
     }
     void chrome(HDC dc) {
@@ -287,8 +305,6 @@ class Editor final : public Steinberg::CPluginView {
         snprintf(presetLabel,sizeof(presetLabel),"%02d   %s",preset+1,presetNames[preset]);
         text(dc,435,45,245,presetLabel,14,RGB(223,242,248));
         text(dc,678,45,22,"v",13,RGB(174,210,225));
-        if(referenceDelay()){
-        }
         bevel(dc,744,36,40,39,RGB(15,29,43));
         text(dc,746,43,37,"SAVE",11,RGB(194,226,237));
         text(dc,799,8,180,"MIDI MAPOWANIE",12,RGB(198,220,231));
@@ -326,10 +342,11 @@ class Editor final : public Steinberg::CPluginView {
             text(dc,x+39,112,139,labels[b],13,RGB(231,246,250));
             cardArt(dc,b,x,97);
             const bool off=value(layout().blockBypass[b])>=.5;
-            metalPanel(dc,x+48,250,89,29);
-            fill(dc,x+51,253,83,23,off?RGB(50,21,30):RGB(6,34,29));
-            lamp(dc,x+111,264,true,off?RGB(232,57,75):RGB(43,233,135));
-            text(dc,x+50,254,48,off?"OFF":"ON",15,off?RGB(244,130,141):RGB(78,244,162));
+            metalPanel(dc,x+40,247,111,35);
+            fill(dc,x+43,250,105,29,off?RGB(50,21,30):RGB(6,34,29));
+            lamp(dc,x+59,264,true,off?RGB(232,57,75):RGB(43,233,135));
+            text(dc,x+70,254,46,off?"OFF":"ON",15,off?RGB(244,130,141):RGB(78,244,162));
+            toggleSwitch(dc,x+134,264,!off);
             if(i<4){line(dc,x+188,188,x+215,188,RGB(43,207,232),2);line(dc,x+207,183,x+215,188,RGB(43,207,232),2);line(dc,x+207,193,x+215,188,RGB(43,207,232),2);}
         }
         metalPanel(dc,1135,97,126,190);
@@ -339,37 +356,41 @@ class Editor final : public Steinberg::CPluginView {
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
         const int cx=c.x+c.w/2,cy=c.y+(radius==40?71:radius>=34?63:56);
-        text(dc,c.x,c.y,c.w,label,radius==40?13:11,RGB(216,236,242));
-        disk(dc,cx+3,cy+5,radius+7,RGB(2,8,13));
-        disk(dc,cx,cy,radius+5,RGB(110,122,128));
-        disk(dc,cx,cy,radius+2,RGB(25,37,46));
-        for(int i=0;i<28;++i){
-            const double a=i*6.283185307179586/28;
-            line(dc,cx+int(std::sin(a)*(radius-1)),cy-int(std::cos(a)*(radius-1)),
-                    cx+int(std::sin(a)*(radius+3)),cy-int(std::cos(a)*(radius+3)),
-                    i<14?RGB(117,130,136):RGB(40,52,61));
+        text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
+        disk(dc,cx+2,cy+4,radius+5,RGB(2,8,13));
+        const auto rimRect=Gdiplus::RectF(float(cx-radius),float(cy-radius),float(radius*2),float(radius*2));
+        Gdiplus::LinearGradientBrush rim(Gdiplus::Point(cx-radius,cy-radius),Gdiplus::Point(cx+radius,cy+radius),
+            Gdiplus::Color(255,205,216,216),Gdiplus::Color(255,43,55,62));
+        canvas->FillEllipse(&rim,rimRect);
+        canvas->DrawEllipse(pen(RGB(216,231,232),1),rimRect);
+        const int inner=radius-5;
+        Gdiplus::LinearGradientBrush face(Gdiplus::Point(cx-inner,cy-inner),Gdiplus::Point(cx+inner,cy+inner),
+            Gdiplus::Color(255,92,108,116),Gdiplus::Color(255,11,21,29));
+        canvas->FillEllipse(&face,Gdiplus::RectF(float(cx-inner),float(cy-inner),float(inner*2),float(inner*2)));
+        canvas->DrawEllipse(pen(RGB(7,15,21),2),float(cx-inner),float(cy-inner),float(inner*2),float(inner*2));
+        const int cap=std::max(8,radius-13);
+        Gdiplus::LinearGradientBrush capFace(Gdiplus::Point(cx-cap,cy-cap),Gdiplus::Point(cx+cap,cy+cap),
+            Gdiplus::Color(255,146,158,162),Gdiplus::Color(255,29,41,49));
+        canvas->FillEllipse(&capFace,float(cx-cap),float(cy-cap),float(cap*2),float(cap*2));
+        Gdiplus::Pen brushed(Gdiplus::Color(31,228,238,240),0.65f);
+        for(int ray=0;ray<28;++ray){
+            const double angle=ray*6.283185307179586/28;
+            canvas->DrawLine(&brushed,float(cx+std::sin(angle)*3),float(cy-std::cos(angle)*3),
+                float(cx+std::sin(angle)*(cap-2)),float(cy-std::cos(angle)*(cap-2)));
         }
-        disk(dc,cx,cy,radius-4,RGB(6,14,21));
-        for(int step=0;step<8;++step){
-            const int ring=radius-6-step*std::max(1,(radius-13)/8);
-            const int shade=33+step*3;
-            disk(dc,cx-1-step/3,cy-2-step/4,ring,RGB(shade,shade+10,shade+17));
-        }
-        const int face=radius-14;
-        line(dc,cx-face+3,cy-face/2,cx-4,cy-face/2-3,RGB(89,105,114));
-        line(dc,cx-face+5,cy-face/2+2,cx-7,cy-face/2,RGB(66,83,93));
-        line(dc,cx+4,cy+face/2,cx+face-3,cy+face/2+3,RGB(29,43,53));
-        for(int i=0;i<10;++i){
-            const double a=(-135+i*27)*3.141592653589793/180;
-            line(dc,cx+int(std::sin(a)*(radius+3)),cy-int(std::cos(a)*(radius+3)),
-                    cx+int(std::sin(a)*(radius+7)),cy-int(std::cos(a)*(radius+7)),
-                    i<=int(value(c.id)*9)?color:RGB(62,86,102),2);
+        canvas->DrawEllipse(pen(RGB(93,112,122),1),float(cx-cap),float(cy-cap),float(cap*2),float(cap*2));
+        for(int i=0;i<=20;++i){
+            const double a=(-135+i*13.5)*3.141592653589793/180;
+            const int outer=radius+6,innerTick=radius+(i%5==0?0:2);
+            line(dc,cx+int(std::sin(a)*innerTick),cy-int(std::cos(a)*innerTick),
+                    cx+int(std::sin(a)*outer),cy-int(std::cos(a)*outer),
+                    i<=int(value(c.id)*20)?color:RGB(71,94,106),i%5==0?2:1);
         }
         const double a=(-135+270*value(c.id))*3.141592653589793/180;
-        line(dc,cx+int(std::sin(a)*(radius-22)),cy-int(std::cos(a)*(radius-22)),
-                cx+int(std::sin(a)*(radius-7)),cy-int(std::cos(a)*(radius-7)),RGB(5,12,17),5);
-        line(dc,cx+int(std::sin(a)*(radius-22)),cy-int(std::cos(a)*(radius-22)),
-                cx+int(std::sin(a)*(radius-7)),cy-int(std::cos(a)*(radius-7)),RGB(233,247,250),3);
+        line(dc,cx+int(std::sin(a)*5),cy-int(std::cos(a)*5),
+                cx+int(std::sin(a)*(radius-9)),cy-int(std::cos(a)*(radius-9)),RGB(4,11,16),6);
+        line(dc,cx+int(std::sin(a)*5),cy-int(std::cos(a)*5),
+                cx+int(std::sin(a)*(radius-9)),cy-int(std::cos(a)*(radius-9)),RGB(238,249,251),3);
         std::string reading=formatted(c.id);
         const auto &definition=layout().parameters[c.id];
         if(radius==40){
@@ -381,8 +402,11 @@ class Editor final : public Steinberg::CPluginView {
             reading=display;
         }
         if(definition.unit=="ms" && reading.find("ms")==std::string::npos)reading+=" ms";
-        text(dc,c.x,c.y+(radius==40?121:radius>=34?109:87),c.w,reading.c_str(),radius>=34?13:11,
-             RGB(228,247,251));
+        const int readoutY=c.y+(radius==40?121:radius>=34?109:87);
+        const int readoutW=std::min(c.w-4,radius*2+58);
+        bevel(dc,cx-readoutW/2,readoutY-3,readoutW,22,RGB(5,18,27));
+        text(dc,cx-readoutW/2,readoutY-2,readoutW,reading.c_str(),radius>=34?13:12,
+             RGB(112,231,240));
     }
     void referenceDelayPanel(HDC dc) {
         metalPanel(dc,11,305,1258,529);
@@ -516,11 +540,22 @@ class Editor final : public Steinberg::CPluginView {
             const int total=int(compact.size()+knobs.size());
             controlPages=std::max(1,(total+5)/6);
             controlPage=std::clamp(controlPage,0,controlPages-1);
+            const int pageStart=controlPage*6,pageEnd=std::min(total,(controlPage+1)*6);
+            const int visibleCompact=std::max(0,std::min(pageEnd,int(compact.size()))-pageStart);
+            const int visibleKnobs=pageEnd-pageStart-visibleCompact;
+            const bool grouped=visibleCompact<=3&&visibleKnobs<=3;
             for(int index=controlPage*6;index<std::min(total,(controlPage+1)*6);++index){
                 const bool isCompact=index<int(compact.size());
                 const int id=isCompact?compact[index]:knobs[index-int(compact.size())];
                 const int local=index-controlPage*6;
-                controls.push_back({id,28+(local%3)*411,375+(local/3)*131,388,isCompact?54:126,isCompact});
+                int x=28+(local%3)*411,y=375+(local/3)*131;
+                if(grouped){
+                    const int count=isCompact?visibleCompact:visibleKnobs;
+                    const int inRow=isCompact?local:local-visibleCompact;
+                    x=28+(3-count)*205+inRow*411;
+                    y=isCompact?(visibleKnobs?385:420):(visibleCompact?460:420);
+                }
+                controls.push_back({id,x,y,388,isCompact?54:126,isCompact});
             }
         }
         for (auto &c : controls) {
@@ -530,7 +565,7 @@ class Editor final : public Steinberg::CPluginView {
             const int yy = c.y - scroll;
             if (yy < 370 || yy + 55 > controlBottom)
                 continue;
-            HWND h = CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
+            HWND h = CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
                                    int(c.x / sx), int((yy + 23) / sy), int(c.w / sx), 240, window,
                                    reinterpret_cast<HMENU>(INT_PTR(10000 + c.id)), instance, nullptr);
             if (!h)
@@ -564,7 +599,7 @@ class Editor final : public Steinberg::CPluginView {
             SendMessage(h, CB_SETCURSEL, choice, 0);
             combos.push_back(h);
         }
-        HWND factory = referenceDelay() ? nullptr : CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST, int(430 / sx),
+        HWND factory = referenceDelay() ? nullptr : CreateWindowA("COMBOBOX", "", WS_CHILD | CBS_DROPDOWNLIST, int(430 / sx),
                                      int(46 / sy), int(300 / sx), 260, window,
                                      reinterpret_cast<HMENU>(INT_PTR(10000 + layout().factoryProgram)),
                                      instance, nullptr);
@@ -603,56 +638,25 @@ class Editor final : public Steinberg::CPluginView {
         const int pixelsWide=std::max(1L,client.right),pixelsHigh=std::max(1L,client.bottom);
         auto bmp = CreateCompatibleBitmap(target, pixelsWide, pixelsHigh);
         auto old = SelectObject(dc, bmp);
-        const int mapped=SaveDC(dc);
-        SetMapMode(dc,MM_ANISOTROPIC);
-        SetWindowExtEx(dc,W,H,nullptr);
-        SetViewportExtEx(dc,pixelsWide,pixelsHigh,nullptr);
+        textOps.clear();
+        auto graphics=std::make_unique<Gdiplus::Graphics>(dc);
+        canvas=graphics.get();
+        graphics->SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        graphics->SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
+        graphics->ScaleTransform(float(pixelsWide)/W,float(pixelsHigh)/H);
         if (referenceDelay()) {
             chrome(dc);
             referenceDelayPanel(dc);
-            RestoreDC(dc,mapped);
+            graphics->Flush(Gdiplus::FlushIntentionSync);
+            canvas=nullptr;
+            graphics.reset();
+            drawTextPass(dc);
             BitBlt(target,0,0,pixelsWide,pixelsHigh,dc,0,0,SRCCOPY);
             SelectObject(dc, old);
             DeleteObject(bmp);
             DeleteDC(dc);
             if (!supplied) EndPaint(window, &ps);
             return;
-        }
-        fill(dc, 0, 0, W, H, RGB(9,19,31));
-        fill(dc, 0, 78, W, 2, RGB(32,96,116));
-        text(dc, 24, 16, 400, "JERZY MULTIFX", 27, RGB(229,249,252));
-        text(dc, 24, 51, 400, "BASS EFFECTS / LIVE STUDIO", 13, RGB(104,177,198));
-        vu(dc, 850, "IN", needleIn); vu(dc, 1054, "OUT", needleOut);
-        bevel(dc, 430, 13, 400, 28, RGB(22,42,58));
-        text(dc, 430, 17, 400, globalSettings ? "BACK TO EFFECT" : "SETTINGS / OUTPUT", 14, RGB(223,244,248));
-        auto order = permutation(int(plain(layout().order, float(value(layout().order)))));
-        for (int i = 0; i < 5; ++i) {
-            int b = order[i], x = 20, y = 90 + i * 113;
-            bevel(dc, x, y, 202, 104, b == view.block ? RGB(21,54,72) : RGB(15,31,47));
-            if (b == view.block) fill(dc, x, y, 4, 104, accent());
-            text(dc, x + 7, y + 12, 188, blockName(b), 15, RGB(231,247,250));
-            const bool bypass = value(layout().blockBypass[b]) >= .5;
-            fill(dc, x + 12, y + 62, 178, 29, bypass ? RGB(95, 36, 48) : RGB(22, 95, 70));
-            disk(dc, x + 28, y + 76, 5, bypass ? RGB(241,81,99) : RGB(65,236,143));
-            text(dc, x + 28, y + 67, 162, bypass ? "BYPASS / OFF" : "ON / AKTYWNY", 14, RGB(242, 251, 251));
-        }
-        if (view.block == 2 && !globalSettings) {
-            for (int bank = 0; bank < 2; ++bank) {
-                const int x = 248 + bank * 506;
-                const int type = int(plain(layout().delayType[bank], float(value(layout().delayType[bank]))));
-                const int mixId = layout().digital[bank] + 2;
-                bevel(dc, x, 90, 494, 70, bank == view.section ? RGB(27,65,83) : RGB(18,39,56));
-                text(dc, x + 10, 96, 150, bank ? "DELAY B" : "DELAY A", 19,
-                     bank ? RGB(191,150,255) : RGB(83,224,239));
-                const char *engines[]{"DIGITAL", "MX COLLECTION", "MEMORY", "REEL", "OIL DRUM"};
-                text(dc, x + 165, 98, 315, engines[std::clamp(type,0,4)], 14, RGB(220,241,247));
-                fill(dc, x + 18, 137, 455, 5, RGB(8,22,34));
-                fill(dc, x + 18, 137, int(455 * value(mixId)), 5,
-                     bank ? RGB(176,124,255) : RGB(60,213,231));
-                char mixLabel[32];
-                snprintf(mixLabel,sizeof(mixLabel),"MIX %d%%",int(std::round(value(mixId)*100)));
-                text(dc, x + 337, 112, 140, mixLabel, 12, RGB(183,215,225));
-            }
         }
         chrome(dc);
         text(dc,24,297,1190,"KLIKNIJ BLOK U GÓRY → WYBIERZ EFEKT PONIŻEJ → USTAW PARAMETRY    •    PRAWY KLIK: MIDI LEARN",13,RGB(169,211,225));
@@ -698,18 +702,10 @@ class Editor final : public Steinberg::CPluginView {
         }
         if (effectBypass() >= 0 && !globalSettings) {
             const int cx = view.section == 1 ? 1080 : W / 2, cy = 735;
-            HBRUSH b = CreateSolidBrush(RGB(173, 181, 176));
-            auto oldBrush = SelectObject(dc, b);
-            Ellipse(dc, cx - 27, cy - 27, cx + 27, cy + 27);
-            SelectObject(dc, oldBrush);
-            DeleteObject(b);
+            toggleSwitch(dc,cx,cy,value(effectBypass())<.5,2);
             text(dc, cx - 110, 765, 220, value(effectBypass()) >= .5 ? "BYPASS / OFF" : "EFFECT ON", 13,
                  RGB(232,221,190));
-            HBRUSH led = CreateSolidBrush(value(effectBypass()) >= .5 ? RGB(94, 48, 40) : RGB(115,225,105));
-            oldBrush = SelectObject(dc, led);
-            Ellipse(dc, cx - 5, cy - 42, cx + 5, cy - 32);
-            SelectObject(dc, oldBrush);
-            DeleteObject(led);
+            lamp(dc,cx,cy-37,true,value(effectBypass()) >= .5 ? RGB(241,81,99) : RGB(65,236,143));
         }
         if (!globalSettings && view.block == 0 && view.section == 2 && value(layout().fuzzModel) * 19 >= 5.5)
             text(dc, 248, 755, 990,
@@ -726,8 +722,8 @@ class Editor final : public Steinberg::CPluginView {
         char status[96];
         snprintf(status,sizeof(status),"GR %.1f dB / PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
         text(dc,1007,682,235,status,12,RGB(166,208,222));
-        const int saved = SaveDC(dc);
-        IntersectClipRect(dc, 20, 370, 1260, controlBottom);
+        const auto saved=graphics->Save();
+        graphics->SetClip(Gdiplus::RectF(20,370,1240,float(controlBottom-370)),Gdiplus::CombineModeIntersect);
         for (auto &c : controls) {
             int y = c.y - scroll;
             if (y + c.h < 370 || y > controlBottom)
@@ -753,11 +749,10 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 if (isToggle(c.id)) {
                     const bool on=p.key.ends_with(".bypass") ? value(c.id)<.5 : value(c.id)>=.5;
-                    disk(dc,c.x+16,y+38,7,on?RGB(65,236,143):RGB(241,81,99));
-                    bevel(dc,c.x+35,y+27,12,21,RGB(12,27,42));
-                    bevel(dc,c.x+33,y+(on?26:37),16,10,RGB(163,202,216));
+                    lamp(dc,c.x+17,y+38,true,on?RGB(65,236,143):RGB(241,81,99));
+                    toggleSwitch(dc,c.x+43,y+38,on);
                 }
-                text(dc, c.x+50, y + 28, c.w-54,
+                text(dc, c.x+65, y + 28, c.w-69,
                      p.key.ends_with(".bypass") ? (value(c.id)>=.5 ? "BYPASS / OFF" : "EFFECT ON") : isToggle(c.id) ? (value(c.id) >= .5 ? "ON" : "OFF") : formatted(c.id).c_str(), 14,
                      RGB(232,247,250));
                 if (p.steps == 0 && !isToggle(c.id)) {
@@ -769,7 +764,7 @@ class Editor final : public Steinberg::CPluginView {
                 referenceKnob(dc,c,label.c_str(),34,accent());
             }
         }
-        RestoreDC(dc, saved);
+        graphics->Restore(saved);
         bevel(dc,1031,638,48,22,RGB(21,51,67));
         text(dc,1031,639,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
         bevel(dc,1083,638,100,22,RGB(15,36,50));
@@ -777,14 +772,17 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,1083,642,100,pageLabel,11,RGB(215,235,244));
         bevel(dc,1187,638,48,22,RGB(21,51,67));
         text(dc,1187,639,48,">",14,controlPage+1<controlPages?RGB(229,246,252):RGB(87,117,131));
-        const char *buttons[]{"LOAD IR WAV", "LOAD PRESET", "SAVE PRESET", "MASTER BYPASS"};
-        buttons[3]=value(layout().bypass)>=.5 ? "MASTER BYPASSED" : "MASTER ACTIVE";
+        const char *buttons[]{"WCZYTAJ IR WAV", "WCZYTAJ PRESET", "ZAPISZ PRESET", "MASTER BYPASS"};
+        buttons[3]=value(layout().bypass)>=.5 ? "MASTER WYŁĄCZONY" : "MASTER AKTYWNY";
         for (int i = 0; i < 4; ++i) {
             fill(dc, 28 + i * 250, 805, 238, 32, RGB(26,53,72));
             text(dc, 28 + i * 250, 811, 238, buttons[i], 14, RGB(226,248,252));
         }
-        text(dc, 1028, 807, 225, "Right click: MIDI Learn", 13, RGB(160, 171, 175));
-        RestoreDC(dc,mapped);
+        text(dc, 1028, 807, 225, "Prawy klik: MIDI Learn", 13, RGB(160, 191, 205));
+        graphics->Flush(Gdiplus::FlushIntentionSync);
+        canvas=nullptr;
+        graphics.reset();
+        drawTextPass(dc);
         BitBlt(target,0,0,pixelsWide,pixelsHigh,dc,0,0,SRCCOPY);
         SelectObject(dc, old);
         DeleteObject(bmp);
@@ -819,6 +817,42 @@ class Editor final : public Steinberg::CPluginView {
     LRESULT message(UINT msg, WPARAM w, LPARAM lp) {
         int x = int(GET_X_LPARAM(lp) * sx), y = int(GET_Y_LPARAM(lp) * sy);
         switch (msg) {
+        case WM_MEASUREITEM: {
+            auto *item=reinterpret_cast<MEASUREITEMSTRUCT *>(lp);
+            if(item&&item->CtlType==ODT_MENU&&item->itemID>=30000){
+                item->itemWidth=UINT(std::max(210,int(300/sx)));
+                item->itemHeight=UINT(std::max(27,int(32/sy)));
+                return TRUE;
+            }
+            break;
+        }
+        case WM_DRAWITEM: {
+            auto *item=reinterpret_cast<DRAWITEMSTRUCT *>(lp);
+            if(item&&item->CtlType==ODT_MENU&&item->itemID>=30000){
+                const bool selected=(item->itemState&ODS_SELECTED)!=0;
+                HBRUSH background=CreateSolidBrush(selected?RGB(21,95,116):RGB(12,32,44));
+                FillRect(item->hDC,&item->rcItem,background);DeleteObject(background);
+                if(item->itemState&ODS_CHECKED){
+                    HBRUSH mark=CreateSolidBrush(RGB(54,220,238));
+                    RECT bar{item->rcItem.left+8,item->rcItem.top+5,item->rcItem.left+12,item->rcItem.bottom-5};
+                    FillRect(item->hDC,&bar,mark);DeleteObject(mark);
+                }
+                auto *caption=reinterpret_cast<const std::wstring *>(item->itemData);
+                if(caption){
+                    HFONT font=CreateFontW(std::max(12,int(14/sy)),0,0,0,FW_SEMIBOLD,0,0,0,
+                        DEFAULT_CHARSET,0,0,ANTIALIASED_QUALITY,DEFAULT_PITCH|FF_SWISS,L"Segoe UI");
+                    auto old=SelectObject(item->hDC,font);
+                    SetBkMode(item->hDC,TRANSPARENT);
+                    SetTextColor(item->hDC,selected?RGB(255,255,255):RGB(217,239,245));
+                    RECT label=item->rcItem;label.left+=25;label.right-=10;
+                    DrawTextW(item->hDC,caption->c_str(),-1,&label,
+                        DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_LEFT);
+                    SelectObject(item->hDC,old);DeleteObject(font);
+                }
+                return TRUE;
+            }
+            break;
+        }
         case WM_PRINTCLIENT:
             paint(reinterpret_cast<HDC>(w));
             return 0;
@@ -844,11 +878,13 @@ class Editor final : public Steinberg::CPluginView {
                 if (!std::isfinite(target)) target=0;
                 return current + (std::max(0.f,target)-current) * (target>current ? .65f : .18f);
             };
+            const float previousIn=needleIn,previousOut=needleOut;
             needleIn=follow(needleIn,controller->meterIn.load());
             needleOut=follow(needleOut,controller->meterOut.load());
             if (drag < 0 && selectionSignature() != signature)
                 rebuild();
-            InvalidateRect(window, nullptr, FALSE);
+            if(std::abs(needleIn-previousIn)>.002f||std::abs(needleOut-previousOut)>.002f)
+                InvalidateRect(window, nullptr, FALSE);
             return 0;
         }
         case WM_COMMAND:
@@ -965,6 +1001,7 @@ class Editor final : public Steinberg::CPluginView {
                 change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;
             }
             if (y >= 36 && y < 76 && x >= 744 && x < 784) {file("savePreset",true);return 0;}
+            if(y>=36&&y<76&&x>=430&&x<704){showChoice(layout().factoryProgram,430,76);return 0;}
             if (y >= 36 && y < 76 && x >= 962 && x < 1118) {
                 if(view.block==2)view.advanced=!view.advanced;
                 else globalSettings=!globalSettings;
@@ -1025,6 +1062,10 @@ class Editor final : public Steinberg::CPluginView {
                 return 0;
             int id = hit(x, y);
             if (id >= 0) {
+                const auto &definition=controlUI()[id].definition;
+                if(!definition.choices.empty()||(definition.steps>1&&definition.steps<=64)){
+                    showChoice(id,x,y+16);return 0;
+                }
                 if (isToggle(id)) {
                     change(id, value(id) >= .5 ? 0 : 1);
                     return 0;
@@ -1132,6 +1173,8 @@ class Editor final : public Steinberg::CPluginView {
   public:
     explicit Editor(Controller *c) : controller(c) {
         c->addRef();
+        Gdiplus::GdiplusStartupInput startup;
+        Gdiplus::GdiplusStartup(&gdiplusToken,&startup,nullptr);
         const double fit = std::clamp(std::min(double(GetSystemMetrics(SM_CXSCREEN) - 80) / W,
                                                double(GetSystemMetrics(SM_CYSCREEN) - 120) / H),
                                       .6, 1.);
@@ -1145,6 +1188,8 @@ class Editor final : public Steinberg::CPluginView {
         for (auto f : fonts)
             if (f)
                 DeleteObject(f);
+        vectorPens.clear();vectorBrushes.clear();
+        if(gdiplusToken)Gdiplus::GdiplusShutdown(gdiplusToken);
         controller->release();
     }
     Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) override {

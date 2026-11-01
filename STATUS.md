@@ -1,5 +1,11 @@
 # Jerzy MultiFX — status
 
+## Preview 23 — wektorowy panel VST3 i czytelniejsze etykiety
+
+- Po porównaniu z referencyjnym GUI MONO ANALOG przebudowano rysowanie Windows VST3: wygładzane krawędzie GDI+, gradienty metalowych gałek i ramek, wektorowe hebelki oraz diody. Tekst jest renderowany czcionką systemową w docelowej rozdzielczości okna, a każda wartość gałki ma osobne pole. Nie dołączono bitmap ani zdjęć sprzętu.
+- Zamiast stale widocznych białych list Windows panel rysuje ciemne pola wyboru; ich opcje otwierają się w menu z ciemnym tłem. Miniatury bloków są teraz prostymi rysunkami modułów studyjnych, a układ krótkich sekcji centruje kontrolki parami. Usunięto stary przebieg rysowania, który mógł nakładać etykiety. Bez zmian w DSP, ID parametrów i MIDI.
+- Lokalnie: Windows x64 cross-build PASS; rzeczywisty DLL GUI pod Wine PASS (trzy cykle, edycja, bypass, MIDI Learn, kolejność, lista, rozmiary 880×592 i 1920×1275); test sygnału/PDC PASS; Steinberg validator kompletnego bundle 47/47 PASS; natywny DSP/RPi 3/3 PASS. Fizyczne FL Studio i Pi nadal nie były dostępne. RPi nie zmieniano.
+
 ## Preview 22 — czytelna nawigacja i kontrolki VST3
 
 - Panel FX pokazuje najwyżej sześć całych kontrolek naraz, z widocznymi przyciskami STRONA i strzałkami. Przełączanie bloku, sekcji, silnika lub ustawień wraca do pierwszej strony. Na ekranie są wskazówki nawigacji, a listy wyboru mają widoczny aktualny stan i strzałkę także podczas testowego przechwytywania obrazu.

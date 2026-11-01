@@ -3,6 +3,7 @@
 #include "pluginterfaces/base/ipluginbase.h"
 #include "public.sdk/source/vst/hosting/hostclasses.h"
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -97,6 +98,11 @@ int main(int argc, char **argv) try {
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
         check(child, "editor child window");
+        if(std::getenv("MULTIFX_VISUAL_ONLY")) {
+            check(argc>=3,"visual capture needs output path");
+            screenshot(child,argv[2]);
+            return 0;
+        }
         // Exercise the real DLL's meter notification and independent needle rendering.
         IConnectionPoint *meters=nullptr;
         check(c->queryInterface(IConnectionPoint::iid,reinterpret_cast<void **>(&meters))==kResultOk,"meter connection");
@@ -142,16 +148,16 @@ int main(int argc, char **argv) try {
         SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(900,820));
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
         int gain = layout().preamp + 1;
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(1044, 442));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(1044, 392));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(1044, 392));
+        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(427, 523));
+        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(427, 473));
+        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(427, 473));
         pump();
         check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
         click(child, 900, 820);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(1044, 442));
+        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(427, 523));
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
         SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 140));
         SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(545, 140));
@@ -161,6 +167,9 @@ int main(int argc, char **argv) try {
         ViewRect size(0, 0, 880, 592);
         check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-small.bmp").c_str());
+        ViewRect large(0,0,1920,1275);
+        check(view->onSize(&large)==kResultOk,"GUI high-resolution vector resize");
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-large.bmp").c_str());
         ViewRect normal(0, 0, 1280, 850);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
         click(child, 330, 140); // Three separate effect panels in block two.
@@ -171,13 +180,11 @@ int main(int argc, char **argv) try {
                 model = int(i);
         HWND modelList = GetDlgItem(child, 10000 + model);
         check(modelList && SendMessage(modelList, CB_GETCOUNT, 0, 0) == 14, "original Chorus model dropdown");
-        check(IsWindowVisible(modelList), "Chorus model dropdown visible");
-        RECT modelRect{},editorRect{};
-        GetWindowRect(modelList,&modelRect);
-        GetWindowRect(child,&editorRect);
-        check(modelRect.left>=editorRect.left && modelRect.right<=editorRect.right &&
-              modelRect.top>=editorRect.top && modelRect.top<editorRect.bottom,
-              "Chorus model dropdown stays inside editor");
+        check(!IsWindowVisible(modelList), "Chorus model data stays behind vector drawn choice field");
+        const double previousModel=c->getParamNormalized(model);
+        SendMessage(modelList,CB_SETCURSEL,1,0);
+        SendMessage(child,WM_COMMAND,MAKEWPARAM(10000+model,CBN_SELCHANGE),reinterpret_cast<LPARAM>(modelList));
+        check(c->getParamNormalized(model)!=previousModel,"Chorus choice updates host parameter");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
         click(child,1210,648);
         check(GetDlgItem(child,10000+model)==nullptr,"next page replaces visible controls");

@@ -1,3 +1,8 @@
+# 0.1.0-preview.23
+
+- Rysowanie VST3 przeniesiono na wektorowe, wygładzane kształty GDI+ oraz natywne czcionki Windows, bez skalowanych zasobów bitmapowych. Przebudowano gałki, lampki, hebelki, pola wartości, karty bloków, listy wyboru i rozmieszczenie krótkich sekcji, zachowując kolorystykę MultiFX.
+- Ograniczono przerysowania panelu przy nieruchomych miernikach. DSP i identyfikatory parametrów bez zmian.
+
 # 0.1.0-preview.22
 
 - Uporządkowano strony parametrów VST3: kompletne kontrolki, jawna nawigacja między stronami, czytelniejsze wskazówki i widoczny stan list wyboru. Zmniejszone okno renderuje tekst i grafiki wektorowe w docelowej rozdzielczości zamiast rozciągać gotowy obraz.
