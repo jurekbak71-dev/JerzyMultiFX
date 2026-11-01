@@ -1,7 +1,7 @@
-# Jerzy MultiFX VST3 Windows — preview 21
+# Jerzy MultiFX VST3 Windows — preview 22
 
-Bardziej fizyczny wygląd GUI zgodny z wybraną makietą: metalowe panele, śruby, lampki, gałki 3D, szczegółowe karty pięciu bloków i cztery grupy parametrów DELAY A+B. Zachowano działające parametry, MIDI Learn oraz mierniki IN/OUT. Kod: 4fa2a76dfe6d4922c9a2076603059a9921036526.
+W panelu FX kontrolki są podzielone na czytelne strony, a wybór bloku, efektu i parametrów jest opisany w oknie. Listy pokazują aktualny wybór. Kolorystyka MultiFX pozostała; czcionki systemowe i wektorowe elementy rysowane są w docelowej rozdzielczości okna. DSP, MIDI i identyfikatory parametrów bez zmian. Kod: a27671fae6367ba4b7ac526743245aa115a466c3.
 
-Testy lokalne: Windows x64 cross-build; prawdziwy DLL VST3 uruchomiony pod Wine; GUI smoke (trzy cykle), sygnał i latencja PASS; Steinberg validator 47/47 PASS; natywny DSP/RPi 3/3 PASS; zawartość ZIP i sumy SHA256 PASS. Bez fizycznego testu w FL Studio i na Raspberry Pi.
+Testy lokalne: Windows x64 cross-build; prawdziwy DLL VST3 uruchomiony pod Wine; GUI smoke (trzy cykle, strony i widoczność list), sygnał i PDC PASS; Steinberg validator kompletnego bundle 47/47 PASS; natywny DSP/RPi 3/3 PASS; zawartość ZIP i SHA256 PASS. Bez fizycznego testu w FL Studio i na Raspberry Pi.
 
-SHA256 ZIP: c8fbdfef3a6fbcc21f4b65b40ead5ef85f2b9a6dd035e8b1a56fd77df440f0d8
+SHA256 ZIP: 7fb8c9ef67587ac75eccabb28d5bdfc59ccd40804262c21290a982bcf8c7ddf9
