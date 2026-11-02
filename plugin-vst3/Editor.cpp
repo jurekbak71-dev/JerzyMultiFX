@@ -1050,7 +1050,15 @@ class Editor final : public Steinberg::CPluginView {
                 BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
                 info.bmiHeader.biWidth=width;info.bmiHeader.biHeight=-height;
                 info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
-                SetDIBitsToDevice(dc,0,0,width,height,0,0,0,height,pixels.data(),&info,DIB_RGB_COLORS);
+                const auto copied=StretchDIBits(dc,0,0,width,height,0,0,width,height,
+                    pixels.data(),&info,DIB_RGB_COLORS,SRCCOPY);
+                static int captures=0;
+                if(captures++<6){
+                    const auto source=image.getPixelAt(std::min(1152,width-1),std::min(265,height-1));
+                    std::fprintf(stderr,"JUCE capture %d: source=%08x dest=%08x transfer=%d size=%dx%d\n",
+                        captures,source.getARGB(),GetPixel(dc,std::min(1152,width-1),std::min(265,height-1)),
+                        copied,width,height);
+                }
             }
 #else
             paint(reinterpret_cast<HDC>(w));
