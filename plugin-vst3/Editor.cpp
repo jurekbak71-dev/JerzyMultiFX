@@ -13,8 +13,6 @@
 #include <commdlg.h>
 #include <windowsx.h>
 #include <d2d1.h>
-#include <dwrite.h>
-#include <memory>
 #include <map>
 namespace multifx {
 class Editor final : public Steinberg::CPluginView {
@@ -61,15 +59,12 @@ class Editor final : public Steinberg::CPluginView {
         if (index < 0 || index >= 8 || !keys[type][index]) return -1;
         return parameterId(std::string(bank ? "delayB." : "delayA.") + keys[type][index]);
     }
-    std::array<HFONT, 64> fonts{}; // Native combo boxes only.
+    std::array<HFONT, 64> fonts{};
     struct TextOp {int x,y,w,size;COLORREF tint;std::string value;};
     std::vector<TextOp> textOps;
-    bool gdiTextFallback = false;
     ID2D1Factory *drawFactory = nullptr;
-    IDWriteFactory *writeFactory = nullptr;
     ID2D1DCRenderTarget *canvas = nullptr;
     std::map<COLORREF,ID2D1SolidColorBrush*> vectorBrushes;
-    std::map<int,IDWriteTextFormat*> textFormats;
     static D2D1_COLOR_F color(COLORREF c, float alpha=1.f) {
         return D2D1::ColorF(GetRValue(c)/255.f,GetGValue(c)/255.f,GetBValue(c)/255.f,alpha);
     }
@@ -176,26 +171,6 @@ class Editor final : public Steinberg::CPluginView {
         if(!s)return;
         textOps.push_back({x,y,w,size,tint,s});
     }
-    void drawTextDirect(const TextOp& op) {
-        const int x=op.x,y=op.y,w=op.w,size=op.size;
-        const char *s=op.value.c_str();const COLORREF tint=op.tint;
-        if(!canvas||!writeFactory)return;
-        auto &format=textFormats[size];
-        if(!format){
-            writeFactory->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,float(size),L"pl-PL",&format);
-            if(format){format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-                format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);}
-        }
-        if(!format)return;
-        const int n=MultiByteToWideChar(CP_UTF8,0,s,-1,nullptr,0);
-        if(n<=1)return;
-        std::wstring wide(size_t(n),L'\0');
-        MultiByteToWideChar(CP_UTF8,0,s,-1,wide.data(),n);
-        if(auto *b=brush(tint))canvas->DrawTextW(wide.data(),UINT32(n-1),format,
-            rect(float(x),float(y),float(w),float(size+8)),b,D2D1_DRAW_TEXT_OPTIONS_NONE);
-    }
     void drawTextPass(HDC dc) {
         for(const auto &op:textOps){
             const int fontSize=std::clamp(int(std::round(op.size/sy)),10,63);
@@ -217,7 +192,8 @@ class Editor final : public Steinberg::CPluginView {
     }
     void line(HDC, int x, int y, int xx, int yy, COLORREF tint, int width = 1) {
         if(auto *b=brush(tint))canvas->DrawLine(D2D1::Point2F(float(x),float(y)),
-            D2D1::Point2F(float(xx),float(yy)),b,float(width));
+            D2D1::Point2F(float(xx),float(yy)),b,
+            std::max(float(width),1.5f*std::max(sx,sy)));
     }
     void disk(HDC, int x, int y, int r, COLORREF tint) {
         if(auto *b=brush(tint))canvas->FillEllipse(D2D1::Ellipse(D2D1::Point2F(float(x),float(y)),float(r),float(r)),b);
@@ -245,11 +221,9 @@ class Editor final : public Steinberg::CPluginView {
         line(dc,x-2,y+1,x+2,y-1,RGB(157,169,171));
     }
     void lamp(HDC dc,int x,int y,bool on,COLORREF tint){
-        disk(dc,x,y,11,RGB(2,8,13));
-        disk(dc,x,y,9,RGB(69,85,91));
-        disk(dc,x,y,7,on?tint:RGB(80,43,47));
-        if(on){disk(dc,x-2,y-2,3,RGB(224,253,248));disk(dc,x,y,2,RGB(255,255,255));}
-        else disk(dc,x-2,y-2,2,RGB(133,91,93));
+        disk(dc,x,y,10,RGB(2,8,13));
+        disk(dc,x,y,8,RGB(102,132,141));
+        disk(dc,x,y,6,on?tint:RGB(79,47,52));
     }
     void toggleSwitch(HDC dc,int x,int y,bool on,int scale=1){
         const int radius=scale==1?13:17;
@@ -312,10 +286,9 @@ class Editor final : public Steinberg::CPluginView {
         for(int i=0;i<3;++i){
             const int cx=x+45+i*47,cy=y+107;
             disk(dc,cx+1,cy+2,13,RGB(3,8,11));
-            gradient(float(cx-11),float(cy-11),22,22,RGB(190,202,203),RGB(54,69,76),true);
+            disk(dc,cx,cy,11,RGB(165,187,192));
             disk(dc,cx,cy,8,RGB(33,48,54));
             line(dc,cx,cy,cx+int(std::sin((i-1)*.62)*7),cy-int(std::cos((i-1)*.62)*7),RGB(226,240,240),2);
-            line(dc,cx-14,cy+15,cx+14,cy+15,RGB(73,91,99));
         }
     }
     void chrome(HDC dc) {
@@ -385,8 +358,8 @@ class Editor final : public Steinberg::CPluginView {
         levelBar(dc,1208,"OUT",needleOut);
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
-        // Same layered metal construction and 270-degree scale as JerzyGuiKit's
-        // metalKnob, drawn directly by Direct2D at the host's current size.
+        // Draw the control from circles, arcs and strokes. Small radial marks and
+        // brushed-metal hatching turn into isolated pixels at reduced host sizes.
         const float cx=float(c.x+c.w/2),cy=float(c.y+(radius==40?71:radius>=34?63:56));
         const float r=float(radius);
         text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
@@ -396,37 +369,50 @@ class Editor final : public Steinberg::CPluginView {
         auto stroke=[&](float x,float y,float xx,float yy,COLORREF tint,float width){
             if(auto*b=brush(tint))canvas->DrawLine(D2D1::Point2F(x,y),D2D1::Point2F(xx,yy),b,width);
         };
+        auto arc=[&](float rr,double start,double sweep,COLORREF tint,float width){
+            if(sweep<=0.001)return;
+            ID2D1PathGeometry *path=nullptr;
+            if(FAILED(drawFactory->CreatePathGeometry(&path))||!path)return;
+            ID2D1GeometrySink *sink=nullptr;
+            if(SUCCEEDED(path->Open(&sink))&&sink){
+                constexpr double pi=3.141592653589793;
+                const double end=start+sweep;
+                sink->BeginFigure(D2D1::Point2F(cx+float(rr*std::cos(start*pi/180.)),
+                                                 cy+float(rr*std::sin(start*pi/180.))),
+                                  D2D1_FIGURE_BEGIN_HOLLOW);
+                sink->AddArc(D2D1::ArcSegment(
+                    D2D1::Point2F(cx+float(rr*std::cos(end*pi/180.)),
+                                   cy+float(rr*std::sin(end*pi/180.))),
+                    D2D1::SizeF(rr,rr),0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                    sweep>180.?D2D1_ARC_SIZE_LARGE:D2D1_ARC_SIZE_SMALL));
+                sink->EndFigure(D2D1_FIGURE_END_OPEN);
+                if(SUCCEEDED(sink->Close()))if(auto*b=brush(tint))canvas->DrawGeometry(path,b,width);
+                sink->Release();
+            }
+            path->Release();
+        };
         constexpr double pi=3.141592653589793;
-        for(int i=0;i<=20;++i){
-            const double a=(135.+13.5*i)*pi/180.;
-            const float rr=i%5==0?1.8f:1.15f;
-            ellipse(cx+float(std::cos(a)*(r+5)),cy+float(std::sin(a)*(r+5)),rr,
-                    i%5==0?color:RGB(67,133,150));
+        // The three continuous rings, rather than stippled pixels, define the form.
+        ellipse(cx+1.5f,cy+2.5f,r+2.f,RGB(2,9,16),.65f);
+        ellipse(cx,cy,r,RGB(20,32,43));
+        ring(cx,cy,r,RGB(157,184,194),2.2f);
+        ring(cx,cy,r-4.5f,RGB(55,83,96),2.f);
+        ellipse(cx,cy,r-7.f,RGB(83,111,124));
+        ring(cx,cy,r-7.f,RGB(212,230,234),1.8f);
+        ellipse(cx-r*.20f,cy-r*.25f,r*.19f,RGB(193,220,225),.12f);
+        arc(r+5.5f,135.,270.,RGB(77,113,128),2.f);
+        arc(r+5.5f,135.,std::clamp(value(c.id),0.,1.)*270.,color,2.6f);
+        for(int i=0;i<=8;++i){
+            const double a=(135.+33.75*i)*pi/180.;
+            const float ux=float(std::cos(a)),uy=float(std::sin(a));
+            stroke(cx+ux*(r+9.f),cy+uy*(r+9.f),cx+ux*(r+13.f),cy+uy*(r+13.f),
+                   i<=int(std::round(value(c.id)*8.))?color:RGB(117,154,169),2.f);
         }
-        ellipse(cx+2.8f,cy+4.2f,r+3.2f,RGB(0,0,0),.55f);
-        ellipse(cx,cy,r+1.7f,RGB(17,24,30));
-        ring(cx,cy,r+1.7f,RGB(125,146,158));
-        for(int i=0;i<28;++i){
-            const double a=2*pi*i/28.;
-            stroke(cx+float(r*.91*std::cos(a)),cy+float(r*.91*std::sin(a)),
-                   cx+float(r*1.09*std::cos(a)),cy+float(r*1.09*std::sin(a)),
-                   i%2?RGB(27,40,47):RGB(90,105,112),1);
-        }
-        const float cap=r*.78f;
-        gradient(cx-cap,cy-cap,cap*2,cap*2,RGB(196,208,211),RGB(61,78,88),true);
-        for(int i=0;i<72;++i){
-            const double a=2*pi*i/72.;
-            stroke(cx+float(cap*.53*std::cos(a)),cy+float(cap*.53*std::sin(a)),
-                   cx+float(cap*.90*std::cos(a)),cy+float(cap*.90*std::sin(a)),
-                   i%3?RGB(131,148,153):RGB(187,201,204),.28f);
-        }
-        ring(cx,cy,cap,RGB(211,226,228),1.3f);
-        ellipse(cx-cap*.25f,cy-cap*.28f,cap*.20f,RGB(255,255,255),.12f);
         const double a=(135.+270.*value(c.id))*pi/180.;
-        stroke(cx+float(r*.18*std::cos(a)),cy+float(r*.18*std::sin(a)),
-               cx+float(r*.78*std::cos(a)),cy+float(r*.78*std::sin(a)),RGB(11,22,29),4.8f);
-        stroke(cx+float(r*.18*std::cos(a)),cy+float(r*.18*std::sin(a)),
-               cx+float(r*.78*std::cos(a)),cy+float(r*.78*std::sin(a)),RGB(242,251,250),2.5f);
+        const float ux=float(std::cos(a)),uy=float(std::sin(a));
+        stroke(cx+ux*r*.10f,cy+uy*r*.10f,cx+ux*r*.68f,cy+uy*r*.68f,RGB(9,25,34),6.f);
+        stroke(cx+ux*r*.10f,cy+uy*r*.10f,cx+ux*r*.68f,cy+uy*r*.68f,RGB(244,251,250),3.4f);
+        ellipse(cx+ux*r*.68f,cy+uy*r*.68f,1.7f,RGB(244,251,250));
         std::string reading=formatted(c.id);
         const auto &definition=layout().parameters[c.id];
         if(radius==40){
@@ -670,7 +656,7 @@ class Editor final : public Steinberg::CPluginView {
         GetClientRect(window, &client);
         sx = float(W) / std::max(1L, client.right);
         sy = float(H) / std::max(1L, client.bottom);
-        if(!drawFactory || !writeFactory){if(!supplied)EndPaint(window,&ps);return;}
+        if(!drawFactory){if(!supplied)EndPaint(window,&ps);return;}
         if(!canvas){
             const auto props=D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
                 D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_IGNORE));
@@ -678,21 +664,18 @@ class Editor final : public Steinberg::CPluginView {
                 if(!supplied)EndPaint(window,&ps);return;
             }
             canvas->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-            canvas->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
         }
         if(FAILED(canvas->BindDC(target,&client))){if(!supplied)EndPaint(window,&ps);return;}
         textOps.clear();
         canvas->BeginDraw();
         canvas->SetTransform(D2D1::Matrix3x2F::Scale(float(client.right)/W,float(client.bottom)/H));
         auto finish=[&] {
-            if(!gdiTextFallback)for(const auto &op:textOps)drawTextDirect(op);
             const HRESULT hr=canvas->EndDraw();
             if(hr==D2DERR_RECREATE_TARGET){
                 for(auto &[key,b]:vectorBrushes)if(b)b->Release();
                 vectorBrushes.clear();canvas->Release();canvas=nullptr;
             }
-            if(gdiTextFallback)drawTextPass(target);
-            else textOps.clear();
+            drawTextPass(target);
             if(!supplied)EndPaint(window,&ps);
         };
         if (referenceDelay()) {
@@ -1209,13 +1192,8 @@ class Editor final : public Steinberg::CPluginView {
     explicit Editor(Controller *c) : controller(c) {
         c->addRef();
         D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,&drawFactory);
-        DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory),
-            reinterpret_cast<IUnknown**>(&writeFactory));
-        // Wine's Direct2D DC target accepts DrawTextW but does not paint glyphs.
-        // Keep captured previews and Linux CI usable without rasterizing controls.
-        if(auto* ntdll=GetModuleHandleA("ntdll.dll"))
-            gdiTextFallback=GetProcAddress(ntdll,"wine_get_version")!=nullptr;
-        if(!writeFactory)gdiTextFallback=true;
+        // System font outlines remain legible in both native Windows and Wine's DC target.
+        // D2D still draws every control directly in the final viewport.
         const double fit = std::clamp(std::min(double(GetSystemMetrics(SM_CXSCREEN) - 80) / W,
                                                double(GetSystemMetrics(SM_CYSCREEN) - 120) / H),
                                       .6, 1.);
@@ -1230,9 +1208,7 @@ class Editor final : public Steinberg::CPluginView {
             if (f)
                 DeleteObject(f);
         for(auto &[key,b]:vectorBrushes)if(b)b->Release();
-        for(auto &[key,f]:textFormats)if(f)f->Release();
         if(canvas)canvas->Release();
-        if(writeFactory)writeFactory->Release();
         if(drawFactory)drawFactory->Release();
         controller->release();
     }

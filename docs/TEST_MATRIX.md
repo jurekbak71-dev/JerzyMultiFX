@@ -5,7 +5,7 @@
 | DSP | CoreTests | IR impulsowy wielopartycyjny, latencja128, 120 permutacji, CRC/parametry/MIDI/IR, finite, bypass, zero alokacji w audio |
 | Sample rate | 44100/48000/96000 | Stereo z antyfazą, bufory32/64/128/256/1024; mono w walidatorze VST |
 | Windows | rzeczywisty PE32+ pod Wine + validator SDK | Nie jest testem FL Studio; natywny Windows CI oddzielnie |
-| GUI | EditorSmoke, screenshot | attach, regulator, bypass, MIDI Learn, drag/reorder, 880×592/1280×850/1920×1275, detach; Direct2D/DirectWrite z tekstowym fallbackiem GDI pod Wine |
+| GUI | EditorSmoke, screenshot | attach, regulator, bypass, MIDI Learn, drag/reorder, 880×592/1280×850/1920×1275, detach; geometria Direct2D, czcionka systemowa GDI |
 | ARM64 | ELF64 AArch64 pod QEMU | DSP i rzeczywisty HTTP/control; nie jest pomiarem realtime RPi |
 | Audio | dummy JACK + JackProbe | Rzeczywista droga audio, zmiana gainu, USB MIDI CC74 Learn, xrun count |
 | HTTP | integration.py | Auth, pełne parametry, presety, stereo IR44100→48000, odrzucenie traversal/zakresów |

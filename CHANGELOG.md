@@ -1,3 +1,8 @@
+# 0.1.0-preview.26
+
+- Gałki i ich skale są budowane z ciągłych okręgów, łuków i linii Direct2D. Usunięto drobne promienie, punktowe detale i szczotkowaną fakturę, które rozpadały się na piksele przy zmianie rozmiaru. Drobne elementy łańcucha i lampki uproszczono, a linie panelu mają minimalną grubość w pikselach ekranu.
+- Napisy używają czytelnych czcionek systemowych w rozmiarze docelowym zarówno na Windows, jak i Wine; usuwa to ciemne etykiety z poprzedniego wariantu DirectWrite. Nie zmieniono DSP, presetów ani identyfikatorów parametrów.
+
 # 0.1.0-preview.25
 
 - Zastąpiono skalowany pośredni obraz GUI bezpośrednim rysowaniem Direct2D. Gałki mają metalowe warstwy i płynną geometrię wzorowaną na JerzyGuiKit z MX Analog Delay 2; napisy na Windows renderuje DirectWrite, pod Wine działa zgodna ścieżka GDI.
