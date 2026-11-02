@@ -59,6 +59,9 @@ if(MULTIFX_VST3)
  target_compile_definitions(JerzyMultiFX PRIVATE NOMINMAX)
  if(MSVC)
   include(FetchContent)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/JUCE/CMakeLists.txt")
+   set(FETCHCONTENT_SOURCE_DIR_JUCE_GUI "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/JUCE")
+  endif()
   FetchContent_Declare(juce_gui
    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
    GIT_TAG 9.0.3

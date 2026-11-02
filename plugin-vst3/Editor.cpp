@@ -322,6 +322,17 @@ class Editor final : public Steinberg::CPluginView {
         line(dc, x+w-1, y, x+w-1, y+h, RGB(10,19,30));
     }
     void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
+#ifdef MULTIFX_JUCE_GUI
+        auto area=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
+        if(raised)JerzyAudioUI::paintPanel(*juceGraphics,area,juceLook.getTheme(),4.0f);
+        else{
+            juceGraphics->setGradientFill(juce::ColourGradient(juce::Colour(0xff0c1923),area.getTopLeft(),
+                juce::Colour(0xff1c2c36),area.getBottomRight(),false));
+            juceGraphics->fillRoundedRectangle(area,3.0f);
+            juceGraphics->setColour(juce::Colour(0xff536f7e));
+            juceGraphics->drawRoundedRectangle(area,3.0f,1.0f);
+        }
+#else
         fill(dc,x+2,y+3,w,h,RGB(2,8,14));
         gradient(float(x),float(y),float(w),float(h),
             raised?RGB(37,47,53):RGB(12,25,35),raised?RGB(13,26,34):RGB(28,44,54));
@@ -329,6 +340,7 @@ class Editor final : public Steinberg::CPluginView {
         line(dc,x,y,x,y+h-1,RGB(80,99,108));
         line(dc,x,y+h-1,x+w,y+h-1,RGB(3,9,15),2);
         line(dc,x+w-1,y,x+w-1,y+h,RGB(3,9,15),2);
+#endif
     }
     void screw(HDC dc,int x,int y){
         disk(dc,x+1,y+2,5,RGB(3,9,15));
@@ -408,7 +420,11 @@ class Editor final : public Steinberg::CPluginView {
         }
     }
     void chrome(HDC dc) {
+#ifdef MULTIFX_JUCE_GUI
+        JerzyAudioUI::paintChassis(*juceGraphics,juce::Rectangle<float>(0,0,float(W),float(H)),juceLook.getTheme());
+#else
         fill(dc,0,0,W,H,RGB(7,17,27));
+#endif
         metalPanel(dc,0,0,W,82);
         fill(dc,0,0,W,78,RGB(8,19,29));
         line(dc,0,81,W,81,RGB(38,68,83));

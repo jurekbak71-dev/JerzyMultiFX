@@ -112,7 +112,7 @@ jobs:
       - name: Package actual VST3 bundle and verify validator
         if: inputs.platform == 'windows'
         shell: pwsh
-        run: python scripts/package.py windows --build build --sdk "${{ runner.temp }}/vst3sdk"
+        run: python scripts/package.py windows --build build --sdk "${{ runner.temp }}/vst3sdk" --juce build/_deps/juce_gui-src
       - name: Package real AArch64 binary
         if: inputs.platform == 'arm64'
         shell: bash

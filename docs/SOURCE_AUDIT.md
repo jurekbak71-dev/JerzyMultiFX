@@ -16,6 +16,8 @@ Integracja bazuje na natywnych DSP, bez hostowania VST wewnątrz RPi. Adaptery C
 
 Preview 25–26: geometria gałek w `plugin-vst3/Editor.cpp` została zainspirowana `source/jerzy_vst_gui_kit.cpp` z `JerzyMXAnalogDelayVST3` (repozytorium referencyjne, SHA wyżej), po czym uproszczona do ciągłych okręgów, łuków i linii. Własny edytor MultiFX używa systemowego Direct2D i czcionek GDI; nie dołączono plików VSTGUI/JerzyGuiKit ani bitmap referencyjnych. Brak samodzielnej licencji źródła pozostaje ograniczeniem dystrybucji publicznej.
 
+Przebudowa JUCE: `plugin-vst3/JerzyVSTGuiKit.h` pochodzi z `Source/JerzyVSTGuiKit.h` w repozytorium `JerzyMonoAnalogVST3`, SHA `bc6a8e1dadfff098bd33b0652cb177e29de019a1`; zmieniono tylko ścieżkę nagłówka JUCE. Rysunek gałki w `plugin-vst3/Editor.cpp` przenosi geometrię `JerzyLookAndFeel::drawRotarySlider` z `Source/PluginEditor.cpp` tego repozytorium, z niebieską paletą MultiFX. Samodzielnej licencji źródła referencyjnego nie znaleziono; publiczna dystrybucja pozostaje zablokowana. JUCE 9.0.3 jest dual AGPLv3/komercyjne; przyjęto AGPLv3 i dołączono źródła do pakietu Windows.
+
 TS808: filtrowane ujemne sprzężenie, przeciwstawne diody i podbicie środka; implementacja behawioralna, bez deklaracji identyczności obwodowej. DS-1/DS-2: osobna charakterystyka twardego clippingu i Turbo; DM-2 nie bierze udziału w DRIVE. COMP: własna obwiednia stereo z miękkim kolanem i dwoma czasami powrotu inspirowanymi OTA/optycznym zachowaniem.
 
 Schematy w references nie są dołączane do paczek binarnych — prawa ilustracji nie zostały ustalone. Kopie kodu bez jawnej licencji pozostają wyraźnie oznaczone; publiczne wydanie wymaga uporządkowania praw. Nie wyciągamy uprawnień do cudzych plików ze zrzutów ekranów.
