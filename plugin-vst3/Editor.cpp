@@ -357,7 +357,11 @@ class Editor final : public Steinberg::CPluginView {
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
         const int cx=c.x+c.w/2,cy=c.y+(radius==40?71:radius>=34?63:56);
         text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
-        disk(dc,cx+2,cy+4,radius+5,RGB(2,8,13));
+        for(int blur=7;blur>=3;blur-=2){
+            Gdiplus::SolidBrush shadow(Gdiplus::Color(25,0,0,0));
+            canvas->FillEllipse(&shadow,float(cx-radius-blur+2),float(cy-radius-blur+4),
+                                float((radius+blur)*2),float((radius+blur)*2));
+        }
         const auto rimRect=Gdiplus::RectF(float(cx-radius),float(cy-radius),float(radius*2),float(radius*2));
         Gdiplus::LinearGradientBrush rim(Gdiplus::Point(cx-radius,cy-radius),Gdiplus::Point(cx+radius,cy+radius),
             Gdiplus::Color(255,205,216,216),Gdiplus::Color(255,43,55,62));
@@ -372,19 +376,14 @@ class Editor final : public Steinberg::CPluginView {
         Gdiplus::LinearGradientBrush capFace(Gdiplus::Point(cx-cap,cy-cap),Gdiplus::Point(cx+cap,cy+cap),
             Gdiplus::Color(255,146,158,162),Gdiplus::Color(255,29,41,49));
         canvas->FillEllipse(&capFace,float(cx-cap),float(cy-cap),float(cap*2),float(cap*2));
-        Gdiplus::Pen brushed(Gdiplus::Color(31,228,238,240),0.65f);
-        for(int ray=0;ray<28;++ray){
-            const double angle=ray*6.283185307179586/28;
-            canvas->DrawLine(&brushed,float(cx+std::sin(angle)*3),float(cy-std::cos(angle)*3),
-                float(cx+std::sin(angle)*(cap-2)),float(cy-std::cos(angle)*(cap-2)));
-        }
         canvas->DrawEllipse(pen(RGB(93,112,122),1),float(cx-cap),float(cy-cap),float(cap*2),float(cap*2));
-        for(int i=0;i<=20;++i){
-            const double a=(-135+i*13.5)*3.141592653589793/180;
-            const int outer=radius+6,innerTick=radius+(i%5==0?0:2);
-            line(dc,cx+int(std::sin(a)*innerTick),cy-int(std::cos(a)*innerTick),
-                    cx+int(std::sin(a)*outer),cy-int(std::cos(a)*outer),
-                    i<=int(value(c.id)*20)?color:RGB(71,94,106),i%5==0?2:1);
+        for(int i=0;i<=12;++i){
+            const double a=(-135+i*22.5)*3.141592653589793/180;
+            const float dotRadius=radius>=34?1.6f:1.35f;
+            const float tx=float(cx+std::sin(a)*(radius+5));
+            const float ty=float(cy-std::cos(a)*(radius+5));
+            canvas->FillEllipse(brush(i<=int(value(c.id)*12)?color:RGB(82,111,125)),
+                tx-dotRadius,ty-dotRadius,dotRadius*2,dotRadius*2);
         }
         const double a=(-135+270*value(c.id))*3.141592653589793/180;
         line(dc,cx+int(std::sin(a)*5),cy-int(std::cos(a)*5),
@@ -638,24 +637,47 @@ class Editor final : public Steinberg::CPluginView {
         const int pixelsWide=std::max(1L,client.right),pixelsHigh=std::max(1L,client.bottom);
         auto bmp = CreateCompatibleBitmap(target, pixelsWide, pixelsHigh);
         auto old = SelectObject(dc, bmp);
+        const int sampleScale=pixelsWide<=1600&&pixelsHigh<=1100?2:1;
+        const int renderWide=pixelsWide*sampleScale,renderHigh=pixelsHigh*sampleScale;
+        auto renderDc=CreateCompatibleDC(target);
+        auto renderBitmap=CreateCompatibleBitmap(target,renderWide,renderHigh);
+        auto oldRender=SelectObject(renderDc,renderBitmap);
         textOps.clear();
-        auto graphics=std::make_unique<Gdiplus::Graphics>(dc);
+        auto graphics=std::make_unique<Gdiplus::Graphics>(renderDc);
         canvas=graphics.get();
         graphics->SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         graphics->SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
-        graphics->ScaleTransform(float(pixelsWide)/W,float(pixelsHigh)/H);
-        if (referenceDelay()) {
-            chrome(dc);
-            referenceDelayPanel(dc);
+        graphics->SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        graphics->ScaleTransform(float(renderWide)/W,float(renderHigh)/H);
+        auto finish=[&] {
             graphics->Flush(Gdiplus::FlushIntentionSync);
             canvas=nullptr;
             graphics.reset();
+            if(sampleScale==1)BitBlt(dc,0,0,pixelsWide,pixelsHigh,renderDc,0,0,SRCCOPY);
+            else {
+                Gdiplus::Bitmap sampled(renderBitmap,nullptr);
+                if(sampled.GetLastStatus()==Gdiplus::Ok){
+                    Gdiplus::Graphics output(dc);
+                    output.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+                    output.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+                    output.DrawImage(&sampled,Gdiplus::Rect(0,0,pixelsWide,pixelsHigh));
+                    output.Flush(Gdiplus::FlushIntentionSync);
+                } else {
+                    SetStretchBltMode(dc,HALFTONE);
+                    SetBrushOrgEx(dc,0,0,nullptr);
+                    StretchBlt(dc,0,0,pixelsWide,pixelsHigh,renderDc,0,0,renderWide,renderHigh,SRCCOPY);
+                }
+            }
             drawTextPass(dc);
             BitBlt(target,0,0,pixelsWide,pixelsHigh,dc,0,0,SRCCOPY);
-            SelectObject(dc, old);
-            DeleteObject(bmp);
-            DeleteDC(dc);
-            if (!supplied) EndPaint(window, &ps);
+            SelectObject(renderDc,oldRender);DeleteObject(renderBitmap);DeleteDC(renderDc);
+            SelectObject(dc,old);DeleteObject(bmp);DeleteDC(dc);
+            if(!supplied)EndPaint(window,&ps);
+        };
+        if (referenceDelay()) {
+            chrome(dc);
+            referenceDelayPanel(dc);
+            finish();
             return;
         }
         chrome(dc);
@@ -779,15 +801,7 @@ class Editor final : public Steinberg::CPluginView {
             text(dc, 28 + i * 250, 811, 238, buttons[i], 14, RGB(226,248,252));
         }
         text(dc, 1028, 807, 225, "Prawy klik: MIDI Learn", 13, RGB(160, 191, 205));
-        graphics->Flush(Gdiplus::FlushIntentionSync);
-        canvas=nullptr;
-        graphics.reset();
-        drawTextPass(dc);
-        BitBlt(target,0,0,pixelsWide,pixelsHigh,dc,0,0,SRCCOPY);
-        SelectObject(dc, old);
-        DeleteObject(bmp);
-        DeleteDC(dc);
-        if (!supplied) EndPaint(window, &ps);
+        finish();
     }
     int hit(int x, int y) const {
         if (referenceDelay()) {
@@ -1216,7 +1230,8 @@ class Editor final : public Steinberg::CPluginView {
         if (!window)
             return Steinberg::kResultFalse;
         systemWindow = parent;
-        SetTimer(window, 1, 33, nullptr);
+        // Meter repaint is independent of parameter edits, which invalidate immediately.
+        SetTimer(window, 1, 60, nullptr);
         rebuild();
         return Steinberg::kResultOk;
     }

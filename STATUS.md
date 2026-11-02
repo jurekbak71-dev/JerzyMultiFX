@@ -1,5 +1,11 @@
 # Jerzy MultiFX — status
 
+## Preview 24 — gładkie obrysy gałek VST3
+
+- Usunięto gęste kreski i promienisty wzór z tarcz gałek, które w małym rozmiarze tworzyły poszarpany kontur. Pozostały wygładzane gradienty metalowej obręczy, czytelny wskaźnik i rzadsze punkty podziałki. Cień ma miękki brzeg.
+- Przy oknie do 1600×1100 wektorowe kształty są rysowane w dwukrotnej rozdzielczości i filtrowane do docelowych pikseli; tekst nadal jest renderowany natywnie w docelowej rozdzielczości. To bufor renderowania, nie bitmapowy zasób tła. Przy większych oknach kształty są rysowane bezpośrednio w rozdzielczości docelowej. DSP, MIDI i RPi bez zmian.
+- Lokalnie: Windows x64 cross-build PASS; rzeczywisty DLL GUI pod Wine PASS (trzy cykle, edycja, bypass, MIDI Learn, kolejność, dwa rozmiary okna); test sygnału/PDC PASS; kompletny bundle w walidatorze Steinberga 47/47 PASS; natywny DSP/RPi 3/3 PASS. Obejrzano zrzut panelu i zbliżenie gałek. Fizycznego FL Studio i Pi nie testowano.
+
 ## Preview 23 — wektorowy panel VST3 i czytelniejsze etykiety
 
 - Po porównaniu z referencyjnym GUI MONO ANALOG przebudowano rysowanie Windows VST3: wygładzane krawędzie GDI+, gradienty metalowych gałek i ramek, wektorowe hebelki oraz diody. Tekst jest renderowany czcionką systemową w docelowej rozdzielczości okna, a każda wartość gałki ma osobne pole. Nie dołączono bitmap ani zdjęć sprzętu.

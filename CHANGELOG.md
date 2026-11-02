@@ -1,3 +1,7 @@
+# 0.1.0-preview.24
+
+- Wygładzono małe gałki VST3: mniej podziałek, bez ząbkowanego promienistego wzoru, miękkie cienie. Wektorowe kształty przy typowych rozmiarach okna są próbkowane 2× i filtrowane do ekranu; fonty pozostają rysowane w rozmiarze końcowym.
+
 # 0.1.0-preview.23
 
 - Rysowanie VST3 przeniesiono na wektorowe, wygładzane kształty GDI+ oraz natywne czcionki Windows, bez skalowanych zasobów bitmapowych. Przebudowano gałki, lampki, hebelki, pola wartości, karty bloków, listy wyboru i rozmieszczenie krótkich sekcji, zachowując kolorystykę MultiFX.
