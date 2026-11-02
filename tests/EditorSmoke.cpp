@@ -36,7 +36,7 @@ static void screenshot(HWND h, const char *path) {
     HBITMAP bmp = CreateCompatibleBitmap(dc, w, height);
     auto previous = SelectObject(memory, bmp);
     RedrawWindow(h, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-    SendMessage(h, WM_PRINT, reinterpret_cast<WPARAM>(memory), PRF_CLIENT | PRF_CHILDREN);
+    SendMessage(h, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(memory), PRF_CLIENT);
     SelectObject(memory, previous);
     BITMAPINFO info{};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -104,6 +104,7 @@ int main(int argc, char **argv) try {
             if(IsWindowVisible(candidate)){vectorSurface=candidate;break;}
         check(vectorSurface,"JUCE vector surface attached to the VST3 editor");
 #endif
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
         if(std::getenv("MULTIFX_VISUAL_ONLY")) {
             check(argc>=3,"visual capture needs output path");
             screenshot(child,argv[2]);
@@ -117,6 +118,9 @@ int main(int argc, char **argv) try {
         message->getAttributes()->setFloat("in",.5);message->getAttributes()->setFloat("out",0);
         check(meters->notify(message)==kResultOk,"input meter notification");
         for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-meter.bmp").c_str());
+        std::cerr<<"Meter pixels: IN "<<inSilent<<" -> "<<meterPixels(child,1152)
+                 <<", OUT "<<outSilent<<" -> "<<meterPixels(child,1208)<<'\n';
         check(meterPixels(child,1152)!=inSilent,"IN meter follows input");
         check(meterPixels(child,1208)==outSilent,"OUT remains at silence independently");
         message->getAttributes()->setFloat("out",.2);meters->notify(message);
