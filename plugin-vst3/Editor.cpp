@@ -1380,9 +1380,9 @@ class Editor final : public Steinberg::CPluginView {
   public:
     explicit Editor(Controller *c) : controller(c) {
         c->addRef();
+#ifndef MULTIFX_JUCE_GUI
         D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,&drawFactory);
-        // System font outlines remain legible in both native Windows and Wine's DC target.
-        // D2D still draws every control directly in the final viewport.
+#endif
         const double fit = std::clamp(std::min(double(GetSystemMetrics(SM_CXSCREEN) - 80) / W,
                                                double(GetSystemMetrics(SM_CYSCREEN) - 120) / H),
                                       .6, 1.);
@@ -1425,7 +1425,7 @@ class Editor final : public Steinberg::CPluginView {
         if (!window)
             return Steinberg::kResultFalse;
 #ifdef MULTIFX_JUCE_GUI
-        juceInitialiser=std::make_unique<juce::ScopedJuceInitialiser_GUI>();
+        if(!juceInitialiser)juceInitialiser=std::make_unique<juce::ScopedJuceInitialiser_GUI>();
         juceCanvas=std::make_unique<JuceCanvas>(*this);
         juceCanvas->setSize(getRect().getWidth(),getRect().getHeight());
         juceCanvas->addToDesktop(0,window);
@@ -1451,9 +1451,6 @@ class Editor final : public Steinberg::CPluginView {
             window = nullptr;
             UnregisterClassA("JerzyMultiFXEditor010", instance);
         }
-#ifdef MULTIFX_JUCE_GUI
-        juceInitialiser.reset();
-#endif
         systemWindow = nullptr;
         return Steinberg::kResultOk;
     }
