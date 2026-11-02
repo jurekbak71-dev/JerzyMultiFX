@@ -57,6 +57,16 @@ if(MULTIFX_VST3)
  smtg_add_vst3plugin(JerzyMultiFX plugin-vst3/Plugin.cpp plugin-vst3/Editor.cpp)
  target_link_libraries(JerzyMultiFX PRIVATE sdk multifx_dsp)
  target_compile_definitions(JerzyMultiFX PRIVATE NOMINMAX)
+ if(MSVC)
+  include(FetchContent)
+  FetchContent_Declare(juce_gui
+   GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+   GIT_TAG 9.0.3
+   GIT_SHALLOW TRUE)
+  FetchContent_MakeAvailable(juce_gui)
+  target_link_libraries(JerzyMultiFX PRIVATE juce::juce_gui_basics)
+  target_compile_definitions(JerzyMultiFX PRIVATE MULTIFX_JUCE_GUI=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+ endif()
  if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   get_target_property(MULTIFX_VST_BUNDLE JerzyMultiFX SMTG_PLUGIN_PACKAGE_PATH)
   add_test(NAME VST3_validator COMMAND $<TARGET_FILE:validator> "${MULTIFX_VST_BUNDLE}")
