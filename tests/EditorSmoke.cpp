@@ -98,6 +98,12 @@ int main(int argc, char **argv) try {
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
         check(child, "editor child window");
+#ifdef MULTIFX_JUCE_GUI
+        HWND vectorSurface=nullptr;
+        for(HWND candidate=GetWindow(child,GW_CHILD);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT))
+            if(IsWindowVisible(candidate)){vectorSurface=candidate;break;}
+        check(vectorSurface,"JUCE vector surface attached to the VST3 editor");
+#endif
         if(std::getenv("MULTIFX_VISUAL_ONLY")) {
             check(argc>=3,"visual capture needs output path");
             screenshot(child,argv[2]);
