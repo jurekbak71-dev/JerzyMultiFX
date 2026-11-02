@@ -29,7 +29,7 @@ def source_filter(member):
     member.uid=member.gid=0;member.uname=member.gname='root'
     return member
 
-def sources(destination,sdk=None):
+def sources(destination,sdk=None,juce=None):
     roots=('core','effects','vendor','plugin-vst3','rpi','ui','tests','scripts','cmake','docs','.github')
     files=('CMakeLists.txt','VERSION','LICENSE','NOTICE','.gitignore','.gitattributes','.clang-format','README_PL.md','INSTALACJA_VST3_PL.md','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md','LICENSES.md','CHANGELOG.md','STATUS.md')
     tracked_result=subprocess.run(['git','-C',str(ROOT),'ls-files','-z'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -49,6 +49,13 @@ def sources(destination,sdk=None):
             for name in sdk_paths:
                 archive.add(sdk/name,arcname='JerzyMultiFX/dependencies/vst3sdk/'+name,filter=source_filter)
             revision=(SDK_REVISION+'\n').encode();info=tarfile.TarInfo('JerzyMultiFX/dependencies/vst3sdk/REVISION');info.size=len(revision);archive.addfile(info,io.BytesIO(revision))
+        if juce:
+            juce=Path(juce)
+            for name in ('CMakeLists.txt','LICENSE.md','JUCE.spdx.json','extras/Build','modules'):
+                archive.add(juce/name,arcname='JerzyMultiFX/dependencies/JUCE/'+name,filter=source_filter)
+            revision=b'JUCE 9.0.3\n'
+            info=tarfile.TarInfo('JerzyMultiFX/dependencies/JUCE/REVISION');info.size=len(revision)
+            archive.addfile(info,io.BytesIO(revision))
 
 def sums(directory):
     rows=[]
@@ -57,7 +64,7 @@ def sums(directory):
     (directory/'SHA256SUMS').write_text('\n'.join(rows)+'\n')
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('platform',choices=['windows','arm64']);p.add_argument('--build',type=Path,required=True);p.add_argument('--sdk',type=Path);p.add_argument('--out',type=Path,default=ROOT/'dist');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('platform',choices=['windows','arm64']);p.add_argument('--build',type=Path,required=True);p.add_argument('--sdk',type=Path);p.add_argument('--juce',type=Path);p.add_argument('--out',type=Path,default=ROOT/'dist');a=p.parse_args()
     assert re.fullmatch(r'\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?',VERSION),'Invalid VERSION'
     a.build=a.build.resolve();a.out.mkdir(exist_ok=True,parents=True)
     label='VST3-Windows-x64' if a.platform=='windows' else 'RPi-aarch64'
@@ -98,7 +105,9 @@ def main():
     if os.environ.get('GITHUB_RUN_ID'):info['actions_run']=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     (stage/'BUILD-INFO.json').write_text(json.dumps(info,indent=2)+'\n')
     (stage/'VALIDATION.json').write_text(json.dumps(validation,indent=2)+'\n')
-    sources(stage/'source.tar.gz',a.sdk if a.platform=='windows' else None)
+    if a.platform=='windows':
+        assert a.juce and (a.juce/'CMakeLists.txt').is_file(),'JUCE source required for Windows package'
+    sources(stage/'source.tar.gz',a.sdk if a.platform=='windows' else None,a.juce if a.platform=='windows' else None)
     sums(stage)
     name=f'JerzyMultiFX-{label}-v{VERSION}'
     if a.platform=='windows':

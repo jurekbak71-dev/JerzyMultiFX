@@ -97,5 +97,15 @@
     ],
     "destination": "vendor/muff/Circuit",
     "license": "GPL-3.0-only; unchanged original circuit solver and catalogue"
+  },
+  {
+    "repository": "JerzyMonoAnalogVST3",
+    "commit": "bc6a8e1dadfff098bd33b0652cb177e29de019a1",
+    "files": [
+      "Source/JerzyVSTGuiKit.h",
+      "Source/PluginEditor.cpp (JerzyLookAndFeel::drawRotarySlider geometry)"
+    ],
+    "destination": "plugin-vst3/JerzyVSTGuiKit.h, plugin-vst3/Editor.cpp",
+    "license": "No standalone license in source checkout; private owner-requested integration, public redistribution requires confirmation of rights"
   }
 ]

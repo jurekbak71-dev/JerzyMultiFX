@@ -80,6 +80,12 @@ jobs:
           path: build/editor.bmp*
           retention-days: 1
           if-no-files-found: ignore
+      - name: Editor PNG for visual review
+        if: inputs.platform == 'windows' && always()
+        shell: pwsh
+        run: |
+          python scripts/editor_thumbnail.py build/editor.bmp-delay.bmp
+          python scripts/editor_thumbnail.py build/editor.bmp-large.bmp
       - name: Toolchain and dummy JACK
         if: inputs.platform == 'arm64'
         shell: bash
@@ -112,7 +118,7 @@ jobs:
       - name: Package actual VST3 bundle and verify validator
         if: inputs.platform == 'windows'
         shell: pwsh
-        run: python scripts/package.py windows --build build --sdk "${{ runner.temp }}/vst3sdk"
+        run: python scripts/package.py windows --build build --sdk "${{ runner.temp }}/vst3sdk" --juce build/_deps/juce_gui-src
       - name: Package real AArch64 binary
         if: inputs.platform == 'arm64'
         shell: bash
@@ -124,6 +130,22 @@ jobs:
       - name: Verify packages and privacy allowlist
         shell: bash
         run: python scripts/verify_packages.py
+      - name: Upload installable Windows package
+        if: inputs.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMultiFX-Windows-VST3-installable-${{ github.run_id }}
+          path: dist/JerzyMultiFX-VST3-Windows-x64-v*.zip
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload double-click Raspberry Pi installer
+        if: inputs.platform == 'arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMultiFX-RPi-HeadRush-double-click-${{ github.run_id }}
+          path: dist/JerzyMultiFX-INSTALATOR.zip
+          retention-days: 7
+          if-no-files-found: error
       - name: Publish this job's files directly to GitHub Release
         if: inputs.publish
         shell: bash

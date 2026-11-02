@@ -14,7 +14,49 @@
 #include <windowsx.h>
 #include <d2d1.h>
 #include <map>
+#include <memory>
+#ifdef MULTIFX_JUCE_GUI
+#include "JerzyVSTGuiKit.h"
+#endif
 namespace multifx {
+#ifdef MULTIFX_JUCE_GUI
+class MonoAnalogLook final : public JerzyAudioUI::HardwareLookAndFeel {
+public:
+    MonoAnalogLook():HardwareLookAndFeel(JerzyAudioUI::steel()){}
+    void drawRotarySlider(juce::Graphics& g,int x,int y,int w,int h,float p,float a0,float a1,juce::Slider& slider) override {
+        juce::Graphics::ScopedSaveState saved(g);g.setOpacity(slider.isEnabled()?1.0f:.45f);
+        auto b=juce::Rectangle<float>(float(x),float(y),float(w),float(h)).reduced(5.0f);
+        const float d=juce::jmin(b.getWidth(),b.getHeight());
+        auto r=juce::Rectangle<float>(d,d).withCentre(b.getCentre());const auto cc=r.getCentre();
+        g.setColour(juce::Colour(0xff050505).withAlpha(.8f));g.fillEllipse(r.translated(0.0f,d*.045f));
+        juce::ColourGradient rim(juce::Colour(0xffddd7c7),cc.x,r.getY(),juce::Colour(0xff292b2c),cc.x,r.getBottom(),false);
+        rim.addColour(.48,juce::Colour(0xff777a79));g.setGradientFill(rim);g.fillEllipse(r);
+        g.setColour(juce::Colour(0xff0e0f0f));g.drawEllipse(r,juce::jmax(1.0f,d*.035f));
+        auto face=r.reduced(d*.105f);
+        juce::ColourGradient body(juce::Colour(0xff4b8193),face.getX(),face.getY(),juce::Colour(0xff192c34),face.getRight(),face.getBottom(),false);
+        body.addColour(.38,juce::Colour(0xff496a76));body.addColour(.72,juce::Colour(0xff293b43));
+        g.setGradientFill(body);g.fillEllipse(face);
+        g.setColour(juce::Colour(0xff9fd6e2).withAlpha(.75f));g.drawEllipse(face,d*.018f);
+        auto inner=face.reduced(d*.18f);
+        juce::ColourGradient cap(juce::Colour(0xffd6e0df),inner.getX(),inner.getY(),juce::Colour(0xff555d60),inner.getRight(),inner.getBottom(),false);
+        cap.addColour(.5,juce::Colour(0xff929fa2));g.setGradientFill(cap);g.fillEllipse(inner);
+        const float a=a0+p*(a1-a0),tickR=d*.49f;
+        for(int i=0;i<=20;++i){
+            const float t=float(i)/20.0f,angle=a0+t*(a1-a0);
+            juce::Point<float> p1(cc.x+std::sin(angle)*(tickR-d*.035f),cc.y-std::cos(angle)*(tickR-d*.035f));
+            juce::Point<float> p2(cc.x+std::sin(angle)*(tickR+(i%5==0?d*.005f:-d*.01f)),cc.y-std::cos(angle)*(tickR+(i%5==0?d*.005f:-d*.01f)));
+            g.setColour(t<=p?juce::Colour(0xff67e3ee):juce::Colour(0xff71858d));
+            g.drawLine(p1.x,p1.y,p2.x,p2.y,juce::jmax(1.0f,d*.012f));
+        }
+        juce::Path arc;arc.addCentredArc(cc.x,cc.y,tickR,tickR,0.0f,a0,a,true);
+        g.setColour(juce::Colour(0xff45cadc));g.strokePath(arc,juce::PathStrokeType(juce::jmax(2.0f,d*.035f)));
+        juce::Path pointer;pointer.startNewSubPath(cc.x,cc.y-d*.10f);pointer.lineTo(cc.x,cc.y-d*.39f);
+        pointer.applyTransform(juce::AffineTransform::rotation(a,cc.x,cc.y));
+        g.setColour(juce::Colour(0xff09232d));g.strokePath(pointer,juce::PathStrokeType(juce::jmax(4.0f,d*.09f),juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
+        g.setColour(juce::Colour(0xffe1faff));g.strokePath(pointer,juce::PathStrokeType(juce::jmax(2.0f,d*.04f),juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
+    }
+};
+#endif
 class Editor final : public Steinberg::CPluginView {
     Controller *controller;
     HWND window = nullptr;
@@ -65,6 +107,48 @@ class Editor final : public Steinberg::CPluginView {
     ID2D1Factory *drawFactory = nullptr;
     ID2D1DCRenderTarget *canvas = nullptr;
     std::map<COLORREF,ID2D1SolidColorBrush*> vectorBrushes;
+#ifdef MULTIFX_JUCE_GUI
+    class JuceCanvas final : public juce::Component {
+        Editor &owner;
+        bool rightPressed=false;
+        LPARAM point(const juce::MouseEvent &e) const {
+            return MAKELPARAM(e.x,e.y);
+        }
+    public:
+        explicit JuceCanvas(Editor &e):owner(e){setOpaque(true);}
+        void paint(juce::Graphics &g) override {owner.paint(nullptr,&g);}
+        void mouseDown(const juce::MouseEvent &e) override {
+            rightPressed=e.mods.isRightButtonDown();
+            SendMessage(owner.window,rightPressed?WM_RBUTTONDOWN:WM_LBUTTONDOWN,
+                        rightPressed?MK_RBUTTON:MK_LBUTTON,point(e));
+        }
+        void mouseDrag(const juce::MouseEvent &e) override {
+            SendMessage(owner.window,WM_MOUSEMOVE,
+                        (rightPressed?MK_RBUTTON:MK_LBUTTON)|(e.mods.isShiftDown()?MK_SHIFT:0),point(e));
+        }
+        void mouseUp(const juce::MouseEvent &e) override {
+            SendMessage(owner.window,rightPressed?WM_RBUTTONUP:WM_LBUTTONUP,0,point(e));
+            rightPressed=false;
+        }
+        void mouseWheelMove(const juce::MouseEvent &e,const juce::MouseWheelDetails &wheel) override {
+            POINT p{e.x,e.y};ClientToScreen(owner.window,&p);
+            const int delta=int(std::round(wheel.deltaY*WHEEL_DELTA));
+            SendMessage(owner.window,WM_MOUSEWHEEL,
+                        MAKEWPARAM(e.mods.isCtrlDown()?MK_CONTROL:0,delta),MAKELPARAM(p.x,p.y));
+        }
+    };
+    std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
+    std::unique_ptr<JuceCanvas> juceCanvas;
+    juce::Graphics *juceGraphics=nullptr;
+    MonoAnalogLook juceLook;
+    juce::Slider drawingSlider;
+    static juce::Colour juceColor(COLORREF c){
+        return juce::Colour::fromRGB(GetRValue(c),GetGValue(c),GetBValue(c));
+    }
+    void requestRepaint(){if(juceCanvas)juceCanvas->repaint();}
+#else
+    void requestRepaint(){if(window)InvalidateRect(window,nullptr,FALSE);}
+#endif
     static D2D1_COLOR_F color(COLORREF c, float alpha=1.f) {
         return D2D1::ColorF(GetRValue(c)/255.f,GetGValue(c)/255.f,GetBValue(c)/255.f,alpha);
     }
@@ -75,11 +159,21 @@ class Editor final : public Steinberg::CPluginView {
     }
     static D2D1_RECT_F rect(float x,float y,float w,float h) {return D2D1::RectF(x,y,x+w,y+h);}
     void ellipse(float x,float y,float radius,COLORREF tint,float alpha=1.f) {
+#ifdef MULTIFX_JUCE_GUI
+        juceGraphics->setColour(juceColor(tint).withAlpha(alpha));
+        juceGraphics->fillEllipse(x-radius,y-radius,radius*2,radius*2);
+#else
         ID2D1SolidColorBrush *b=nullptr;
         canvas->CreateSolidColorBrush(color(tint,alpha),&b);
         if(b){canvas->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x,y),radius,radius),b);b->Release();}
+#endif
     }
     void gradient(float x,float y,float w,float h,COLORREF top,COLORREF bottom,bool oval=false) {
+#ifdef MULTIFX_JUCE_GUI
+        juceGraphics->setGradientFill(juce::ColourGradient(juceColor(top),x,y,juceColor(bottom),x+w,y+h,false));
+        if(oval)juceGraphics->fillEllipse(x,y,w,h);
+        else juceGraphics->fillRect(x,y,w,h);
+#else
         ID2D1GradientStopCollection *stops=nullptr;
         ID2D1LinearGradientBrush *b=nullptr;
         D2D1_GRADIENT_STOP values[2]={{0,color(top)},{1,color(bottom)}};
@@ -90,6 +184,7 @@ class Editor final : public Steinberg::CPluginView {
                   else canvas->FillRectangle(rect(x,y,w,h),b);b->Release();}
             stops->Release();
         }
+#endif
     }
     int effectBypass() const {
         if (view.block != 1)
@@ -126,8 +221,7 @@ class Editor final : public Steinberg::CPluginView {
         controller->setParamNormalized(id, v);
         controller->performEdit(id, v);
         controller->endEdit(id);
-        if (window)
-            InvalidateRect(window, nullptr, FALSE);
+        requestRepaint();
     }
     void destroyCombos() {
         for (auto h : combos)
@@ -165,13 +259,25 @@ class Editor final : public Steinberg::CPluginView {
         }
     }
     void fill(HDC, int x, int y, int w, int h, COLORREF tint) {
+#ifdef MULTIFX_JUCE_GUI
+        juceGraphics->setColour(juceColor(tint));juceGraphics->fillRect(x,y,w,h);
+#else
         if(auto *b=brush(tint))canvas->FillRectangle(rect(float(x),float(y),float(w),float(h)),b);
+#endif
     }
     void text(HDC, int x, int y, int w, const char *s, int size, COLORREF tint) {
         if(!s)return;
         textOps.push_back({x,y,w,size,tint,s});
     }
     void drawTextPass(HDC dc) {
+#ifdef MULTIFX_JUCE_GUI
+        for(const auto &op:textOps){
+            juceGraphics->setColour(juceColor(op.tint));
+            juceGraphics->setFont(juce::Font(juce::FontOptions(float(op.size)).withStyle("Bold")));
+            juceGraphics->drawFittedText(juce::String::fromUTF8(op.value.c_str()),
+                op.x,op.y,op.w,op.size+8,juce::Justification::centred,1,0.8f);
+        }
+#else
         for(const auto &op:textOps){
             const int fontSize=std::clamp(int(std::round(op.size/sy)),10,63);
             if(!fonts[fontSize])fonts[fontSize]=CreateFontW(fontSize,0,0,0,FW_SEMIBOLD,0,0,0,
@@ -188,15 +294,25 @@ class Editor final : public Steinberg::CPluginView {
             }
             SelectObject(dc,old);
         }
+#endif
         textOps.clear();
     }
     void line(HDC, int x, int y, int xx, int yy, COLORREF tint, int width = 1) {
+#ifdef MULTIFX_JUCE_GUI
+        juceGraphics->setColour(juceColor(tint));
+        juceGraphics->drawLine(float(x),float(y),float(xx),float(yy),std::max(1.2f,float(width)));
+#else
         if(auto *b=brush(tint))canvas->DrawLine(D2D1::Point2F(float(x),float(y)),
             D2D1::Point2F(float(xx),float(yy)),b,
             std::max(float(width),1.5f*std::max(sx,sy)));
+#endif
     }
     void disk(HDC, int x, int y, int r, COLORREF tint) {
+#ifdef MULTIFX_JUCE_GUI
+        juceGraphics->setColour(juceColor(tint));juceGraphics->fillEllipse(float(x-r),float(y-r),float(r*2),float(r*2));
+#else
         if(auto *b=brush(tint))canvas->FillEllipse(D2D1::Ellipse(D2D1::Point2F(float(x),float(y)),float(r),float(r)),b);
+#endif
     }
     void bevel(HDC dc, int x, int y, int w, int h, COLORREF tint) {
         fill(dc, x, y, w, h, tint);
@@ -206,6 +322,17 @@ class Editor final : public Steinberg::CPluginView {
         line(dc, x+w-1, y, x+w-1, y+h, RGB(10,19,30));
     }
     void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
+#ifdef MULTIFX_JUCE_GUI
+        auto area=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
+        if(raised)JerzyAudioUI::paintPanel(*juceGraphics,area,juceLook.getTheme(),4.0f);
+        else{
+            juceGraphics->setGradientFill(juce::ColourGradient(juce::Colour(0xff0c1923),area.getTopLeft(),
+                juce::Colour(0xff1c2c36),area.getBottomRight(),false));
+            juceGraphics->fillRoundedRectangle(area,3.0f);
+            juceGraphics->setColour(juce::Colour(0xff536f7e));
+            juceGraphics->drawRoundedRectangle(area,3.0f,1.0f);
+        }
+#else
         fill(dc,x+2,y+3,w,h,RGB(2,8,14));
         gradient(float(x),float(y),float(w),float(h),
             raised?RGB(37,47,53):RGB(12,25,35),raised?RGB(13,26,34):RGB(28,44,54));
@@ -213,6 +340,7 @@ class Editor final : public Steinberg::CPluginView {
         line(dc,x,y,x,y+h-1,RGB(80,99,108));
         line(dc,x,y+h-1,x+w,y+h-1,RGB(3,9,15),2);
         line(dc,x+w-1,y,x+w-1,y+h,RGB(3,9,15),2);
+#endif
     }
     void screw(HDC dc,int x,int y){
         disk(dc,x+1,y+2,5,RGB(3,9,15));
@@ -292,7 +420,11 @@ class Editor final : public Steinberg::CPluginView {
         }
     }
     void chrome(HDC dc) {
+#ifdef MULTIFX_JUCE_GUI
+        JerzyAudioUI::paintChassis(*juceGraphics,juce::Rectangle<float>(0,0,float(W),float(H)),juceLook.getTheme());
+#else
         fill(dc,0,0,W,H,RGB(7,17,27));
+#endif
         metalPanel(dc,0,0,W,82);
         fill(dc,0,0,W,78,RGB(8,19,29));
         line(dc,0,81,W,81,RGB(38,68,83));
@@ -363,6 +495,12 @@ class Editor final : public Steinberg::CPluginView {
         const float cx=float(c.x+c.w/2),cy=float(c.y+(radius==40?71:radius>=34?63:56));
         const float r=float(radius);
         text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
+#ifdef MULTIFX_JUCE_GUI
+        const int diameter=int(std::round(r*2.65f));
+        juceLook.drawRotarySlider(*juceGraphics,int(cx)-diameter/2,int(cy)-diameter/2,
+            diameter,diameter,float(value(c.id)),juce::MathConstants<float>::pi*1.25f,
+            juce::MathConstants<float>::pi*2.75f,drawingSlider);
+#else
         auto ring=[&](float x,float y,float rr,COLORREF tint,float width=1.f){
             if(auto*b=brush(tint))canvas->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x,y),rr,rr),b,width);
         };
@@ -413,6 +551,7 @@ class Editor final : public Steinberg::CPluginView {
         stroke(cx+ux*r*.10f,cy+uy*r*.10f,cx+ux*r*.68f,cy+uy*r*.68f,RGB(9,25,34),6.f);
         stroke(cx+ux*r*.10f,cy+uy*r*.10f,cx+ux*r*.68f,cy+uy*r*.68f,RGB(244,251,250),3.4f);
         ellipse(cx+ux*r*.68f,cy+uy*r*.68f,1.7f,RGB(244,251,250));
+#endif
         std::string reading=formatted(c.id);
         const auto &definition=layout().parameters[c.id];
         if(radius==40){
@@ -634,7 +773,7 @@ class Editor final : public Steinberg::CPluginView {
             combos.push_back(factory);
         }
         signature = selectionSignature();
-        InvalidateRect(window, nullptr, FALSE);
+        requestRepaint();
     }
     std::string selectionSignature() const {
         auto s = state();
@@ -649,7 +788,22 @@ class Editor final : public Steinberg::CPluginView {
             }
         return key;
     }
-    void paint(HDC supplied = nullptr) {
+    void paint(HDC supplied = nullptr
+#ifdef MULTIFX_JUCE_GUI
+        ,juce::Graphics *g = nullptr
+#endif
+    ) {
+#ifdef MULTIFX_JUCE_GUI
+        if(!g)return;
+        juceGraphics=g;
+        juce::Graphics::ScopedSaveState saved(*g);
+        RECT client{};GetClientRect(window,&client);
+        sx=float(W)/std::max(1L,client.right);sy=float(H)/std::max(1L,client.bottom);
+        g->addTransform(juce::AffineTransform::scale(float(client.right)/W,float(client.bottom)/H));
+        textOps.clear();
+        HDC target=nullptr;
+        auto finish=[&]{drawTextPass(nullptr);juceGraphics=nullptr;};
+#else
         PAINTSTRUCT ps{};
         auto target = supplied ? supplied : BeginPaint(window, &ps);
         RECT client;
@@ -678,6 +832,7 @@ class Editor final : public Steinberg::CPluginView {
             drawTextPass(target);
             if(!supplied)EndPaint(window,&ps);
         };
+#endif
         if (referenceDelay()) {
             chrome(target);
             referenceDelayPanel(target);
@@ -749,7 +904,12 @@ class Editor final : public Steinberg::CPluginView {
         char status[96];
         snprintf(status,sizeof(status),"GR %.1f dB / PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
         text(dc,1007,682,235,status,12,RGB(166,208,222));
+#ifdef MULTIFX_JUCE_GUI
+        juceGraphics->saveState();
+        juceGraphics->reduceClipRegion(20,370,1240,controlBottom-370);
+#else
         canvas->PushAxisAlignedClip(rect(20,370,1240,float(controlBottom-370)),D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+#endif
         for (auto &c : controls) {
             int y = c.y - scroll;
             if (y + c.h < 370 || y > controlBottom)
@@ -790,7 +950,11 @@ class Editor final : public Steinberg::CPluginView {
                 referenceKnob(dc,c,label.c_str(),34,accent());
             }
         }
+#ifdef MULTIFX_JUCE_GUI
+        juceGraphics->restoreState();
+#else
         canvas->PopAxisAlignedClip();
+#endif
         bevel(dc,1031,638,48,22,RGB(21,51,67));
         text(dc,1031,639,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
         bevel(dc,1083,638,100,22,RGB(15,36,50));
@@ -872,14 +1036,43 @@ class Editor final : public Steinberg::CPluginView {
             break;
         }
         case WM_PRINTCLIENT:
+#ifdef MULTIFX_JUCE_GUI
+            if(auto dc=reinterpret_cast<HDC>(w)){
+                RECT bounds{};GetClientRect(window,&bounds);
+                const int width=std::max(1L,bounds.right),height=std::max(1L,bounds.bottom);
+                juce::Image image(juce::Image::ARGB,width,height,true,juce::SoftwareImageType{});
+                {
+                    juce::Graphics graphics(image);
+                    paint(nullptr,&graphics);
+                }
+                std::vector<DWORD> pixels(size_t(width)*size_t(height));
+                for(int y=0;y<height;++y)for(int x=0;x<width;++x){
+                    const auto c=image.getPixelAt(x,y);
+                    pixels[size_t(y)*size_t(width)+size_t(x)]=RGB(c.getBlue(),c.getGreen(),c.getRed());
+                }
+                BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+                info.bmiHeader.biWidth=width;info.bmiHeader.biHeight=-height;
+                info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
+                StretchDIBits(dc,0,0,width,height,0,0,width,height,
+                    pixels.data(),&info,DIB_RGB_COLORS,SRCCOPY);
+            }
+#else
             paint(reinterpret_cast<HDC>(w));
+#endif
             return 0;
         case WM_PAINT:
+#ifdef MULTIFX_JUCE_GUI
+            {PAINTSTRUCT ps{};BeginPaint(window,&ps);EndPaint(window,&ps);}
+#else
             paint();
+#endif
             return 0;
         case WM_ERASEBKGND:
             return 1;
         case WM_SIZE:
+#ifdef MULTIFX_JUCE_GUI
+            if(juceCanvas)juceCanvas->setSize(LOWORD(lp),HIWORD(lp));
+#endif
             if (window)
                 PostMessage(window, WM_APP + 1, 0, 0);
             return 0;
@@ -902,7 +1095,7 @@ class Editor final : public Steinberg::CPluginView {
             if (drag < 0 && selectionSignature() != signature)
                 rebuild();
             if(std::abs(needleIn-previousIn)>.002f||std::abs(needleOut-previousOut)>.002f)
-                InvalidateRect(window, nullptr, FALSE);
+                requestRepaint();
             return 0;
         }
         case WM_COMMAND:
@@ -1191,9 +1384,9 @@ class Editor final : public Steinberg::CPluginView {
   public:
     explicit Editor(Controller *c) : controller(c) {
         c->addRef();
+#ifndef MULTIFX_JUCE_GUI
         D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,&drawFactory);
-        // System font outlines remain legible in both native Windows and Wine's DC target.
-        // D2D still draws every control directly in the final viewport.
+#endif
         const double fit = std::clamp(std::min(double(GetSystemMetrics(SM_CXSCREEN) - 80) / W,
                                                double(GetSystemMetrics(SM_CYSCREEN) - 120) / H),
                                       .6, 1.);
@@ -1235,6 +1428,13 @@ class Editor final : public Steinberg::CPluginView {
                                  getRect().getHeight(), static_cast<HWND>(parent), nullptr, instance, this);
         if (!window)
             return Steinberg::kResultFalse;
+#ifdef MULTIFX_JUCE_GUI
+        if(!juceInitialiser)juceInitialiser=std::make_unique<juce::ScopedJuceInitialiser_GUI>();
+        juceCanvas=std::make_unique<JuceCanvas>(*this);
+        juceCanvas->setSize(getRect().getWidth(),getRect().getHeight());
+        juceCanvas->addToDesktop(0,window);
+        juceCanvas->setVisible(true);
+#endif
         systemWindow = parent;
         // Meter repaint is independent of parameter edits, which invalidate immediately.
         SetTimer(window, 1, 60, nullptr);
@@ -1243,6 +1443,9 @@ class Editor final : public Steinberg::CPluginView {
     }
     Steinberg::tresult PLUGIN_API removed() override {
         if (window) {
+#ifdef MULTIFX_JUCE_GUI
+            if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
+#endif
             if (value(layout().attackTrigger) >= .5)
                 change(layout().attackTrigger, 0);
             destroyCombos();
