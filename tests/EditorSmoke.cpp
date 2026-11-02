@@ -119,8 +119,6 @@ int main(int argc, char **argv) try {
         check(meters->notify(message)==kResultOk,"input meter notification");
         for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-meter.bmp").c_str());
-        std::cerr<<"Meter pixels: IN "<<inSilent<<" -> "<<meterPixels(child,1152)
-                 <<", OUT "<<outSilent<<" -> "<<meterPixels(child,1208)<<'\n';
         check(meterPixels(child,1152)!=inSilent,"IN meter follows input");
         check(meterPixels(child,1208)==outSilent,"OUT remains at silence independently");
         message->getAttributes()->setFloat("out",.2);meters->notify(message);

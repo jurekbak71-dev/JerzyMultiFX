@@ -1040,12 +1040,9 @@ class Editor final : public Steinberg::CPluginView {
             if(auto dc=reinterpret_cast<HDC>(w)){
                 RECT bounds{};GetClientRect(window,&bounds);
                 const int width=std::max(1L,bounds.right),height=std::max(1L,bounds.bottom);
-                juce::Image image(juce::Image::ARGB,width,height,true);
-                juce::uint32 immediate=0;
+                juce::Image image(juce::Image::ARGB,width,height,true,juce::SoftwareImageType{});
                 {
                     juce::Graphics graphics(image);
-                    graphics.fillAll(juce::Colours::magenta);
-                    immediate=image.getPixelAt(0,0).getARGB();
                     paint(nullptr,&graphics);
                 }
                 std::vector<DWORD> pixels(size_t(width)*size_t(height));
@@ -1056,15 +1053,8 @@ class Editor final : public Steinberg::CPluginView {
                 BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
                 info.bmiHeader.biWidth=width;info.bmiHeader.biHeight=-height;
                 info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
-                const auto copied=StretchDIBits(dc,0,0,width,height,0,0,width,height,
+                StretchDIBits(dc,0,0,width,height,0,0,width,height,
                     pixels.data(),&info,DIB_RGB_COLORS,SRCCOPY);
-                static int captures=0;
-                if(captures++<6){
-                    const auto source=image.getPixelAt(std::min(1152,width-1),std::min(265,height-1));
-                    std::fprintf(stderr,"JUCE capture %d: immediate=%08x source=%08x corner=%08x dest=%08x transfer=%d size=%dx%d\n",
-                        captures,immediate,source.getARGB(),image.getPixelAt(0,0).getARGB(),
-                        GetPixel(dc,std::min(1152,width-1),std::min(265,height-1)),copied,width,height);
-                }
             }
 #else
             paint(reinterpret_cast<HDC>(w));

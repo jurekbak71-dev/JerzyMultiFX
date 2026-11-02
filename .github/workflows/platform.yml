@@ -80,6 +80,12 @@ jobs:
           path: build/editor.bmp*
           retention-days: 1
           if-no-files-found: ignore
+      - name: Editor PNG for visual review
+        if: inputs.platform == 'windows' && always()
+        shell: pwsh
+        run: |
+          python scripts/editor_thumbnail.py build/editor.bmp-delay.bmp
+          python scripts/editor_thumbnail.py build/editor.bmp-large.bmp
       - name: Toolchain and dummy JACK
         if: inputs.platform == 'arm64'
         shell: bash
