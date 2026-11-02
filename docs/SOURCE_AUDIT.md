@@ -14,6 +14,8 @@ Pełne SHA i mapowanie plików: [source-manifest.json](source-manifest.json).
 
 Integracja bazuje na natywnych DSP, bez hostowania VST wewnątrz RPi. Adaptery C ABI pochodzą z JerzyAudioPlatform db7727ca8032b3c75e542fcf0d152533467f4619. Nowy frontend RPi wykorzystuje kontrakt JACK/MIDI i rozdzielenie audio/control tej platformy, bez jej starej listy efektów. JerzyRPiAudioLab e210a367d74a99ce7d9d1592f9f5ce97cf134e12 służy jako referencja sprzętowa.
 
+Preview 25: geometria metalowych gałek w `plugin-vst3/Editor.cpp` została dostosowana na podstawie `source/jerzy_vst_gui_kit.cpp` z `JerzyMXAnalogDelayVST3` (repozytorium referencyjne, SHA wyżej). Własny edytor MultiFX używa bezpośrednio systemowego Direct2D/DirectWrite; nie dołączono plików VSTGUI/JerzyGuiKit ani bitmap referencyjnych. Brak samodzielnej licencji źródła pozostaje ograniczeniem dystrybucji publicznej.
+
 TS808: filtrowane ujemne sprzężenie, przeciwstawne diody i podbicie środka; implementacja behawioralna, bez deklaracji identyczności obwodowej. DS-1/DS-2: osobna charakterystyka twardego clippingu i Turbo; DM-2 nie bierze udziału w DRIVE. COMP: własna obwiednia stereo z miękkim kolanem i dwoma czasami powrotu inspirowanymi OTA/optycznym zachowaniem.
 
 Schematy w references nie są dołączane do paczek binarnych — prawa ilustracji nie zostały ustalone. Kopie kodu bez jawnej licencji pozostają wyraźnie oznaczone; publiczne wydanie wymaga uporządkowania praw. Nie wyciągamy uprawnień do cudzych plików ze zrzutów ekranów.

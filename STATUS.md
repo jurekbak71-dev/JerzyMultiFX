@@ -1,5 +1,11 @@
 # Jerzy MultiFX — status
 
+## Preview 25 — bezpośrednie rysowanie Direct2D
+
+- Identyfikację wizualnego wzorca skorygowano: pokazany MX Analog Delay 2 używa VSTGUI/JerzyGuiKit i Direct2D, nie JUCE. Edytor MultiFX zachowuje istniejącą obsługę parametrów oraz układ, ale rysuje kształty bezpośrednio przez Direct2D, bez bitmapowego bufora i końcowego resamplingu. Gałki wykorzystują metalowe warstwy, podziałkę i zakres 270° wzorowane na geometrii JerzyGuiKit, w palecie MultiFX.
+- Tekst na Windows używa DirectWrite. Wine nie wyświetla jego glifów na użytej powierzchni DC, dlatego testy pod Wine korzystają z systemowego tekstu GDI; kształty nadal rysuje Direct2D. Nie kopiowano plików źródłowych JerzyGuiKit ani materiałów referencyjnych do paczki.
+- Lokalnie: Windows x64 cross-build PASS, rzeczywisty DLL VST3 GUI pod Wine PASS (trzy cykle attach/edit/MIDI Learn/reorder, zrzuty 880×592/1280×850/1920×1275), test sygnału/PDC PASS, kompletny bundle w walidatorze Steinberga 47/47 PASS, natywny DSP/RPi 3/3 PASS. Obejrzano zrzuty panelu DELAY i obu skali. Fizycznego FL Studio ani Raspberry Pi nie testowano.
+
 ## Preview 24 — gładkie obrysy gałek VST3
 
 - Usunięto gęste kreski i promienisty wzór z tarcz gałek, które w małym rozmiarze tworzyły poszarpany kontur. Pozostały wygładzane gradienty metalowej obręczy, czytelny wskaźnik i rzadsze punkty podziałki. Cień ma miękki brzeg.

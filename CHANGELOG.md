@@ -1,3 +1,8 @@
+# 0.1.0-preview.25
+
+- Zastąpiono skalowany pośredni obraz GUI bezpośrednim rysowaniem Direct2D. Gałki mają metalowe warstwy i płynną geometrię wzorowaną na JerzyGuiKit z MX Analog Delay 2; napisy na Windows renderuje DirectWrite, pod Wine działa zgodna ścieżka GDI.
+- Bez zmian w DSP, presetach, mapach MIDI i ID parametrów.
+
 # 0.1.0-preview.24
 
 - Wygładzono małe gałki VST3: mniej podziałek, bez ząbkowanego promienistego wzoru, miękkie cienie. Wektorowe kształty przy typowych rozmiarach okna są próbkowane 2× i filtrowane do ekranu; fonty pozostają rysowane w rozmiarze końcowym.

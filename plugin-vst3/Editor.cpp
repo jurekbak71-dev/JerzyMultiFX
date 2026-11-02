@@ -12,7 +12,8 @@
 #include <windows.h>
 #include <commdlg.h>
 #include <windowsx.h>
-#include <gdiplus.h>
+#include <d2d1.h>
+#include <dwrite.h>
 #include <memory>
 #include <map>
 namespace multifx {
@@ -60,29 +61,40 @@ class Editor final : public Steinberg::CPluginView {
         if (index < 0 || index >= 8 || !keys[type][index]) return -1;
         return parameterId(std::string(bank ? "delayB." : "delayA.") + keys[type][index]);
     }
-    std::array<HFONT, 64> fonts{};
+    std::array<HFONT, 64> fonts{}; // Native combo boxes only.
     struct TextOp {int x,y,w,size;COLORREF tint;std::string value;};
     std::vector<TextOp> textOps;
-    Gdiplus::Graphics *canvas = nullptr;
-    ULONG_PTR gdiplusToken = 0;
-    std::map<COLORREF,std::unique_ptr<Gdiplus::SolidBrush>> vectorBrushes;
-    std::map<uint64_t,std::unique_ptr<Gdiplus::Pen>> vectorPens;
-    static Gdiplus::Color color(COLORREF c) {
-        return Gdiplus::Color(255, GetRValue(c), GetGValue(c), GetBValue(c));
+    bool gdiTextFallback = false;
+    ID2D1Factory *drawFactory = nullptr;
+    IDWriteFactory *writeFactory = nullptr;
+    ID2D1DCRenderTarget *canvas = nullptr;
+    std::map<COLORREF,ID2D1SolidColorBrush*> vectorBrushes;
+    std::map<int,IDWriteTextFormat*> textFormats;
+    static D2D1_COLOR_F color(COLORREF c, float alpha=1.f) {
+        return D2D1::ColorF(GetRValue(c)/255.f,GetGValue(c)/255.f,GetBValue(c)/255.f,alpha);
     }
-    Gdiplus::SolidBrush *brush(COLORREF tint) {
+    ID2D1SolidColorBrush *brush(COLORREF tint) {
         auto &b=vectorBrushes[tint];
-        if(!b)b=std::make_unique<Gdiplus::SolidBrush>(color(tint));
-        return b.get();
+        if(!b && canvas)canvas->CreateSolidColorBrush(color(tint),&b);
+        return b;
     }
-    Gdiplus::Pen *pen(COLORREF tint,int width) {
-        auto &p=vectorPens[(uint64_t(width)<<32)|uint64_t(tint)];
-        if(!p){
-            p=std::make_unique<Gdiplus::Pen>(color(tint),float(width));
-            p->SetStartCap(Gdiplus::LineCapRound);
-            p->SetEndCap(Gdiplus::LineCapRound);
+    static D2D1_RECT_F rect(float x,float y,float w,float h) {return D2D1::RectF(x,y,x+w,y+h);}
+    void ellipse(float x,float y,float radius,COLORREF tint,float alpha=1.f) {
+        ID2D1SolidColorBrush *b=nullptr;
+        canvas->CreateSolidColorBrush(color(tint,alpha),&b);
+        if(b){canvas->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x,y),radius,radius),b);b->Release();}
+    }
+    void gradient(float x,float y,float w,float h,COLORREF top,COLORREF bottom,bool oval=false) {
+        ID2D1GradientStopCollection *stops=nullptr;
+        ID2D1LinearGradientBrush *b=nullptr;
+        D2D1_GRADIENT_STOP values[2]={{0,color(top)},{1,color(bottom)}};
+        if(SUCCEEDED(canvas->CreateGradientStopCollection(values,2,&stops))&&stops){
+            canvas->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(
+                D2D1::Point2F(x,y),D2D1::Point2F(x+w,y+h)),stops,&b);
+            if(b){if(oval)canvas->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x+w/2,y+h/2),w/2,h/2),b);
+                  else canvas->FillRectangle(rect(x,y,w,h),b);b->Release();}
+            stops->Release();
         }
-        return p.get();
     }
     int effectBypass() const {
         if (view.block != 1)
@@ -158,35 +170,57 @@ class Editor final : public Steinberg::CPluginView {
         }
     }
     void fill(HDC, int x, int y, int w, int h, COLORREF tint) {
-        canvas->FillRectangle(brush(tint), Gdiplus::RectF(float(x), float(y), float(w), float(h)));
+        if(auto *b=brush(tint))canvas->FillRectangle(rect(float(x),float(y),float(w),float(h)),b);
     }
     void text(HDC, int x, int y, int w, const char *s, int size, COLORREF tint) {
+        if(!s)return;
         textOps.push_back({x,y,w,size,tint,s});
     }
+    void drawTextDirect(const TextOp& op) {
+        const int x=op.x,y=op.y,w=op.w,size=op.size;
+        const char *s=op.value.c_str();const COLORREF tint=op.tint;
+        if(!canvas||!writeFactory)return;
+        auto &format=textFormats[size];
+        if(!format){
+            writeFactory->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,float(size),L"pl-PL",&format);
+            if(format){format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);}
+        }
+        if(!format)return;
+        const int n=MultiByteToWideChar(CP_UTF8,0,s,-1,nullptr,0);
+        if(n<=1)return;
+        std::wstring wide(size_t(n),L'\0');
+        MultiByteToWideChar(CP_UTF8,0,s,-1,wide.data(),n);
+        if(auto *b=brush(tint))canvas->DrawTextW(wide.data(),UINT32(n-1),format,
+            rect(float(x),float(y),float(w),float(size+8)),b,D2D1_DRAW_TEXT_OPTIONS_NONE);
+    }
     void drawTextPass(HDC dc) {
-        for(const auto &op:textOps) {
+        for(const auto &op:textOps){
             const int fontSize=std::clamp(int(std::round(op.size/sy)),10,63);
-            if(!fonts[fontSize])fonts[fontSize]=CreateFontA(fontSize,0,0,0,FW_SEMIBOLD,0,0,0,
-                DEFAULT_CHARSET,0,0,ANTIALIASED_QUALITY,DEFAULT_PITCH|FF_SWISS,"Segoe UI");
+            if(!fonts[fontSize])fonts[fontSize]=CreateFontW(fontSize,0,0,0,FW_SEMIBOLD,0,0,0,
+                DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,DEFAULT_PITCH|FF_SWISS,L"Segoe UI");
             const auto old=SelectObject(dc,fonts[fontSize]?fonts[fontSize]:GetStockObject(DEFAULT_GUI_FONT));
             const int n=MultiByteToWideChar(CP_UTF8,0,op.value.c_str(),-1,nullptr,0);
             if(n>0){
-                std::vector<wchar_t> wide(n);
+                std::wstring wide(size_t(n),L'\0');
                 MultiByteToWideChar(CP_UTF8,0,op.value.c_str(),-1,wide.data(),n);
                 RECT box{int(std::round(op.x/sx)),int(std::round(op.y/sy)),
                     int(std::round((op.x+op.w)/sx)),int(std::round((op.y+op.size+8)/sy))};
                 SetTextColor(dc,op.tint);SetBkMode(dc,TRANSPARENT);
-                DrawTextW(dc,wide.data(),-1,&box,DT_SINGLELINE|DT_END_ELLIPSIS|DT_CENTER|DT_VCENTER);
+                DrawTextW(dc,wide.c_str(),-1,&box,DT_SINGLELINE|DT_END_ELLIPSIS|DT_CENTER|DT_VCENTER);
             }
             SelectObject(dc,old);
         }
         textOps.clear();
     }
     void line(HDC, int x, int y, int xx, int yy, COLORREF tint, int width = 1) {
-        canvas->DrawLine(pen(tint,width), float(x), float(y), float(xx), float(yy));
+        if(auto *b=brush(tint))canvas->DrawLine(D2D1::Point2F(float(x),float(y)),
+            D2D1::Point2F(float(xx),float(yy)),b,float(width));
     }
     void disk(HDC, int x, int y, int r, COLORREF tint) {
-        canvas->FillEllipse(brush(tint), float(x-r), float(y-r), float(r*2), float(r*2));
+        if(auto *b=brush(tint))canvas->FillEllipse(D2D1::Ellipse(D2D1::Point2F(float(x),float(y)),float(r),float(r)),b);
     }
     void bevel(HDC dc, int x, int y, int w, int h, COLORREF tint) {
         fill(dc, x, y, w, h, tint);
@@ -197,9 +231,8 @@ class Editor final : public Steinberg::CPluginView {
     }
     void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
         fill(dc,x+2,y+3,w,h,RGB(2,8,14));
-        Gdiplus::LinearGradientBrush gradient(Gdiplus::Point(x,y),Gdiplus::Point(x,y+std::max(h,1)),
-            color(raised?RGB(37,47,53):RGB(12,25,35)),color(raised?RGB(13,26,34):RGB(28,44,54)));
-        canvas->FillRectangle(&gradient,Gdiplus::Rect(x,y,w,h));
+        gradient(float(x),float(y),float(w),float(h),
+            raised?RGB(37,47,53):RGB(12,25,35),raised?RGB(13,26,34):RGB(28,44,54));
         line(dc,x,y,x+w-1,y,raised?RGB(118,134,141):RGB(53,71,82));
         line(dc,x,y,x,y+h-1,RGB(80,99,108));
         line(dc,x,y+h-1,x+w,y+h-1,RGB(3,9,15),2);
@@ -221,9 +254,8 @@ class Editor final : public Steinberg::CPluginView {
     void toggleSwitch(HDC dc,int x,int y,bool on,int scale=1){
         const int radius=scale==1?13:17;
         disk(dc,x+1,y+2,radius+2,RGB(1,7,11));
-        Gdiplus::LinearGradientBrush socket(Gdiplus::Point(x-radius,y-radius),Gdiplus::Point(x+radius,y+radius),
-            Gdiplus::Color(255,195,204,204),Gdiplus::Color(255,67,77,80));
-        canvas->FillEllipse(&socket,float(x-radius),float(y-radius),float(radius*2),float(radius*2));
+        gradient(float(x-radius),float(y-radius),float(radius*2),float(radius*2),
+            RGB(195,204,204),RGB(67,77,80),true);
         disk(dc,x,y,radius-4,RGB(13,26,32));
         const int tipY=y+(on?-7:7);
         line(dc,x,y,x,tipY,RGB(9,14,18),7);
@@ -280,9 +312,7 @@ class Editor final : public Steinberg::CPluginView {
         for(int i=0;i<3;++i){
             const int cx=x+45+i*47,cy=y+107;
             disk(dc,cx+1,cy+2,13,RGB(3,8,11));
-            Gdiplus::LinearGradientBrush rim(Gdiplus::Point(cx-11,cy-11),Gdiplus::Point(cx+11,cy+11),
-                Gdiplus::Color(255,190,202,203),Gdiplus::Color(255,54,69,76));
-            canvas->FillEllipse(&rim,float(cx-11),float(cy-11),22.0f,22.0f);
+            gradient(float(cx-11),float(cy-11),22,22,RGB(190,202,203),RGB(54,69,76),true);
             disk(dc,cx,cy,8,RGB(33,48,54));
             line(dc,cx,cy,cx+int(std::sin((i-1)*.62)*7),cy-int(std::cos((i-1)*.62)*7),RGB(226,240,240),2);
             line(dc,cx-14,cy+15,cx+14,cy+15,RGB(73,91,99));
@@ -355,41 +385,48 @@ class Editor final : public Steinberg::CPluginView {
         levelBar(dc,1208,"OUT",needleOut);
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
-        const int cx=c.x+c.w/2,cy=c.y+(radius==40?71:radius>=34?63:56);
+        // Same layered metal construction and 270-degree scale as JerzyGuiKit's
+        // metalKnob, drawn directly by Direct2D at the host's current size.
+        const float cx=float(c.x+c.w/2),cy=float(c.y+(radius==40?71:radius>=34?63:56));
+        const float r=float(radius);
         text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
-        for(int blur=7;blur>=3;blur-=2){
-            Gdiplus::SolidBrush shadow(Gdiplus::Color(25,0,0,0));
-            canvas->FillEllipse(&shadow,float(cx-radius-blur+2),float(cy-radius-blur+4),
-                                float((radius+blur)*2),float((radius+blur)*2));
+        auto ring=[&](float x,float y,float rr,COLORREF tint,float width=1.f){
+            if(auto*b=brush(tint))canvas->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x,y),rr,rr),b,width);
+        };
+        auto stroke=[&](float x,float y,float xx,float yy,COLORREF tint,float width){
+            if(auto*b=brush(tint))canvas->DrawLine(D2D1::Point2F(x,y),D2D1::Point2F(xx,yy),b,width);
+        };
+        constexpr double pi=3.141592653589793;
+        for(int i=0;i<=20;++i){
+            const double a=(135.+13.5*i)*pi/180.;
+            const float rr=i%5==0?1.8f:1.15f;
+            ellipse(cx+float(std::cos(a)*(r+5)),cy+float(std::sin(a)*(r+5)),rr,
+                    i%5==0?color:RGB(67,133,150));
         }
-        const auto rimRect=Gdiplus::RectF(float(cx-radius),float(cy-radius),float(radius*2),float(radius*2));
-        Gdiplus::LinearGradientBrush rim(Gdiplus::Point(cx-radius,cy-radius),Gdiplus::Point(cx+radius,cy+radius),
-            Gdiplus::Color(255,205,216,216),Gdiplus::Color(255,43,55,62));
-        canvas->FillEllipse(&rim,rimRect);
-        canvas->DrawEllipse(pen(RGB(216,231,232),1),rimRect);
-        const int inner=radius-5;
-        Gdiplus::LinearGradientBrush face(Gdiplus::Point(cx-inner,cy-inner),Gdiplus::Point(cx+inner,cy+inner),
-            Gdiplus::Color(255,92,108,116),Gdiplus::Color(255,11,21,29));
-        canvas->FillEllipse(&face,Gdiplus::RectF(float(cx-inner),float(cy-inner),float(inner*2),float(inner*2)));
-        canvas->DrawEllipse(pen(RGB(7,15,21),2),float(cx-inner),float(cy-inner),float(inner*2),float(inner*2));
-        const int cap=std::max(8,radius-13);
-        Gdiplus::LinearGradientBrush capFace(Gdiplus::Point(cx-cap,cy-cap),Gdiplus::Point(cx+cap,cy+cap),
-            Gdiplus::Color(255,146,158,162),Gdiplus::Color(255,29,41,49));
-        canvas->FillEllipse(&capFace,float(cx-cap),float(cy-cap),float(cap*2),float(cap*2));
-        canvas->DrawEllipse(pen(RGB(93,112,122),1),float(cx-cap),float(cy-cap),float(cap*2),float(cap*2));
-        for(int i=0;i<=12;++i){
-            const double a=(-135+i*22.5)*3.141592653589793/180;
-            const float dotRadius=radius>=34?1.6f:1.35f;
-            const float tx=float(cx+std::sin(a)*(radius+5));
-            const float ty=float(cy-std::cos(a)*(radius+5));
-            canvas->FillEllipse(brush(i<=int(value(c.id)*12)?color:RGB(82,111,125)),
-                tx-dotRadius,ty-dotRadius,dotRadius*2,dotRadius*2);
+        ellipse(cx+2.8f,cy+4.2f,r+3.2f,RGB(0,0,0),.55f);
+        ellipse(cx,cy,r+1.7f,RGB(17,24,30));
+        ring(cx,cy,r+1.7f,RGB(125,146,158));
+        for(int i=0;i<28;++i){
+            const double a=2*pi*i/28.;
+            stroke(cx+float(r*.91*std::cos(a)),cy+float(r*.91*std::sin(a)),
+                   cx+float(r*1.09*std::cos(a)),cy+float(r*1.09*std::sin(a)),
+                   i%2?RGB(27,40,47):RGB(90,105,112),1);
         }
-        const double a=(-135+270*value(c.id))*3.141592653589793/180;
-        line(dc,cx+int(std::sin(a)*5),cy-int(std::cos(a)*5),
-                cx+int(std::sin(a)*(radius-9)),cy-int(std::cos(a)*(radius-9)),RGB(4,11,16),6);
-        line(dc,cx+int(std::sin(a)*5),cy-int(std::cos(a)*5),
-                cx+int(std::sin(a)*(radius-9)),cy-int(std::cos(a)*(radius-9)),RGB(238,249,251),3);
+        const float cap=r*.78f;
+        gradient(cx-cap,cy-cap,cap*2,cap*2,RGB(196,208,211),RGB(61,78,88),true);
+        for(int i=0;i<72;++i){
+            const double a=2*pi*i/72.;
+            stroke(cx+float(cap*.53*std::cos(a)),cy+float(cap*.53*std::sin(a)),
+                   cx+float(cap*.90*std::cos(a)),cy+float(cap*.90*std::sin(a)),
+                   i%3?RGB(131,148,153):RGB(187,201,204),.28f);
+        }
+        ring(cx,cy,cap,RGB(211,226,228),1.3f);
+        ellipse(cx-cap*.25f,cy-cap*.28f,cap*.20f,RGB(255,255,255),.12f);
+        const double a=(135.+270.*value(c.id))*pi/180.;
+        stroke(cx+float(r*.18*std::cos(a)),cy+float(r*.18*std::sin(a)),
+               cx+float(r*.78*std::cos(a)),cy+float(r*.78*std::sin(a)),RGB(11,22,29),4.8f);
+        stroke(cx+float(r*.18*std::cos(a)),cy+float(r*.18*std::sin(a)),
+               cx+float(r*.78*std::cos(a)),cy+float(r*.78*std::sin(a)),RGB(242,251,250),2.5f);
         std::string reading=formatted(c.id);
         const auto &definition=layout().parameters[c.id];
         if(radius==40){
@@ -633,53 +670,38 @@ class Editor final : public Steinberg::CPluginView {
         GetClientRect(window, &client);
         sx = float(W) / std::max(1L, client.right);
         sy = float(H) / std::max(1L, client.bottom);
-        auto dc = CreateCompatibleDC(target);
-        const int pixelsWide=std::max(1L,client.right),pixelsHigh=std::max(1L,client.bottom);
-        auto bmp = CreateCompatibleBitmap(target, pixelsWide, pixelsHigh);
-        auto old = SelectObject(dc, bmp);
-        const int sampleScale=pixelsWide<=1600&&pixelsHigh<=1100?2:1;
-        const int renderWide=pixelsWide*sampleScale,renderHigh=pixelsHigh*sampleScale;
-        auto renderDc=CreateCompatibleDC(target);
-        auto renderBitmap=CreateCompatibleBitmap(target,renderWide,renderHigh);
-        auto oldRender=SelectObject(renderDc,renderBitmap);
-        textOps.clear();
-        auto graphics=std::make_unique<Gdiplus::Graphics>(renderDc);
-        canvas=graphics.get();
-        graphics->SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        graphics->SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
-        graphics->SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-        graphics->ScaleTransform(float(renderWide)/W,float(renderHigh)/H);
-        auto finish=[&] {
-            graphics->Flush(Gdiplus::FlushIntentionSync);
-            canvas=nullptr;
-            graphics.reset();
-            if(sampleScale==1)BitBlt(dc,0,0,pixelsWide,pixelsHigh,renderDc,0,0,SRCCOPY);
-            else {
-                Gdiplus::Bitmap sampled(renderBitmap,nullptr);
-                if(sampled.GetLastStatus()==Gdiplus::Ok){
-                    Gdiplus::Graphics output(dc);
-                    output.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-                    output.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-                    output.DrawImage(&sampled,Gdiplus::Rect(0,0,pixelsWide,pixelsHigh));
-                    output.Flush(Gdiplus::FlushIntentionSync);
-                } else {
-                    SetStretchBltMode(dc,HALFTONE);
-                    SetBrushOrgEx(dc,0,0,nullptr);
-                    StretchBlt(dc,0,0,pixelsWide,pixelsHigh,renderDc,0,0,renderWide,renderHigh,SRCCOPY);
-                }
+        if(!drawFactory || !writeFactory){if(!supplied)EndPaint(window,&ps);return;}
+        if(!canvas){
+            const auto props=D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_IGNORE));
+            if(FAILED(drawFactory->CreateDCRenderTarget(&props,&canvas))){
+                if(!supplied)EndPaint(window,&ps);return;
             }
-            drawTextPass(dc);
-            BitBlt(target,0,0,pixelsWide,pixelsHigh,dc,0,0,SRCCOPY);
-            SelectObject(renderDc,oldRender);DeleteObject(renderBitmap);DeleteDC(renderDc);
-            SelectObject(dc,old);DeleteObject(bmp);DeleteDC(dc);
+            canvas->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            canvas->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+        }
+        if(FAILED(canvas->BindDC(target,&client))){if(!supplied)EndPaint(window,&ps);return;}
+        textOps.clear();
+        canvas->BeginDraw();
+        canvas->SetTransform(D2D1::Matrix3x2F::Scale(float(client.right)/W,float(client.bottom)/H));
+        auto finish=[&] {
+            if(!gdiTextFallback)for(const auto &op:textOps)drawTextDirect(op);
+            const HRESULT hr=canvas->EndDraw();
+            if(hr==D2DERR_RECREATE_TARGET){
+                for(auto &[key,b]:vectorBrushes)if(b)b->Release();
+                vectorBrushes.clear();canvas->Release();canvas=nullptr;
+            }
+            if(gdiTextFallback)drawTextPass(target);
+            else textOps.clear();
             if(!supplied)EndPaint(window,&ps);
         };
         if (referenceDelay()) {
-            chrome(dc);
-            referenceDelayPanel(dc);
+            chrome(target);
+            referenceDelayPanel(target);
             finish();
             return;
         }
+        HDC dc=target;
         chrome(dc);
         text(dc,24,297,1190,"KLIKNIJ BLOK U GÓRY → WYBIERZ EFEKT PONIŻEJ → USTAW PARAMETRY    •    PRAWY KLIK: MIDI LEARN",13,RGB(169,211,225));
         auto sections = sectionNames(view.block);
@@ -744,8 +766,7 @@ class Editor final : public Steinberg::CPluginView {
         char status[96];
         snprintf(status,sizeof(status),"GR %.1f dB / PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
         text(dc,1007,682,235,status,12,RGB(166,208,222));
-        const auto saved=graphics->Save();
-        graphics->SetClip(Gdiplus::RectF(20,370,1240,float(controlBottom-370)),Gdiplus::CombineModeIntersect);
+        canvas->PushAxisAlignedClip(rect(20,370,1240,float(controlBottom-370)),D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         for (auto &c : controls) {
             int y = c.y - scroll;
             if (y + c.h < 370 || y > controlBottom)
@@ -786,7 +807,7 @@ class Editor final : public Steinberg::CPluginView {
                 referenceKnob(dc,c,label.c_str(),34,accent());
             }
         }
-        graphics->Restore(saved);
+        canvas->PopAxisAlignedClip();
         bevel(dc,1031,638,48,22,RGB(21,51,67));
         text(dc,1031,639,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
         bevel(dc,1083,638,100,22,RGB(15,36,50));
@@ -1187,8 +1208,14 @@ class Editor final : public Steinberg::CPluginView {
   public:
     explicit Editor(Controller *c) : controller(c) {
         c->addRef();
-        Gdiplus::GdiplusStartupInput startup;
-        Gdiplus::GdiplusStartup(&gdiplusToken,&startup,nullptr);
+        D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,&drawFactory);
+        DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory),
+            reinterpret_cast<IUnknown**>(&writeFactory));
+        // Wine's Direct2D DC target accepts DrawTextW but does not paint glyphs.
+        // Keep captured previews and Linux CI usable without rasterizing controls.
+        if(auto* ntdll=GetModuleHandleA("ntdll.dll"))
+            gdiTextFallback=GetProcAddress(ntdll,"wine_get_version")!=nullptr;
+        if(!writeFactory)gdiTextFallback=true;
         const double fit = std::clamp(std::min(double(GetSystemMetrics(SM_CXSCREEN) - 80) / W,
                                                double(GetSystemMetrics(SM_CYSCREEN) - 120) / H),
                                       .6, 1.);
@@ -1202,8 +1229,11 @@ class Editor final : public Steinberg::CPluginView {
         for (auto f : fonts)
             if (f)
                 DeleteObject(f);
-        vectorPens.clear();vectorBrushes.clear();
-        if(gdiplusToken)Gdiplus::GdiplusShutdown(gdiplusToken);
+        for(auto &[key,b]:vectorBrushes)if(b)b->Release();
+        for(auto &[key,f]:textFormats)if(f)f->Release();
+        if(canvas)canvas->Release();
+        if(writeFactory)writeFactory->Release();
+        if(drawFactory)drawFactory->Release();
         controller->release();
     }
     Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) override {
