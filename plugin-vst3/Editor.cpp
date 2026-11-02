@@ -1041,7 +1041,13 @@ class Editor final : public Steinberg::CPluginView {
                 RECT bounds{};GetClientRect(window,&bounds);
                 const int width=std::max(1L,bounds.right),height=std::max(1L,bounds.bottom);
                 juce::Image image(juce::Image::ARGB,width,height,true);
-                juce::Graphics graphics(image);paint(nullptr,&graphics);
+                juce::uint32 immediate=0;
+                {
+                    juce::Graphics graphics(image);
+                    graphics.fillAll(juce::Colours::magenta);
+                    immediate=image.getPixelAt(0,0).getARGB();
+                    paint(nullptr,&graphics);
+                }
                 std::vector<DWORD> pixels(size_t(width)*size_t(height));
                 for(int y=0;y<height;++y)for(int x=0;x<width;++x){
                     const auto c=image.getPixelAt(x,y);
@@ -1055,9 +1061,9 @@ class Editor final : public Steinberg::CPluginView {
                 static int captures=0;
                 if(captures++<6){
                     const auto source=image.getPixelAt(std::min(1152,width-1),std::min(265,height-1));
-                    std::fprintf(stderr,"JUCE capture %d: source=%08x dest=%08x transfer=%d size=%dx%d\n",
-                        captures,source.getARGB(),GetPixel(dc,std::min(1152,width-1),std::min(265,height-1)),
-                        copied,width,height);
+                    std::fprintf(stderr,"JUCE capture %d: immediate=%08x source=%08x corner=%08x dest=%08x transfer=%d size=%dx%d\n",
+                        captures,immediate,source.getARGB(),image.getPixelAt(0,0).getARGB(),
+                        GetPixel(dc,std::min(1152,width-1),std::min(265,height-1)),copied,width,height);
                 }
             }
 #else
