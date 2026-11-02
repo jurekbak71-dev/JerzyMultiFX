@@ -130,6 +130,14 @@ jobs:
       - name: Verify packages and privacy allowlist
         shell: bash
         run: python scripts/verify_packages.py
+      - name: Upload installable Windows package
+        if: inputs.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMultiFX-Windows-VST3-installable-${{ github.run_id }}
+          path: dist/JerzyMultiFX-VST3-Windows-x64-v*.zip
+          retention-days: 7
+          if-no-files-found: error
       - name: Publish this job's files directly to GitHub Release
         if: inputs.publish
         shell: bash
