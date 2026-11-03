@@ -28,6 +28,12 @@ static void click(HWND h, int x, int y) {
     SendMessage(h, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
     pump();
 }
+static void checkSurfaceBounds(HWND editor, HWND surface, const char *message) {
+    RECT editorBounds{}, surfaceBounds{};
+    GetClientRect(editor, &editorBounds);
+    GetClientRect(surface, &surfaceBounds);
+    check(editorBounds.right == surfaceBounds.right && editorBounds.bottom == surfaceBounds.bottom, message);
+}
 static void screenshot(HWND h, const char *path) {
     RECT size{};
     GetClientRect(h, &size);
@@ -89,6 +95,13 @@ int main(int argc, char **argv) try {
         check(c->initialize(nullptr) == kResultOk, "initialize GUI controller");
         auto *view = c->createView(ViewType::kEditor);
         check(view, "custom pedal editor exists");
+        ViewRect initialSize{};
+        check(view->getSize(&initialSize)==kResultOk && initialSize.getWidth()==1024 && initialSize.getHeight()==576,
+              "FL Studio receives the compact 1024x576 default editor size");
+        ViewRect constrained(0,0,1500,1000);
+        check(view->checkSizeConstraint(&constrained)==kResultOk &&
+                  constrained.getWidth()*9==constrained.getHeight()*16,
+              "host resize is constrained to the complete 16:9 editor surface");
         HWND parent = CreateWindowExA(0, "STATIC", "Jerzy MultiFX GUI test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                                       0, 0, 1320, 920, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
         check(parent, "create test host window");
@@ -103,6 +116,7 @@ int main(int argc, char **argv) try {
         for(HWND candidate=GetWindow(child,GW_CHILD);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT))
             if(IsWindowVisible(candidate)){vectorSurface=candidate;break;}
         check(vectorSurface,"JUCE vector surface attached to the VST3 editor");
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface matches the host viewport without duplicate DPI scaling");
 #endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
         if(std::getenv("MULTIFX_VISUAL_ONLY")) {
@@ -174,12 +188,21 @@ int main(int argc, char **argv) try {
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
         ViewRect size(0, 0, 1024, 576);
         check(view->onSize(&size) == kResultOk, "compact GUI resize");
+#ifdef MULTIFX_JUCE_GUI
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface follows compact host bounds");
+#endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-small.bmp").c_str());
         ViewRect dpi125(0,0,1600,900);
         check(view->onSize(&dpi125)==kResultOk,"GUI scale 125 percent");
+#ifdef MULTIFX_JUCE_GUI
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface follows 125 percent host bounds");
+#endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-125.bmp").c_str());
         ViewRect large(0,0,1920,1080);
         check(view->onSize(&large)==kResultOk,"GUI scale 150 percent");
+#ifdef MULTIFX_JUCE_GUI
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface follows 150 percent host bounds");
+#endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-large.bmp").c_str());
         ViewRect normal(0, 0, 1280, 720);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");

@@ -71,6 +71,7 @@ class Editor final : public Steinberg::CPluginView {
     static constexpr int controlBottom = 520;
     float sx = 1, sy = 1;
     static constexpr int W = 1280, H = 720;
+    static constexpr int DefaultW = 1024, DefaultH = 576;
     struct Control {
         int id, x, y, w, h;
         bool compact;
@@ -118,6 +119,12 @@ class Editor final : public Steinberg::CPluginView {
         }
     public:
         explicit JuceCanvas(Editor &e):owner(e){setOpaque(true);}
+        float getDesktopScaleFactor() const override {
+            // The VST3 host already supplies the editor's final pixel bounds. Letting
+            // JUCE apply the monitor DPI scale again makes the child HWND larger than
+            // the host viewport (most visibly in FL Studio at 125% and 150% DPI).
+            return 1.0f;
+        }
         void paint(juce::Graphics &g) override {owner.paint(nullptr,&g);}
         void mouseDown(const juce::MouseEvent &e) override {
             rightPressed=e.mods.isRightButtonDown();
@@ -1327,10 +1334,7 @@ class Editor final : public Steinberg::CPluginView {
 #ifndef MULTIFX_JUCE_GUI
         D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,&drawFactory);
 #endif
-        const double fit = std::clamp(std::min(double(GetSystemMetrics(SM_CXSCREEN) - 80) / W,
-                                               double(GetSystemMetrics(SM_CYSCREEN) - 120) / H),
-                                      .6, 1.);
-        Steinberg::ViewRect r(0, 0, int(W * fit), int(H * fit));
+        Steinberg::ViewRect r(0, 0, DefaultW, DefaultH);
         setRect(r);
         sx = float(W) / r.getWidth();
         sy = float(H) / r.getHeight();
@@ -1401,8 +1405,17 @@ class Editor final : public Steinberg::CPluginView {
     Steinberg::tresult PLUGIN_API canResize() override {
         return Steinberg::kResultTrue;
     }
+    Steinberg::tresult PLUGIN_API checkSizeConstraint(Steinberg::ViewRect *r) override {
+        if (!r)
+            return Steinberg::kInvalidArgument;
+        int width=std::clamp(((r->getWidth()+8)/16)*16,640,1920);
+        const int height=width*9/16;
+        r->right=r->left+width;
+        r->bottom=r->top+height;
+        return Steinberg::kResultOk;
+    }
     Steinberg::tresult PLUGIN_API onSize(Steinberg::ViewRect *r) override {
-        if (!r || r->getWidth() < 640 || r->getHeight() < 425)
+        if (!r || r->getWidth() < 640 || r->getHeight() < 360)
             return Steinberg::kResultFalse;
         setRect(*r);
         if (window) {

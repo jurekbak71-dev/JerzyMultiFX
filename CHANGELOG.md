@@ -1,3 +1,8 @@
+# 0.1.0-preview.28
+
+- Usunięto podwójne skalowanie DPI osadzonej powierzchni JUCE w hostach VST3. FL Studio nadaje już końcowy rozmiar oknu edytora, dlatego powierzchnia wektorowa używa dokładnie obszaru hosta przy 100%, 125% i 150%, zamiast ponownie mnożyć wymiary przez skalę monitora i obcinać prawą oraz dolną część GUI. Domyślne okno zmniejszono do 1024×576, zachowując proporcje i komplet sterowania.
+- Tak jak w JerzyAutoTune, host otrzymuje stałe proporcje całej powierzchni oraz jawne granice skalowania. Test Windows sprawdza zgodność natywnych wymiarów powierzchni JUCE z oknem VST3 po każdym przeskalowaniu. DSP, parametry, presety i MIDI pozostają bez zmian.
+
 # 0.1.0-preview.27
 
 - Przebudowano edytor VST3 do bazowego widoku 1280×720, aby pełny panel mieścił się w oknie FL Studio. Zwarty łańcuch bloków, routing, banki A/B, silnik, regulatory i strony wszystkich pozostałych parametrów zachowują istniejące działania.

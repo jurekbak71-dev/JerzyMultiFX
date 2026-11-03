@@ -1,3 +1,8 @@
+## Preview 28 — poprawne osadzenie JUCE przy skalowaniu DPI
+
+- Powierzchnia JUCE nie dziedziczy już dodatkowej skali monitora po osadzeniu w natywnym oknie VST3. Host ustala końcowy obszar edytora, a dziecko JUCE zachowuje identyczne wymiary; usuwa to przycięcie prawej i dolnej części zaobserwowane w FL Studio. Domyślny rozmiar zgłaszany hostowi wynosi teraz 1024×576 (1536×864 przy 150% DPI).
+- Zastosowano wzorzec rozmiaru z JerzyAutoTune: jedna powierzchnia projektu, stałe proporcje 16:9 i jawne granice resize przekazywane hostowi. Test Windows porównuje rozmiar natywnej powierzchni JUCE z obszarem hosta dla 1280×720, 1024×576, 1600×900 i 1920×1080. DSP, ID parametrów, presety, routing i MIDI nie zostały zmienione. Ponowny zrzut w fizycznym FL Studio pozostaje testem odbiorczym po instalacji preview 28.
+
 ## Preview 27 — kompaktowy edytor VST3 dla FL Studio
 
 - Zatwierdzony wariant GUI nr 2 wdraża bazowy obszar 1280×720: zwarty nagłówek i poziomy łańcuch efektów, kompletny panel DELAY A+B oraz sekcje parametrów zależne od silnika. Puste grupy dolne są ukrywane; strony pozostałych efektów, ustawienia, bypass, presety, routing i MIDI Learn mieszczą się w tym samym widoku. Zachowano wszystkie parametry, istniejące akcje i DSP.
