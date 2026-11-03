@@ -1,3 +1,8 @@
+# 0.1.0-preview.29
+
+- Naprawiono natywne osadzenie powierzchni JUCE w FL Studio: po utworzeniu podrzędnego HWND jego platformowa skala DPI jest jawnie ustawiana na 1.0. Zapobiega to ponownemu przemnożeniu fizycznego obszaru VST3 przez 125% lub 150% i obcięciu prawej oraz dolnej części panelu.
+- Numer wersji jest widoczny bezpośrednio w nagłówku GUI. Instalator pokazuje wersję, commit i SHA256, po skopiowaniu ponownie sprawdza sumę binarium i zapisuje `ZAINSTALOWANA-WERSJA.txt` w zainstalowanym bundle. Ułatwia to odróżnienie aktualnej wtyczki od kopii przechowywanej w cache hosta.
+
 # 0.1.0-preview.28
 
 - Usunięto podwójne skalowanie DPI osadzonej powierzchni JUCE w hostach VST3. FL Studio nadaje już końcowy rozmiar oknu edytora, dlatego powierzchnia wektorowa używa dokładnie obszaru hosta przy 100%, 125% i 150%, zamiast ponownie mnożyć wymiary przez skalę monitora i obcinać prawą oraz dolną część GUI. Domyślne okno zmniejszono do 1024×576, zachowując proporcje i komplet sterowania.

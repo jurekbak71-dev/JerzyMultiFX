@@ -151,6 +151,15 @@ class Editor final : public Steinberg::CPluginView {
     juce::Graphics *juceGraphics=nullptr;
     MonoAnalogLook juceLook;
     juce::Slider drawingSlider;
+    void fitJuceCanvas(int width,int height){
+        if(!juceCanvas)return;
+        // A JUCE desktop component attached to a foreign HWND inherits that
+        // window's platform DPI. VST3 already gives us the final physical
+        // viewport, so inheriting FL Studio's 125/150% DPI here would enlarge
+        // the child HWND for a second time and clip its right and bottom edges.
+        if(auto *peer=juceCanvas->getPeer())peer->setCustomPlatformScaleFactor(1.0);
+        juceCanvas->setBounds(0,0,width,height);
+    }
     static juce::Colour juceColor(COLORREF c){
         return juce::Colour::fromRGB(GetRValue(c),GetGValue(c),GetBValue(c));
     }
@@ -439,7 +448,8 @@ class Editor final : public Steinberg::CPluginView {
         line(dc,0,73,W,73,RGB(38,68,83));
         text(dc,23,8,138,"JERZY",25,RGB(224,248,252));
         text(dc,157,8,190,"MULTI FX",25,RGB(46,196,235));
-        text(dc,24,40,310,"BASS GUITAR EFFECTS STUDIO",10,RGB(124,172,193));
+        text(dc,24,40,210,"BASS GUITAR EFFECTS STUDIO",10,RGB(124,172,193));
+        text(dc,238,42,115,MULTIFX_VERSION,8,RGB(64,212,231));
         text(dc,365,7,100,"PRESET",10,RGB(199,221,232));
         bevel(dc,365,28,322,36,RGB(15,29,43));
         text(dc,371,34,18,"<",18,RGB(187,219,230));
@@ -1039,7 +1049,7 @@ class Editor final : public Steinberg::CPluginView {
             return 1;
         case WM_SIZE:
 #ifdef MULTIFX_JUCE_GUI
-            if(juceCanvas)juceCanvas->setSize(LOWORD(lp),HIWORD(lp));
+            fitJuceCanvas(LOWORD(lp),HIWORD(lp));
 #endif
             if (window)
                 PostMessage(window, WM_APP + 1, 0, 0);
@@ -1047,6 +1057,14 @@ class Editor final : public Steinberg::CPluginView {
         case WM_APP + 1:
             rebuild();
             return 0;
+#ifdef MULTIFX_JUCE_GUI
+        case WM_APP + 29:
+            if(juceCanvas)
+                if(auto *peer=juceCanvas->getPeer())
+                    if(const auto custom=peer->getCustomPlatformScaleFactor())
+                        return LRESULT(std::lround(*custom*1000.0));
+            return 0;
+#endif
         case WM_TIMER: {
             if (w == 2) {
                 KillTimer(window, 2);
@@ -1375,8 +1393,8 @@ class Editor final : public Steinberg::CPluginView {
 #ifdef MULTIFX_JUCE_GUI
         if(!juceInitialiser)juceInitialiser=std::make_unique<juce::ScopedJuceInitialiser_GUI>();
         juceCanvas=std::make_unique<JuceCanvas>(*this);
-        juceCanvas->setSize(getRect().getWidth(),getRect().getHeight());
         juceCanvas->addToDesktop(0,window);
+        fitJuceCanvas(getRect().getWidth(),getRect().getHeight());
         juceCanvas->setVisible(true);
 #endif
         systemWindow = parent;

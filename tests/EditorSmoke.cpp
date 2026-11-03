@@ -116,6 +116,8 @@ int main(int argc, char **argv) try {
         for(HWND candidate=GetWindow(child,GW_CHILD);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT))
             if(IsWindowVisible(candidate)){vectorSurface=candidate;break;}
         check(vectorSurface,"JUCE vector surface attached to the VST3 editor");
+        check(SendMessage(child,WM_APP+29,0,0)==1000,
+              "JUCE native peer explicitly disables duplicate FL Studio DPI scaling");
         checkSurfaceBounds(child,vectorSurface,"JUCE surface matches the host viewport without duplicate DPI scaling");
 #endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
@@ -201,6 +203,8 @@ int main(int argc, char **argv) try {
         ViewRect large(0,0,1920,1080);
         check(view->onSize(&large)==kResultOk,"GUI scale 150 percent");
 #ifdef MULTIFX_JUCE_GUI
+        check(SendMessage(child,WM_APP+29,0,0)==1000,
+              "JUCE native peer keeps the explicit DPI override after host resize");
         checkSurfaceBounds(child,vectorSurface,"JUCE surface follows 150 percent host bounds");
 #endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-large.bmp").c_str());

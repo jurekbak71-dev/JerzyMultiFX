@@ -1,6 +1,12 @@
-## Preview 28 — poprawne osadzenie JUCE przy skalowaniu DPI
+## Preview 29 — natywna korekta DPI okna podrzędnego FL Studio
 
-- Powierzchnia JUCE nie dziedziczy już dodatkowej skali monitora po osadzeniu w natywnym oknie VST3. Host ustala końcowy obszar edytora, a dziecko JUCE zachowuje identyczne wymiary; usuwa to przycięcie prawej i dolnej części zaobserwowane w FL Studio. Domyślny rozmiar zgłaszany hostowi wynosi teraz 1024×576 (1536×864 przy 150% DPI).
+- W preview 28 wyłączono skalowanie na poziomie komponentu, ale JUCE dla powierzchni osadzonej w obcym HWND nadal pobierało platformową skalę z okna rodzica FL Studio. Preview 29 ustawia `ComponentPeer::setCustomPlatformScaleFactor(1.0)` już po `addToDesktop`, a następnie dopasowuje powierzchnię do fizycznych wymiarów przekazanych przez host. To usuwa drugie skalowanie 125/150%, które zachowywało zbyt duży panel mimo właściwego pliku instalacyjnego.
+- GUI pokazuje własną wersję w nagłówku. Instalator raportuje wersję, commit i SHA256, sprawdza sumę po instalacji i zapisuje potwierdzenie w bundle. Testy automatyczne i fizyczny test FL Studio zostaną odnotowane oddzielnie; DSP, parametry, presety i funkcje nie zostały zmienione.
+- Lokalnie: cross-build Windows x64/JUCE PASS, natywne testy wspólnego DSP i RPi 3/3 PASS. Test Windows/MSVC, walidator bundle i pakowanie instalatora są przekazane do CI. Odbiór w fizycznym FL Studio nadal wymaga zrzutu z widocznym numerem preview 29.
+
+## Preview 28 — próba korekty osadzenia JUCE przy skalowaniu DPI
+
+- Komponent otrzymał skalę pulpitu 1.0, lecz fizyczny test FL Studio wykazał, że natywne okno podrzędne JUCE nadal dziedziczyło skalę DPI z HWND rodzica. Domyślny rozmiar zgłaszany hostowi zmniejszono do 1024×576, ale ta wersja nie rozwiązała przycięcia w rzeczywistym FL Studio.
 - Zastosowano wzorzec rozmiaru z JerzyAutoTune: jedna powierzchnia projektu, stałe proporcje 16:9 i jawne granice resize przekazywane hostowi. Test Windows porównuje rozmiar natywnej powierzchni JUCE z obszarem hosta dla 1280×720, 1024×576, 1600×900 i 1920×1080. DSP, ID parametrów, presety, routing i MIDI nie zostały zmienione. Ponowny zrzut w fizycznym FL Studio pozostaje testem odbiorczym po instalacji preview 28.
 
 ## Preview 27 — kompaktowy edytor VST3 dla FL Studio
