@@ -111,6 +111,13 @@ class Editor final : public Steinberg::CPluginView {
     ID2D1DCRenderTarget *canvas = nullptr;
     std::map<COLORREF,ID2D1SolidColorBrush*> vectorBrushes;
 #ifdef MULTIFX_JUCE_GUI
+    bool jucePointerDispatch=false;
+    void dispatchJucePointer(UINT message,WPARAM flags,LPARAM position){
+        const bool previous=jucePointerDispatch;
+        jucePointerDispatch=true;
+        SendMessage(window,message,flags,position);
+        jucePointerDispatch=previous;
+    }
     class JuceCanvas final : public juce::Component {
         Editor &owner;
         bool rightPressed=false;
@@ -128,22 +135,22 @@ class Editor final : public Steinberg::CPluginView {
         void paint(juce::Graphics &g) override {owner.paint(nullptr,&g);}
         void mouseDown(const juce::MouseEvent &e) override {
             rightPressed=e.mods.isRightButtonDown();
-            SendMessage(owner.window,rightPressed?WM_RBUTTONDOWN:WM_LBUTTONDOWN,
-                        rightPressed?MK_RBUTTON:MK_LBUTTON,point(e));
+            owner.dispatchJucePointer(rightPressed?WM_RBUTTONDOWN:WM_LBUTTONDOWN,
+                                      rightPressed?MK_RBUTTON:MK_LBUTTON,point(e));
         }
         void mouseDrag(const juce::MouseEvent &e) override {
-            SendMessage(owner.window,WM_MOUSEMOVE,
-                        (rightPressed?MK_RBUTTON:MK_LBUTTON)|(e.mods.isShiftDown()?MK_SHIFT:0),point(e));
+            owner.dispatchJucePointer(WM_MOUSEMOVE,
+                                      (rightPressed?MK_RBUTTON:MK_LBUTTON)|(e.mods.isShiftDown()?MK_SHIFT:0),point(e));
         }
         void mouseUp(const juce::MouseEvent &e) override {
-            SendMessage(owner.window,rightPressed?WM_RBUTTONUP:WM_LBUTTONUP,0,point(e));
+            owner.dispatchJucePointer(rightPressed?WM_RBUTTONUP:WM_LBUTTONUP,0,point(e));
             rightPressed=false;
         }
         void mouseWheelMove(const juce::MouseEvent &e,const juce::MouseWheelDetails &wheel) override {
             POINT p{e.x,e.y};ClientToScreen(owner.window,&p);
             const int delta=int(std::round(wheel.deltaY*WHEEL_DELTA));
-            SendMessage(owner.window,WM_MOUSEWHEEL,
-                        MAKEWPARAM(e.mods.isCtrlDown()?MK_CONTROL:0,delta),MAKELPARAM(p.x,p.y));
+            owner.dispatchJucePointer(WM_MOUSEWHEEL,
+                                      MAKEWPARAM(e.mods.isCtrlDown()?MK_CONTROL:0,delta),MAKELPARAM(p.x,p.y));
         }
     };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
@@ -167,6 +174,21 @@ class Editor final : public Steinberg::CPluginView {
 #else
     void requestRepaint(){if(window)InvalidateRect(window,nullptr,FALSE);}
 #endif
+    void capturePointer(){
+#ifdef MULTIFX_JUCE_GUI
+        // The JUCE peer already owns native mouse capture. Moving capture to
+        // the hidden parent HWND makes JUCE synthesize mouseUp immediately,
+        // which ends knob drags at the initial press.
+        if(jucePointerDispatch)return;
+#endif
+        SetCapture(window);
+    }
+    void releasePointer(){
+#ifdef MULTIFX_JUCE_GUI
+        if(jucePointerDispatch)return;
+#endif
+        ReleaseCapture();
+    }
     static D2D1_COLOR_F color(COLORREF c, float alpha=1.f) {
         return D2D1::ColorF(GetRValue(c)/255.f,GetGValue(c)/255.f,GetBValue(c)/255.f,alpha);
     }
@@ -1130,9 +1152,9 @@ class Editor final : public Steinberg::CPluginView {
                     const int at=std::clamp((x-20)/216,0,4),local=x-(20+at*216);
                     auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
                     if(local>=135){const int id=layout().blockBypass[order[at]];change(id,value(id)>=.5?0:1);return 0;}
-                    reorder=at;reorderHorizontal=true;view.block=order[at];view.section=0;scroll=0;controlPage=0;rebuild();SetCapture(window);return 0;
+                    reorder=at;reorderHorizontal=true;view.block=order[at];view.section=0;scroll=0;controlPage=0;rebuild();capturePointer();return 0;
                 }
-                if(y>=180&&y<197&&x>=866&&x<1163){const int id=layout().digital[bank]+2;change(id,double(x-868)/294);drag=id;startX=x;startY=y;startValue=value(id);SetCapture(window);return 0;}
+                if(y>=180&&y<197&&x>=866&&x<1163){const int id=layout().digital[bank]+2;change(id,double(x-868)/294);drag=id;startX=x;startY=y;startValue=value(id);capturePointer();return 0;}
                 if(engineMenuOpen){
                     if(x>=35&&x<241&&y>=245&&y<445){
                         const int choice=std::clamp((y-245)/25,0,7);
@@ -1150,7 +1172,7 @@ class Editor final : public Steinberg::CPluginView {
                     if(x>=1007&&x<1214){const int id=layout().slotBypass[bank];change(id,value(id)>=.5?0:1);return 0;}
                 }
                 if(y>=282&&y<414&&x>=1007&&x<1214){const int route=(y-282)/44;if(route<3)change(layout().delayMode,double(route)/2);return 0;}
-                const int id=hit(x,y);if(id>=0){drag=id;startX=x;startY=y;startValue=value(id);SetCapture(window);return 0;}
+                const int id=hit(x,y);if(id>=0){drag=id;startX=x;startY=y;startValue=value(id);capturePointer();return 0;}
                 return 0;
             }
             if (const int id = delayMidiTarget(x, y); id >= 0) {
@@ -1200,7 +1222,7 @@ class Editor final : public Steinberg::CPluginView {
                     globalSettings = false;
                     scroll = 0;controlPage=0;
                     rebuild();
-                    SetCapture(window);
+                    capturePointer();
                 }
                 return 0;
             }
@@ -1252,7 +1274,7 @@ class Editor final : public Steinberg::CPluginView {
                 startX = x;
                 startY = y;
                 startValue = value(id);
-                SetCapture(window);
+                capturePointer();
             }
             return 0;
         }
@@ -1285,7 +1307,7 @@ class Editor final : public Steinberg::CPluginView {
                 reorderHorizontal = false;
             }
             drag = -1;
-            ReleaseCapture();
+            releasePointer();
             return 0;
         case WM_RBUTTONUP: {
             if(referenceDelay()){

@@ -1,3 +1,8 @@
+## Preview 30 — działające sterowanie myszy na powierzchni JUCE
+
+- Przekazywanie zdarzenia `mouseDown` do natywnego edytora nie przenosi już przechwycenia myszy z powierzchni JUCE na ukryty HWND rodzica. Poprzednie przeniesienie wywoływało w JUCE natychmiastowy `mouseUp`, przez co widoczne pokrętła nie reagowały na przeciąganie w FL Studio. Powierzchnia JUCE utrzymuje teraz przechwycenie przez `mouseDrag` aż do rzeczywistego puszczenia przycisku.
+- Zachowano korektę DPI, układ 1024×576 i widoczny numer wersji. DSP, ID parametrów, presety, routing i MIDI nie zostały zmienione. Fizyczny test FL Studio preview 30 pozostaje testem odbiorczym.
+
 ## Preview 29 — natywna korekta DPI okna podrzędnego FL Studio
 
 - W preview 28 wyłączono skalowanie na poziomie komponentu, ale JUCE dla powierzchni osadzonej w obcym HWND nadal pobierało platformową skalę z okna rodzica FL Studio. Preview 29 ustawia `ComponentPeer::setCustomPlatformScaleFactor(1.0)` już po `addToDesktop`, a następnie dopasowuje powierzchnię do fizycznych wymiarów przekazanych przez host. To usuwa drugie skalowanie 125/150%, które zachowywało zbyt duży panel mimo właściwego pliku instalacyjnego.

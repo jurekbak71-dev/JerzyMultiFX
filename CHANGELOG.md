@@ -1,3 +1,8 @@
+# 0.1.0-preview.30
+
+- Naprawiono obsługę myszy na osadzonej powierzchni JUCE. Edytor nie przenosi już natywnego przechwycenia myszy z widocznej powierzchni na ukryte okno rodzica, co wcześniej kończyło przeciąganie pokrętła natychmiast po naciśnięciu. Gałki, suwaki i przeciąganie kolejności zachowują przechwycenie do rzeczywistego puszczenia przycisku.
+- Zmiana dotyczy wyłącznie wejścia GUI. DSP, parametry, presety i MIDI pozostają bez zmian.
+
 # 0.1.0-preview.29
 
 - Naprawiono natywne osadzenie powierzchni JUCE w FL Studio: po utworzeniu podrzędnego HWND jego platformowa skala DPI jest jawnie ustawiana na 1.0. Zapobiega to ponownemu przemnożeniu fizycznego obszaru VST3 przez 125% lub 150% i obcięciu prawej oraz dolnej części panelu.
