@@ -1,3 +1,8 @@
+# 0.1.0-preview.27
+
+- Przebudowano edytor VST3 do bazowego widoku 1280×720, aby pełny panel mieścił się w oknie FL Studio. Zwarty łańcuch bloków, routing, banki A/B, silnik, regulatory i strony wszystkich pozostałych parametrów zachowują istniejące działania.
+- Układ DELAY dostosowuje grupy dolnych regulatorów do wybranego silnika. Ustawienia, obejścia, presety, routing, MIDI Learn i wszystkie ID parametrów pozostają dostępne; bez zmian w DSP.
+
 # 0.1.0-preview.26
 
 - Gałki i ich skale są budowane z ciągłych okręgów, łuków i linii Direct2D. Usunięto drobne promienie, punktowe detale i szczotkowaną fakturę, które rozpadały się na piksele przy zmianie rozmiaru. Drobne elementy łańcucha i lampki uproszczono, a linie panelu mają minimalną grubość w pikselach ekranu.

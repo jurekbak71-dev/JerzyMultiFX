@@ -1,3 +1,8 @@
+## Preview 27 — kompaktowy edytor VST3 dla FL Studio
+
+- Zatwierdzony wariant GUI nr 2 wdraża bazowy obszar 1280×720: zwarty nagłówek i poziomy łańcuch efektów, kompletny panel DELAY A+B oraz sekcje parametrów zależne od silnika. Puste grupy dolne są ukrywane; strony pozostałych efektów, ustawienia, bypass, presety, routing i MIDI Learn mieszczą się w tym samym widoku. Zachowano wszystkie parametry, istniejące akcje i DSP.
+- Zweryfikowano Windows VST3 cross-build oraz rzeczywisty edytor DLL pod Wine: edycja parametrów, silniki Oil Drum A/B, routing, bypass, MIDI Learn, kolejność bloków, strony i zamknięcie. Zrzuty ekranu: 1280×720, 1024×576, 1600×900 i 1920×1080. Natywny zestaw DSP/RPi: 3/3 testy PASS. Weryfikacja MSVC/JUCE z GitHub Actions oraz FL Studio na Windows pozostaje do wykonania; nie wykonano fizycznego FL Studio.
+
 # Jerzy MultiFX — status
 
 ## Preview 26 — czyste linie wektorowe GUI
