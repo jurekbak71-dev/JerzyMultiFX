@@ -1106,6 +1106,18 @@ class Editor final : public Steinberg::CPluginView {
             controller->loadFile(path, kind);
     }
     LRESULT message(UINT msg, WPARAM w, LPARAM lp) {
+        // Pointer coordinates must follow the *current* embedded host viewport.
+        // FL Studio can resize the VST3 editor before the next paint, leaving
+        // the cached paint transform stale and making GUI hit tests miss.
+        if (window && (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONUP ||
+                       msg == WM_RBUTTONUP || msg == WM_MOUSEMOVE ||
+                       msg == WM_MOUSEWHEEL)) {
+            RECT bounds{};
+            if (GetClientRect(window, &bounds) && bounds.right > 0 && bounds.bottom > 0) {
+                sx = float(W) / float(bounds.right);
+                sy = float(H) / float(bounds.bottom);
+            }
+        }
         int x = int(GET_X_LPARAM(lp) * sx), y = int(GET_Y_LPARAM(lp) * sy);
         switch (msg) {
         case WM_MEASUREITEM: {
