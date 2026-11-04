@@ -44,10 +44,11 @@ static void pump() {
     }
 }
 static void movePointer(HWND h, int x, int y) {
-    // A real user has to move the pointer into the target before clicking.
-    // JUCE maintains a hovered component and mouse capture state, so sending
-    // button messages to distant coordinates without a preceding WM_MOUSEMOVE
-    // can incorrectly target the slider from the previous interaction.
+    // Native JUCE mouse dispatch can inspect the operating-system cursor
+    // position as well as the coordinates of WM_MOUSEMOVE. Match both.
+    POINT screen{x, y};
+    check(ClientToScreen(h, &screen) != 0, "convert editor pointer to screen");
+    check(SetCursorPos(screen.x, screen.y) != 0, "position OS pointer over the editor");
     SendMessage(h, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
     pump();
 }
