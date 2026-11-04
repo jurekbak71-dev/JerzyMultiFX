@@ -115,6 +115,33 @@ def main():
         with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as z:
             for f in sorted(stage.rglob('*')):
                 if f.is_file():z.write(f,name+'/'+f.relative_to(stage).as_posix())
+        fixed=ROOT/'.build'/'package-windows-fixed'
+        if fixed.exists():shutil.rmtree(fixed)
+        fixed.mkdir(parents=True)
+        shutil.copytree(stage/'Jerzy MultiFX.vst3',fixed/'Jerzy MultiFX.vst3')
+        for script in ('ZAINSTALUJ-VST3.cmd','ZAINSTALUJ-VST3.ps1','BUILD-INFO.json','VALIDATION.json'):
+            shutil.copy2(stage/script,fixed/script)
+        shutil.copy2(ROOT/'INSTALACJA_VST3_PL.md',fixed/'INSTALACJA.txt')
+        shutil.copy2(ROOT/'CHANGELOG.md',fixed/'CHANGELOG.txt')
+        report=(
+            f'Jerzy MultiFX {VERSION} / Windows x64\n'
+            f'Commit: {commit}\n\n'
+            'AUTOMATYCZNA WERYFIKACJA:\n'
+            '- natywny build Release x64 MSVC/JUCE: wymagany przed utworzeniem paczki\n'
+            '- wejscie GUI: test wysyla zdarzenia do widocznej natywnej powierzchni JUCE; '
+            'sprawdza drag pokretla, aktualizacje parametru i pelny gest automatyzacji VST3\n'
+            '- DSP: testy sygnalowe, bypass, routing, zapis/odczyt stanu i stabilnosc numeryczna\n'
+            f'- Steinberg VST3 validator: {validation.get("vst3_validator",{}).get("passed",0)} passed, 0 failed\n'
+            '- architektura binarium: PE32+ x86_64\n\n'
+            'TEST RECZNY:\n'
+            '- fizyczne FL Studio na komputerze uzytkownika: WYMAGA WERYFIKACJI; CI nie ma FL Studio\n'
+        )
+        (fixed/'TEST_REPORT.txt').write_text(report,encoding='utf-8')
+        sums(fixed)
+        fixed_output=a.out/'MULTI_FX_FIXED_Windows_x64.zip'
+        with zipfile.ZipFile(fixed_output,'w',zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(fixed.rglob('*')):
+                if f.is_file():z.write(f,'MULTI_FX_FIXED_Windows_x64/'+f.relative_to(fixed).as_posix())
     else:
         output=a.out/(name+'.tar.gz')
         with tarfile.open(output,'w:gz') as t:t.add(stage,arcname=name,filter=lambda m:normalize(m))

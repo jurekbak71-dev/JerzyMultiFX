@@ -1,3 +1,29 @@
+# 0.1.0-preview.31
+
+- Zastąpiono ręczne przekazywanie ruchu narysowanych regulatorów prawdziwymi komponentami `juce::Slider`, zgodnie ze sprawdzonym wzorcem JerzyAutoTuneVST3. Każda widoczna gałka i ciągły suwak ma teraz własny obszar interakcji JUCE, obsługę drag, Shift-drag, wheel, reset dwuklikiem oraz synchronizację z automatyzacją hosta.
+- Gest regulatora rozpoczyna jedno `beginEdit`, wysyła kolejne `performEdit` i kończy jednym `endEdit`. Zdarzenia pozostałych elementów są obsługiwane bez ponownego wysyłania komunikatów przez ukryty HWND rodzica i bez odbierania focus/capture widocznej powierzchni.
+- Test edytora kieruje teraz zdarzenia do rzeczywistego natywnego okna JUCE zamiast omijać je przez ukryte okno rodzica. Sprawdza zmianę wartości gałki i kompletny gest automatyzacji VST3. Dodano wynikową paczkę `MULTI_FX_FIXED_Windows_x64.zip` z binarium, instalatorem i raportami tekstowymi.
+
+# 0.1.0-preview.30
+
+- Naprawiono obsługę myszy na osadzonej powierzchni JUCE. Edytor nie przenosi już natywnego przechwycenia myszy z widocznej powierzchni na ukryte okno rodzica, co wcześniej kończyło przeciąganie pokrętła natychmiast po naciśnięciu. Gałki, suwaki i przeciąganie kolejności zachowują przechwycenie do rzeczywistego puszczenia przycisku.
+- Zmiana dotyczy wyłącznie wejścia GUI. DSP, parametry, presety i MIDI pozostają bez zmian.
+
+# 0.1.0-preview.29
+
+- Naprawiono natywne osadzenie powierzchni JUCE w FL Studio: po utworzeniu podrzędnego HWND jego platformowa skala DPI jest jawnie ustawiana na 1.0. Zapobiega to ponownemu przemnożeniu fizycznego obszaru VST3 przez 125% lub 150% i obcięciu prawej oraz dolnej części panelu.
+- Numer wersji jest widoczny bezpośrednio w nagłówku GUI. Instalator pokazuje wersję, commit i SHA256, po skopiowaniu ponownie sprawdza sumę binarium i zapisuje `ZAINSTALOWANA-WERSJA.txt` w zainstalowanym bundle. Ułatwia to odróżnienie aktualnej wtyczki od kopii przechowywanej w cache hosta.
+
+# 0.1.0-preview.28
+
+- Zmniejszono domyślne okno do 1024×576 i wyłączono skalowanie pulpitu na poziomie komponentu. Fizyczny test FL Studio wykazał później, że natywne okno JUCE nadal dziedziczyło DPI rodzica; właściwa korekta `ComponentPeer` znajduje się w preview 29.
+- Tak jak w JerzyAutoTune, host otrzymuje stałe proporcje całej powierzchni oraz jawne granice skalowania. Test Windows porównuje natywne wymiary powierzchni JUCE z oknem VST3 po każdym przeskalowaniu. DSP, parametry, presety i MIDI pozostają bez zmian.
+
+# 0.1.0-preview.27
+
+- Przebudowano edytor VST3 do bazowego widoku 1280×720, aby pełny panel mieścił się w oknie FL Studio. Zwarty łańcuch bloków, routing, banki A/B, silnik, regulatory i strony wszystkich pozostałych parametrów zachowują istniejące działania.
+- Układ DELAY dostosowuje grupy dolnych regulatorów do wybranego silnika. Ustawienia, obejścia, presety, routing, MIDI Learn i wszystkie ID parametrów pozostają dostępne; bez zmian w DSP.
+
 # 0.1.0-preview.26
 
 - Gałki i ich skale są budowane z ciągłych okręgów, łuków i linii Direct2D. Usunięto drobne promienie, punktowe detale i szczotkowaną fakturę, które rozpadały się na piksele przy zmianie rozmiaru. Drobne elementy łańcucha i lampki uproszczono, a linie panelu mają minimalną grubość w pikselach ekranu.

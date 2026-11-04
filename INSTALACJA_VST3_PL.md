@@ -3,9 +3,11 @@
 1. Zamknij FL Studio lub inny program muzyczny.
 2. Rozpakuj cały ZIP z paczką VST3.
 3. Kliknij dwa razy `ZAINSTALUJ-VST3.cmd`. Zatwierdź okno Windows proszące o instalację w folderze wtyczek.
-4. Otwórz DAW, odśwież listę wtyczek i wybierz **Jerzy MultiFX**.
+4. Sprawdź komunikat `Zainstalowano`, numer wersji i potwierdzoną sumę SHA256.
+5. Otwórz DAW, wykonaj pełne wyszukiwanie wtyczek i wybierz **Jerzy MultiFX**. Numer aktualnej wersji jest widoczny w nagłówku własnego GUI.
 
 Instalator zachowuje poprzednią wersję w `C:\ProgramData\JerzyMultiFX\kopie`.
+Potwierdzenie dokładnie zainstalowanej wersji zapisuje w `C:\Program Files\Common Files\VST3\Jerzy MultiFX.vst3\ZAINSTALOWANA-WERSJA.txt`.
 Własny panel wtyczki ma pięć bloków, osobne strony efektów i listę silników MD.
 Jeśli DAW pokazuje ogólną listę parametrów, przełącz widok wtyczki na jej własny edytor (GUI).
 Bufor interfejsu audio ustawia się w DAW. Czysty tor ma 0 próbek dodatkowego opóźnienia DSP; aktywne Attack Decay, Atomic, DRIVE i IR zgłaszają własne opóźnienia hostowi.

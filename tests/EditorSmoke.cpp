@@ -16,6 +16,26 @@ static void check(bool c, const char *m) {
     if (!c)
         throw std::runtime_error(m);
 }
+struct EditRecorder final : IComponentHandler {
+    int begins=0,performs=0,ends=0;
+    ParamID lastId=kNoParamId;
+    ParamValue lastValue=0;
+    void reset(){begins=performs=ends=0;lastId=kNoParamId;lastValue=0;}
+    tresult PLUGIN_API queryInterface(const TUID iid,void **obj) override {
+        if(FUnknownPrivate::iidEqual(iid,IComponentHandler::iid)||FUnknownPrivate::iidEqual(iid,FUnknown::iid)){
+            *obj=static_cast<IComponentHandler *>(this);return kResultOk;
+        }
+        *obj=nullptr;return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override {return 1;}
+    uint32 PLUGIN_API release() override {return 1;}
+    tresult PLUGIN_API beginEdit(ParamID id) override {++begins;lastId=id;return kResultOk;}
+    tresult PLUGIN_API performEdit(ParamID id,ParamValue value) override {
+        ++performs;lastId=id;lastValue=value;return kResultOk;
+    }
+    tresult PLUGIN_API endEdit(ParamID id) override {++ends;lastId=id;return kResultOk;}
+    tresult PLUGIN_API restartComponent(int32) override {return kResultOk;}
+};
 static void pump() {
     MSG m{};
     while (PeekMessage(&m, nullptr, 0, 0, PM_REMOVE)) {
@@ -27,6 +47,27 @@ static void click(HWND h, int x, int y) {
     SendMessage(h, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
     SendMessage(h, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
     pump();
+}
+static void drag(HWND h, int x, int y, int endX, int endY) {
+    SendMessage(h,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(x,y));
+    pump();
+    Sleep(10);
+    SendMessage(h,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(endX,endY));
+    pump();
+    Sleep(10);
+    SendMessage(h,WM_LBUTTONUP,0,MAKELPARAM(endX,endY));
+    pump();
+}
+static void rightClick(HWND h,int x,int y) {
+    SendMessage(h,WM_RBUTTONDOWN,MK_RBUTTON,MAKELPARAM(x,y));
+    SendMessage(h,WM_RBUTTONUP,0,MAKELPARAM(x,y));
+    pump();
+}
+static void checkSurfaceBounds(HWND editor, HWND surface, const char *message) {
+    RECT editorBounds{}, surfaceBounds{};
+    GetClientRect(editor, &editorBounds);
+    GetClientRect(surface, &surfaceBounds);
+    check(editorBounds.right == surfaceBounds.right && editorBounds.bottom == surfaceBounds.bottom, message);
 }
 static void screenshot(HWND h, const char *path) {
     RECT size{};
@@ -61,13 +102,13 @@ static void screenshot(HWND h, const char *path) {
     DeleteDC(memory);
     ReleaseDC(h, dc);
 }
-static unsigned long long meterPixels(HWND h, int x) {
+static unsigned long long meterPixels(HWND h, int x, int top) {
     RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW);
     HDC screen=GetDC(h),dc=CreateCompatibleDC(screen);
-    auto bitmap=CreateCompatibleBitmap(screen,1280,850);auto old=SelectObject(dc,bitmap);
+    auto bitmap=CreateCompatibleBitmap(screen,1280,720);auto old=SelectObject(dc,bitmap);
     SendMessage(h,WM_PRINTCLIENT,reinterpret_cast<WPARAM>(dc),PRF_CLIENT);
     unsigned long long hash=1469598103934665603ULL;
-    for(int y=122;y<270;++y)for(int xx=x;xx<x+15;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
+    for(int y=top;y<top+14;++y)for(int xx=x;xx<x+60;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
     SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);ReleaseDC(h,screen);return hash;
 }
 int main(int argc, char **argv) try {
@@ -87,13 +128,22 @@ int main(int argc, char **argv) try {
                   c,
               "instantiate real DLL controller");
         check(c->initialize(nullptr) == kResultOk, "initialize GUI controller");
+        EditRecorder edits;
+        c->setComponentHandler(&edits);
         auto *view = c->createView(ViewType::kEditor);
         check(view, "custom pedal editor exists");
+        ViewRect initialSize{};
+        check(view->getSize(&initialSize)==kResultOk && initialSize.getWidth()==1024 && initialSize.getHeight()==576,
+              "FL Studio receives the compact 1024x576 default editor size");
+        ViewRect constrained(0,0,1500,1000);
+        check(view->checkSizeConstraint(&constrained)==kResultOk &&
+                  constrained.getWidth()*9==constrained.getHeight()*16,
+              "host resize is constrained to the complete 16:9 editor surface");
         HWND parent = CreateWindowExA(0, "STATIC", "Jerzy MultiFX GUI test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                                       0, 0, 1320, 920, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
         check(parent, "create test host window");
         check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "attach custom GUI");
-        ViewRect testSize(0, 0, 1280, 850);
+        ViewRect testSize(0, 0, 1280, 720);
         check(view->onSize(&testSize) == kResultOk, "set deterministic GUI test size");
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
@@ -103,6 +153,13 @@ int main(int argc, char **argv) try {
         for(HWND candidate=GetWindow(child,GW_CHILD);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT))
             if(IsWindowVisible(candidate)){vectorSurface=candidate;break;}
         check(vectorSurface,"JUCE vector surface attached to the VST3 editor");
+        check(SendMessage(child,WM_APP+29,0,0)==1000,
+              "JUCE native peer explicitly disables duplicate FL Studio DPI scaling");
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface matches the host viewport without duplicate DPI scaling");
+#endif
+        HWND pointerTarget=child;
+#ifdef MULTIFX_JUCE_GUI
+        pointerTarget=vectorSurface;
 #endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
         if(std::getenv("MULTIFX_VISUAL_ONLY")) {
@@ -113,74 +170,83 @@ int main(int argc, char **argv) try {
         // Exercise the real DLL's meter notification and independent needle rendering.
         IConnectionPoint *meters=nullptr;
         check(c->queryInterface(IConnectionPoint::iid,reinterpret_cast<void **>(&meters))==kResultOk,"meter connection");
-        const auto inSilent=meterPixels(child,1152),outSilent=meterPixels(child,1208);
+        const auto inSilent=meterPixels(child,1145,101),outSilent=meterPixels(child,1145,123);
         auto *message=new HostMessage;message->setMessageID("meters");
         message->getAttributes()->setFloat("in",.5);message->getAttributes()->setFloat("out",0);
         check(meters->notify(message)==kResultOk,"input meter notification");
         for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-meter.bmp").c_str());
-        check(meterPixels(child,1152)!=inSilent,"IN meter follows input");
-        check(meterPixels(child,1208)==outSilent,"OUT remains at silence independently");
+        check(meterPixels(child,1145,101)!=inSilent,"IN meter follows input");
+        check(meterPixels(child,1145,123)==outSilent,"OUT remains at silence independently");
         message->getAttributes()->setFloat("out",.2);meters->notify(message);
         for(int i=0;i<8;++i)SendMessage(child,WM_TIMER,1,0);
-        check(meterPixels(child,1208)!=outSilent,"OUT meter follows output");
+        check(meterPixels(child,1145,123)!=outSilent,"OUT meter follows output");
         message->release();meters->release();
-        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(100,265));
+        rightClick(pointerTarget,187,132);
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().blockBypass[0]+1)/layout().controlCount)<1e-6,"block bypass MIDI Learn");
-        click(child,100,420); // Select Oil Drum for DELAY A from the visual engine list.
-        click(child,750,390); // Select bank B.
-        click(child,100,420); // Select Oil Drum for DELAY B.
-        click(child,750,390); // Return to bank A.
+        click(pointerTarget,100,220); click(pointerTarget,100,250); // Select Oil Drum for DELAY A from the engine selector.
+        click(pointerTarget,600,220); // Select bank B.
+        click(pointerTarget,100,220); click(pointerTarget,100,250); // Select Oil Drum for DELAY B.
+        click(pointerTarget,470,220); // Return to bank A.
         check(c->getParamNormalized(layout().delayType[0]) == 1 &&
               c->getParamNormalized(layout().delayType[1]) == 1,
               "visual engine list selects real Oil Drum engines in both banks");
-        click(child,1000,340);
+        click(pointerTarget,1000,190);
         check(c->getParamNormalized(layout().digital[0]+2)>.3,
               "reference top MIX slider controls the selected delay bank");
         const int oilTime=parameterId("delayA.oil.time");
         const double oldOilTime=c->getParamNormalized(oilTime);
-        SendMessage(child,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(350,540));
-        SendMessage(child,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(350,500));
-        SendMessage(child,WM_LBUTTONUP,0,MAKELPARAM(350,500));
+        edits.reset();
+        drag(pointerTarget,120,330,120,290);
         check(c->getParamNormalized(oilTime)>oldOilTime,
               "reference TIME knob controls the Oil Drum engine");
-        click(child,1140,538);
+        check(edits.begins==1&&edits.performs>0&&edits.ends==1&&edits.lastId==ParamID(oilTime),
+              "visible JUCE knob sends one complete VST3 automation gesture to the host");
+        click(pointerTarget,1100,340);
         check(std::abs(c->getParamNormalized(layout().delayMode)-.5)<1e-6,
               "reference routing button selects real parallel DSP mode");
-        click(child,990,428);
+        click(pointerTarget,1100,220);
         check(c->getParamNormalized(layout().slotBypass[0])==1,"reference bank bypass switches off");
-        click(child,990,428);
+        click(pointerTarget,1100,220);
         check(c->getParamNormalized(layout().slotBypass[0])==0,"reference bank bypass switches on");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-delay.bmp").c_str());
-        click(child,100,140); // PREAMP / DRIVE in the horizontal chain.
-        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(900,820));
+        click(pointerTarget,100,110); // PREAMP / DRIVE in the horizontal chain.
+        rightClick(pointerTarget,900,650);
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
         int gain = layout().preamp + 1;
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(427, 523));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(427, 473));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(427, 473));
-        pump();
+        drag(pointerTarget,427,443,427,403);
         check(c->getParamNormalized(gain) > .1, "preamp gain control changes host parameter");
-        click(child, 900, 820);
+        click(pointerTarget, 900, 650);
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
-        click(child, 900, 820);
+        click(pointerTarget, 900, 650);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        SendMessage(child, WM_RBUTTONUP, 0, MAKELPARAM(427, 523));
+        rightClick(pointerTarget,427,443);
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
-        SendMessage(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 140));
-        SendMessage(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(545, 140));
-        SendMessage(child, WM_LBUTTONUP, 0, MAKELPARAM(545, 140));
-        pump();
+        drag(pointerTarget,100,110,545,110);
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
-        ViewRect size(0, 0, 880, 592);
-        check(view->onSize(&size) == kResultOk, "GUI scale 80 percent");
+        ViewRect size(0, 0, 1024, 576);
+        check(view->onSize(&size) == kResultOk, "compact GUI resize");
+#ifdef MULTIFX_JUCE_GUI
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface follows compact host bounds");
+#endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-small.bmp").c_str());
-        ViewRect large(0,0,1920,1275);
-        check(view->onSize(&large)==kResultOk,"GUI high-resolution vector resize");
+        ViewRect dpi125(0,0,1600,900);
+        check(view->onSize(&dpi125)==kResultOk,"GUI scale 125 percent");
+#ifdef MULTIFX_JUCE_GUI
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface follows 125 percent host bounds");
+#endif
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-125.bmp").c_str());
+        ViewRect large(0,0,1920,1080);
+        check(view->onSize(&large)==kResultOk,"GUI scale 150 percent");
+#ifdef MULTIFX_JUCE_GUI
+        check(SendMessage(child,WM_APP+29,0,0)==1000,
+              "JUCE native peer keeps the explicit DPI override after host resize");
+        checkSurfaceBounds(child,vectorSurface,"JUCE surface follows 150 percent host bounds");
+#endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-large.bmp").c_str());
-        ViewRect normal(0, 0, 1280, 850);
+        ViewRect normal(0, 0, 1280, 720);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
-        click(child, 330, 140); // Three separate effect panels in block two.
+        click(pointerTarget, 330, 110); // Three separate effect panels in block two.
         pump();
         int model = -1;
         for (size_t i = 0; i < layout().parameters.size(); ++i)
@@ -194,33 +260,33 @@ int main(int argc, char **argv) try {
         SendMessage(child,WM_COMMAND,MAKEWPARAM(10000+model,CBN_SELCHANGE),reinterpret_cast<LPARAM>(modelList));
         check(c->getParamNormalized(model)!=previousModel,"Chorus choice updates host parameter");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
-        click(child,1210,648);
+        click(pointerTarget,1210,543);
         check(GetDlgItem(child,10000+model)==nullptr,"next page replaces visible controls");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone-page2.bmp").c_str());
-        click(child,1055,648);
+        click(pointerTarget,1055,543);
         check(GetDlgItem(child,10000+model)!=nullptr,"previous page restores its controls");
-        click(child, 340, 334);
+        click(pointerTarget, 340, 195);
         pump(); // Attack page.
         check(GetDlgItem(child, 10000 + model) == nullptr, "Chorus controls hidden on Attack page");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-attack.bmp").c_str());
         const int attack=parameterId("attack.bypass");
-        click(child,1080,735);
+        click(pointerTarget,1080,570);
         check(c->getParamNormalized(attack)==0,"dedicated Attack footswitch");
-        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(1080,735));
+        rightClick(pointerTarget,1080,570);
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(attack+1)/layout().controlCount)<1e-6,"Attack switch MIDI Learn");
-        click(child, 555, 334);
+        click(pointerTarget, 555, 195);
         pump(); // Atomic page.
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
-        click(child, 100, 140);
+        click(pointerTarget, 100, 110);
         pump(); // Reordered MD block is now first.
-        SendMessage(child,WM_RBUTTONUP,0,MAKELPARAM(350,540));
+        rightClick(pointerTarget,120,330);
         check(std::abs(c->getParamNormalized(layout().midiLearn) -
                        double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
               "reference DELAY TIME knob learns the common MIDI macro");
-        click(child,1000,55); // Full parameter list.
+        click(pointerTarget,1000,45); // Full parameter list.
         HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
         check(family && SendMessage(family, CB_GETCOUNT, 0, 0) == 13, "MD family dropdown");
-        click(child, 320, 720);
+        click(pointerTarget, 320, 560);
         check(std::abs(c->getParamNormalized(layout().midiLearn) -
                        double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
               "DELAY TIME MIDI Learn is available independently of the chosen engine");
@@ -244,14 +310,14 @@ int main(int argc, char **argv) try {
         const int division = parameterId("delayA.oil.division");
         HWND divisions = GetDlgItem(child, 10000 + division);
         for(int page=0;page<20&&!divisions;++page){
-            click(child,1210,648); // Explicit parameter pages expose the remaining Oil controls.
+            click(pointerTarget,1210,543); // Explicit parameter pages expose the remaining Oil controls.
             divisions=GetDlgItem(child,10000+division);
         }
         check(divisions && SendMessage(divisions, CB_GETCURSEL, 0, 0) == 3,
               "Oil original quarter-note enum displayed");
         RECT divisionRect{};GetWindowRect(divisions,&divisionRect);
         POINT divisionTop{divisionRect.left,divisionRect.top};ScreenToClient(child,&divisionTop);
-        check(divisionTop.x>=20 && divisionTop.y>=370 && divisionTop.y<660,
+        check(divisionTop.x>=20 && divisionTop.y>=218 && divisionTop.y<520,
               "continuous-tagged Oil enums occupy the compact selector row, never a knob");
         SendMessage(divisions, CB_SETCURSEL, 2, 0);
         SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + division, CBN_SELCHANGE),
@@ -263,6 +329,7 @@ int main(int argc, char **argv) try {
         check(view->removed() == kResultOk, "detach GUI");
         view->release();
         DestroyWindow(parent);
+        c->setComponentHandler(nullptr);
         c->terminate();
         c->release();
         factory->release();

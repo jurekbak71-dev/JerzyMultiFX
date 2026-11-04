@@ -67,9 +67,11 @@ class Editor final : public Steinberg::CPluginView {
     bool reorderHorizontal = false;
     double startValue = 0;
     float needleIn = 0, needleOut = 0;
-    static constexpr int controlBottom = 660;
+    static constexpr int controlTop = 218;
+    static constexpr int controlBottom = 520;
     float sx = 1, sy = 1;
-    static constexpr int W = 1280, H = 850;
+    static constexpr int W = 1280, H = 720;
+    static constexpr int DefaultW = 1024, DefaultH = 576;
     struct Control {
         int id, x, y, w, h;
         bool compact;
@@ -78,6 +80,7 @@ class Editor final : public Steinberg::CPluginView {
     std::vector<HWND> combos;
     std::string signature;
     bool globalSettings = false;
+    bool engineMenuOpen = false;
     bool referenceDelay() const { return view.block == 2 && !view.advanced && !globalSettings; }
     int delayControl(int bank, int kind) const {
         static const DelayMidiRoutes routes;
@@ -107,7 +110,45 @@ class Editor final : public Steinberg::CPluginView {
     ID2D1Factory *drawFactory = nullptr;
     ID2D1DCRenderTarget *canvas = nullptr;
     std::map<COLORREF,ID2D1SolidColorBrush*> vectorBrushes;
+    double preparedParameterValue(int id,double v) const {
+        if(id<0)return 0;
+        v=clean(float(v));
+        const int steps=controlUI()[id].definition.steps;
+        return steps>0?std::round(v*steps)/steps:v;
+    }
+    void beginParameterGesture(int id){
+        if(id>=0)controller->beginEdit(id);
+    }
+    void performParameterGesture(int id,double v){
+        if(id<0)return;
+        v=preparedParameterValue(id,v);
+        controller->setParamNormalized(id,v);
+        controller->performEdit(id,v);
+        requestRepaint();
+    }
+    void endParameterGesture(int id){
+        if(id>=0)controller->endEdit(id);
+    }
+    void learnParameter(int id){
+        if(id<0)return;
+        if(referenceDelay()){
+            for(int bank=0;bank<2;++bank)for(int kind=0;kind<2;++kind)
+                if(id==delayControl(bank,kind))
+                    id=parameterId(std::string(bank?"delayB.":"delayA.")+(kind?"feedback":"time"));
+        }
+        change(layout().midiLearn,double(id+1)/layout().controlCount);
+    }
 #ifdef MULTIFX_JUCE_GUI
+    bool jucePointerDispatch=false;
+    void dispatchJucePointer(UINT message,WPARAM flags,LPARAM position){
+        const bool previous=jucePointerDispatch;
+        jucePointerDispatch=true;
+        // Keep pointer handling inside the JUCE event callback. Sending the
+        // message through the hidden parent HWND changes native focus/capture
+        // in some hosts (including FL Studio) before JUCE can finish its drag.
+        this->message(message,flags,position);
+        jucePointerDispatch=previous;
+    }
     class JuceCanvas final : public juce::Component {
         Editor &owner;
         bool rightPressed=false;
@@ -116,32 +157,128 @@ class Editor final : public Steinberg::CPluginView {
         }
     public:
         explicit JuceCanvas(Editor &e):owner(e){setOpaque(true);}
+        float getDesktopScaleFactor() const override {
+            // The VST3 host already supplies the editor's final pixel bounds. Letting
+            // JUCE apply the monitor DPI scale again makes the child HWND larger than
+            // the host viewport (most visibly in FL Studio at 125% and 150% DPI).
+            return 1.0f;
+        }
         void paint(juce::Graphics &g) override {owner.paint(nullptr,&g);}
         void mouseDown(const juce::MouseEvent &e) override {
             rightPressed=e.mods.isRightButtonDown();
-            SendMessage(owner.window,rightPressed?WM_RBUTTONDOWN:WM_LBUTTONDOWN,
-                        rightPressed?MK_RBUTTON:MK_LBUTTON,point(e));
+            owner.dispatchJucePointer(rightPressed?WM_RBUTTONDOWN:WM_LBUTTONDOWN,
+                                      rightPressed?MK_RBUTTON:MK_LBUTTON,point(e));
         }
         void mouseDrag(const juce::MouseEvent &e) override {
-            SendMessage(owner.window,WM_MOUSEMOVE,
-                        (rightPressed?MK_RBUTTON:MK_LBUTTON)|(e.mods.isShiftDown()?MK_SHIFT:0),point(e));
+            owner.dispatchJucePointer(WM_MOUSEMOVE,
+                                      (rightPressed?MK_RBUTTON:MK_LBUTTON)|(e.mods.isShiftDown()?MK_SHIFT:0),point(e));
         }
         void mouseUp(const juce::MouseEvent &e) override {
-            SendMessage(owner.window,rightPressed?WM_RBUTTONUP:WM_LBUTTONUP,0,point(e));
+            owner.dispatchJucePointer(rightPressed?WM_RBUTTONUP:WM_LBUTTONUP,0,point(e));
             rightPressed=false;
         }
         void mouseWheelMove(const juce::MouseEvent &e,const juce::MouseWheelDetails &wheel) override {
             POINT p{e.x,e.y};ClientToScreen(owner.window,&p);
             const int delta=int(std::round(wheel.deltaY*WHEEL_DELTA));
-            SendMessage(owner.window,WM_MOUSEWHEEL,
-                        MAKEWPARAM(e.mods.isCtrlDown()?MK_CONTROL:0,delta),MAKELPARAM(p.x,p.y));
+            owner.dispatchJucePointer(WM_MOUSEWHEEL,
+                                      MAKEWPARAM(e.mods.isCtrlDown()?MK_CONTROL:0,delta),MAKELPARAM(p.x,p.y));
         }
+    };
+    class JuceParameterSlider final : public juce::Slider {
+        Editor &owner;
+        int parameter=-1;
+        bool gesture=false;
+        juce::Rectangle<int> designBounds;
+    public:
+        JuceParameterSlider(Editor &e,int id,bool horizontal,juce::Rectangle<int> bounds)
+            :juce::Slider(horizontal?juce::Slider::LinearHorizontal:
+                                     juce::Slider::RotaryHorizontalVerticalDrag,
+                          juce::Slider::NoTextBox),owner(e),parameter(id),designBounds(bounds){
+            setRange(0.0,1.0,0.0);
+            setValue(owner.value(parameter),juce::dontSendNotification);
+            setMouseDragSensitivity(180);
+            setScrollWheelEnabled(true);
+            setDoubleClickReturnValue(true,controlUI()[parameter].definition.initial);
+            setWantsKeyboardFocus(false);
+            onDragStart=[this]{gesture=true;owner.beginParameterGesture(parameter);};
+            onValueChange=[this]{
+                if(gesture)owner.performParameterGesture(parameter,getValue());
+                else owner.change(parameter,getValue());
+            };
+            onDragEnd=[this]{
+                if(gesture){owner.endParameterGesture(parameter);gesture=false;}
+            };
+        }
+        void paint(juce::Graphics &) override {}
+        void mouseDown(const juce::MouseEvent &e) override {
+            if(e.mods.isRightButtonDown()){
+                owner.learnParameter(parameter);
+                return;
+            }
+            juce::Slider::mouseDown(e);
+        }
+        void mouseUp(const juce::MouseEvent &e) override {
+            if(e.mods.isRightButtonDown())return;
+            juce::Slider::mouseUp(e);
+        }
+        void fit(float scaleX,float scaleY){
+            setBounds(int(std::lround(designBounds.getX()*scaleX)),
+                      int(std::lround(designBounds.getY()*scaleY)),
+                      std::max(1,int(std::lround(designBounds.getWidth()*scaleX))),
+                      std::max(1,int(std::lround(designBounds.getHeight()*scaleY))));
+        }
+        int parameterId() const {return parameter;}
     };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
     std::unique_ptr<JuceCanvas> juceCanvas;
+    std::vector<std::unique_ptr<JuceParameterSlider>> juceParameterSliders;
     juce::Graphics *juceGraphics=nullptr;
     MonoAnalogLook juceLook;
     juce::Slider drawingSlider;
+    void fitJuceCanvas(int width,int height){
+        if(!juceCanvas)return;
+        // A JUCE desktop component attached to a foreign HWND inherits that
+        // window's platform DPI. VST3 already gives us the final physical
+        // viewport, so inheriting FL Studio's 125/150% DPI here would enlarge
+        // the child HWND for a second time and clip its right and bottom edges.
+        if(auto *peer=juceCanvas->getPeer())peer->setCustomPlatformScaleFactor(1.0);
+        juceCanvas->setBounds(0,0,width,height);
+        const float scaleX=float(width)/W,scaleY=float(height)/H;
+        for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+    }
+    void rebuildJuceParameterSliders(){
+        juceParameterSliders.clear();
+        if(!juceCanvas)return;
+        auto add=[&](int id,bool horizontal,juce::Rectangle<int> bounds){
+            if(id<0)return;
+            auto slider=std::make_unique<JuceParameterSlider>(*this,id,horizontal,bounds);
+            juceCanvas->addAndMakeVisible(*slider);
+            slider->toFront(false);
+            juceParameterSliders.push_back(std::move(slider));
+        };
+        if(referenceDelay()){
+            const int bank=std::clamp(view.section,0,1);
+            add(layout().digital[bank]+2,true,{866,177,298,23});
+        }
+        for(const auto &c:controls){
+            const auto &definition=controlUI()[c.id].definition;
+            if(isToggle(c.id)||!definition.choices.empty()||definition.steps>0)continue;
+            const int y=c.y-scroll;
+            if(referenceDelay()||(y>=controlTop&&y+c.h<=controlBottom))
+                add(c.id,c.compact,{c.x,y,c.w,c.h});
+        }
+        RECT client{};GetClientRect(window,&client);
+        const float scaleX=float(std::max(1L,client.right))/W;
+        const float scaleY=float(std::max(1L,client.bottom))/H;
+        for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+    }
+    void syncJuceParameterSliders(){
+        for(auto &slider:juceParameterSliders){
+            const double current=value(slider->parameterId());
+            if(std::abs(slider->getValue()-current)>1.0e-7)
+                slider->setValue(current,juce::dontSendNotification);
+        }
+    }
     static juce::Colour juceColor(COLORREF c){
         return juce::Colour::fromRGB(GetRValue(c),GetGValue(c),GetBValue(c));
     }
@@ -149,6 +286,21 @@ class Editor final : public Steinberg::CPluginView {
 #else
     void requestRepaint(){if(window)InvalidateRect(window,nullptr,FALSE);}
 #endif
+    void capturePointer(){
+#ifdef MULTIFX_JUCE_GUI
+        // The JUCE peer already owns native mouse capture. Moving capture to
+        // the hidden parent HWND makes JUCE synthesize mouseUp immediately,
+        // which ends knob drags at the initial press.
+        if(jucePointerDispatch)return;
+#endif
+        SetCapture(window);
+    }
+    void releasePointer(){
+#ifdef MULTIFX_JUCE_GUI
+        if(jucePointerDispatch)return;
+#endif
+        ReleaseCapture();
+    }
     static D2D1_COLOR_F color(COLORREF c, float alpha=1.f) {
         return D2D1::ColorF(GetRValue(c)/255.f,GetGValue(c)/255.f,GetBValue(c)/255.f,alpha);
     }
@@ -192,7 +344,7 @@ class Editor final : public Steinberg::CPluginView {
         return layout().processorBypass[view.section + 1];
     }
     int delayMidiTarget(int x, int y) const {
-        if (referenceDelay() || globalSettings || view.block != 2 || y < 700 || y >= 748 || x < 250 || x >= 1000)
+        if (referenceDelay() || globalSettings || view.block != 2 || y < 548 || y >= 596 || x < 250 || x >= 1000)
             return -1;
         const int index = (x - 250) / 250;
         const std::string bank = view.section ? "delayB." : "delayA.";
@@ -213,15 +365,9 @@ class Editor final : public Steinberg::CPluginView {
     void change(int id, double v) {
         if (id < 0)
             return;
-        const int steps = controlUI()[id].definition.steps;
-        v = clean(float(v));
-        if (steps > 0)
-            v = std::round(v * steps) / steps;
-        controller->beginEdit(id);
-        controller->setParamNormalized(id, v);
-        controller->performEdit(id, v);
-        controller->endEdit(id);
-        requestRepaint();
+        beginParameterGesture(id);
+        performParameterGesture(id,v);
+        endParameterGesture(id);
     }
     void destroyCombos() {
         for (auto h : combos)
@@ -425,74 +571,73 @@ class Editor final : public Steinberg::CPluginView {
 #else
         fill(dc,0,0,W,H,RGB(7,17,27));
 #endif
-        metalPanel(dc,0,0,W,82);
-        fill(dc,0,0,W,78,RGB(8,19,29));
-        line(dc,0,81,W,81,RGB(38,68,83));
-        text(dc,39,11,155,"JERZY",28,RGB(224,248,252));
-        text(dc,181,11,210,"MULTI FX",28,RGB(46,196,235));
-        text(dc,25,47,360,"BASS GUITAR EFFECTS STUDIO",12,RGB(124,172,193));
-        text(dc,395,8,100,"PRESET",12,RGB(199,221,232));
-        bevel(dc,397,36,338,39,RGB(15,29,43));
-        text(dc,405,43,18,"<",20,RGB(187,219,230));
-        text(dc,706,43,18,">",20,RGB(187,219,230));
+        metalPanel(dc,0,0,W,74);
+        fill(dc,0,0,W,70,RGB(8,19,29));
+        line(dc,0,73,W,73,RGB(38,68,83));
+        text(dc,23,8,138,"JERZY",25,RGB(224,248,252));
+        text(dc,157,8,190,"MULTI FX",25,RGB(46,196,235));
+        text(dc,24,40,210,"BASS GUITAR EFFECTS STUDIO",10,RGB(124,172,193));
+        text(dc,238,42,115,MULTIFX_VERSION,8,RGB(64,212,231));
+        text(dc,365,7,100,"PRESET",10,RGB(199,221,232));
+        bevel(dc,365,28,322,36,RGB(15,29,43));
+        text(dc,371,34,18,"<",18,RGB(187,219,230));
+        text(dc,668,34,18,">",18,RGB(187,219,230));
         const int preset=std::clamp(int(std::round(value(layout().factoryProgram)*7)),0,7);
         char presetLabel[96];
         snprintf(presetLabel,sizeof(presetLabel),"%02d   %s",preset+1,presetNames[preset]);
-        text(dc,435,45,245,presetLabel,14,RGB(223,242,248));
-        text(dc,678,45,22,"v",13,RGB(174,210,225));
-        bevel(dc,744,36,40,39,RGB(15,29,43));
-        text(dc,746,43,37,"SAVE",11,RGB(194,226,237));
-        text(dc,799,8,180,"MIDI MAPOWANIE",12,RGB(198,220,231));
-        bevel(dc,797,36,144,39,RGB(8,30,39));
+        text(dc,405,36,245,presetLabel,13,RGB(223,242,248));
+        text(dc,640,34,22,"v",12,RGB(174,210,225));
+        bevel(dc,696,28,56,36,RGB(15,29,43));
+        text(dc,697,36,54,"ZAPISZ",10,RGB(194,226,237));
+        text(dc,765,8,180,"MIDI MAPOWANIE",10,RGB(198,220,231));
+        bevel(dc,765,28,144,36,RGB(8,30,39));
         bool mapped=false;
         for (int i=0;i<128;++i) if (value(layout().midiMap+i)>0) {mapped=true;break;}
-        disk(dc,814,55,5,mapped?RGB(55,226,145):RGB(65,198,219));
-        text(dc,823,44,111,mapped?"AKTYWNE":"MIDI LEARN",12,RGB(204,241,246));
-        bevel(dc,962,36,155,39,RGB(14,32,47));
-        text(dc,965,44,149,globalSettings||view.advanced?"WRÓĆ":"USTAWIENIA",12,RGB(204,231,240));
-        bevel(dc,1126,36,127,39,RGB(14,32,47));
-        text(dc,1128,44,123,"POMOC",12,RGB(204,231,240));
-        metalPanel(dc,10,88,1260,210,false);
-        fill(dc,13,91,1254,204,RGB(7,18,28));
+        disk(dc,780,46,5,mapped?RGB(55,226,145):RGB(65,198,219));
+        text(dc,790,36,111,mapped?"AKTYWNE":"MIDI LEARN",11,RGB(204,241,246));
+        bevel(dc,920,28,162,36,RGB(14,32,47));
+        text(dc,923,36,156,globalSettings||view.advanced?"WRÓĆ":"USTAWIENIA",11,RGB(204,231,240));
+        bevel(dc,1091,28,164,36,RGB(14,32,47));
+        text(dc,1094,36,158,"POMOC",11,RGB(204,231,240));
+        metalPanel(dc,10,80,1260,72,false);
+        fill(dc,13,83,1254,66,RGB(7,18,28));
         auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
         for(int i=0;i<5;++i) {
-            const int b=order[i],x=24+i*222;
+            const int b=order[i],x=20+i*216;
             const bool selected=b==view.block;
-            metalPanel(dc,x,97,183,190);
-            fill(dc,x+3,100,177,184,selected?RGB(22,43,55):RGB(16,30,40));
+            metalPanel(dc,x,87,201,58);
+            fill(dc,x+3,90,195,52,selected?RGB(22,43,55):RGB(16,30,40));
             if(selected) {
-                line(dc,x-2,95,x+185,95,RGB(15,95,112),2);
-                line(dc,x-2,95,x-2,289,RGB(15,95,112),2);
-                line(dc,x+185,95,x+185,289,RGB(15,95,112),2);
-                line(dc,x,97,x+183,97,RGB(49,224,240),3);
-                line(dc,x,97,x,287,RGB(49,224,240),3);
-                line(dc,x+182,97,x+182,287,RGB(49,224,240),3);
-                line(dc,x+3,101,x+179,101,RGB(28,141,164));
+                line(dc,x-1,86,x+202,86,RGB(49,224,240),3);
+                line(dc,x-1,86,x-1,146,RGB(15,95,112),2);
+                line(dc,x+201,86,x+201,146,RGB(15,95,112),2);
             }
-            screw(dc,x+8,274);screw(dc,x+173,274);
             char number[8];snprintf(number,sizeof(number),"%d",i+1);
-            bevel(dc,x+9,108,25,27,RGB(30,48,64));
-            text(dc,x+9,110,25,number,17,selected?RGB(61,227,244):RGB(226,240,245));
+            bevel(dc,x+9,101,27,29,RGB(30,48,64));
+            text(dc,x+9,105,27,number,17,selected?RGB(61,227,244):RGB(226,240,245));
             const char* labels[]{"PREAMP / DRIVE","MODULACJA","DELAY A + B","REVERB","CAB / IR"};
-            text(dc,x+39,112,139,labels[b],13,RGB(231,246,250));
-            cardArt(dc,b,x,97);
+            text(dc,x+44,103,143,labels[b],13,RGB(231,246,250));
+            disk(dc,x+182,115,7,RGB(5,18,23));lamp(dc,x+182,115,true,RGB(43,233,135));
             const bool off=value(layout().blockBypass[b])>=.5;
-            metalPanel(dc,x+40,247,111,35);
-            fill(dc,x+43,250,105,29,off?RGB(50,21,30):RGB(6,34,29));
-            lamp(dc,x+59,264,true,off?RGB(232,57,75):RGB(43,233,135));
-            text(dc,x+70,254,46,off?"OFF":"ON",15,off?RGB(244,130,141):RGB(78,244,162));
-            toggleSwitch(dc,x+134,264,!off);
-            if(i<4){line(dc,x+188,188,x+215,188,RGB(43,207,232),2);line(dc,x+207,183,x+215,188,RGB(43,207,232),2);line(dc,x+207,193,x+215,188,RGB(43,207,232),2);}
+            fill(dc,x+43,121,104,21,off?RGB(50,21,30):RGB(6,34,29));
+            text(dc,x+47,123,98,off?"BYPASS":"AKTYWNY",10,off?RGB(244,130,141):RGB(78,244,162));
+            toggleSwitch(dc,x+167,132,!off);
+            if(i<4){line(dc,x+202,116,x+213,116,RGB(43,207,232),2);line(dc,x+208,111,x+214,116,RGB(43,207,232),2);line(dc,x+208,121,x+214,116,RGB(43,207,232),2);}
         }
-        metalPanel(dc,1135,97,126,190);
-        fill(dc,1138,100,120,184,RGB(8,19,28));
-        levelBar(dc,1152,"IN",needleIn);
-        levelBar(dc,1208,"OUT",needleOut);
+        metalPanel(dc,1110,87,151,58);fill(dc,1113,90,145,52,RGB(8,19,28));
+        const float levels[]{needleIn,needleOut};const char* meterNames[]{"IN","OUT"};
+        for(int row=0;row<2;++row){
+            const int y=99+row*22;const float db=20.f*std::log10(std::max(levels[row],1.e-6f));
+            const int lit=std::clamp(int((db+36.f)/2.5f),0,12);
+            text(dc,1117,y,27,meterNames[row],9,RGB(190,219,229));
+            for(int i=0;i<12;++i)fill(dc,1145+i*5,y+2,4,8,i<lit?(i>9?RGB(245,174,78):RGB(55,222,155)):RGB(27,52,65));
+            char dbText[20];snprintf(dbText,sizeof(dbText),"%.0f",db);text(dc,1208,y,42,dbText,9,RGB(190,219,229));
+        }
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
         // Draw the control from circles, arcs and strokes. Small radial marks and
         // brushed-metal hatching turn into isolated pixels at reduced host sizes.
-        const float cx=float(c.x+c.w/2),cy=float(c.y+(radius==40?71:radius>=34?63:56));
+        const float cx=float(c.x+c.w/2),cy=float(c.y+(radius==40?71:radius>=34?63:radius>=26?50:56));
         const float r=float(radius);
         text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
 #ifdef MULTIFX_JUCE_GUI
@@ -563,108 +708,66 @@ class Editor final : public Steinberg::CPluginView {
             reading=display;
         }
         if(definition.unit=="ms" && reading.find("ms")==std::string::npos)reading+=" ms";
-        const int readoutY=c.y+(radius==40?121:radius>=34?109:87);
+        const int readoutY=c.y+(radius==40?121:radius>=34?109:radius>=26?88:87);
         const int readoutW=std::min(c.w-4,radius*2+58);
         bevel(dc,cx-readoutW/2,readoutY-3,readoutW,22,RGB(5,18,27));
         text(dc,cx-readoutW/2,readoutY-2,readoutW,reading.c_str(),radius>=34?13:12,
              RGB(112,231,240));
     }
     void referenceDelayPanel(HDC dc) {
-        metalPanel(dc,11,305,1258,529);
-        fill(dc,14,308,1252,522,RGB(11,25,36));
-        screw(dc,21,315);screw(dc,1259,315);
-        screw(dc,21,824);screw(dc,1259,824);
-        text(dc,29,318,285,"DELAY A + B",27,RGB(230,250,252));
-        text(dc,321,327,390,"DWA NIEZALEŻNE SILNIKI OPÓŹNIENIA",11,RGB(132,178,195));
-        const int bank=std::clamp(view.section,0,1);
-        const int mix=layout().digital[bank]+2;
-        text(dc,797,326,61,"MIX",14,RGB(225,245,249));
-        metalPanel(dc,850,333,344,14,false);
-        fill(dc,852,337,340,6,RGB(2,9,15));
-        fill(dc,852,337,int(340*value(mix)),6,RGB(43,210,235));
-        disk(dc,852+int(340*value(mix))+1,343,11,RGB(2,9,15));
-        disk(dc,852+int(340*value(mix)),341,9,RGB(154,171,179));
-        disk(dc,852+int(340*value(mix))-2,339,5,RGB(235,244,246));
-        char mixText[24];snprintf(mixText,sizeof(mixText),"%d%%",int(std::round(value(mix)*100)));
-        text(dc,1196,324,59,mixText,16,RGB(232,248,250));
-        metalPanel(dc,26,365,236,416,false);
-        fill(dc,29,368,230,410,RGB(8,21,32));
-        text(dc,36,374,212,"SILNIK DELAYA",14,RGB(227,246,249));
+        metalPanel(dc,11,160,1258,548); fill(dc,14,163,1252,542,RGB(11,25,36));
+        screw(dc,21,170); screw(dc,1259,170); screw(dc,21,699); screw(dc,1259,699);
+        text(dc,29,170,285,"DELAY A + B",26,RGB(230,250,252));
+        text(dc,321,178,390,"DWA NIEZALEŻNE SILNIKI OPÓŹNIENIA",11,RGB(132,178,195));
+        const int bank=std::clamp(view.section,0,1),mix=layout().digital[bank]+2;
+        text(dc,823,177,48,"MIX",13,RGB(225,245,249)); metalPanel(dc,866,180,298,14,false);
+        fill(dc,868,184,294,6,RGB(2,9,15)); fill(dc,868,184,int(294*value(mix)),6,RGB(43,210,235));
+        disk(dc,868+int(294*value(mix))+1,190,10,RGB(2,9,15)); disk(dc,868+int(294*value(mix)),188,8,RGB(154,171,179));
+        disk(dc,868+int(294*value(mix))-2,186,4,RGB(235,244,246));
+        char mixText[24]; snprintf(mixText,sizeof(mixText),"%d%%",int(std::round(value(mix)*100))); text(dc,1170,174,70,mixText,14,RGB(232,248,250));
         const int type=int(plain(layout().delayType[bank],float(value(layout().delayType[bank]))));
         const int model=int(std::round(value(layout().mxAlgorithms[bank][0])*8));
         const char* names[]{"OIL DRUM","MX ANALOG","REEL / TAPE","DIGITAL","MEMORY","VOLANTE","OLIVERA","BRIG / BBD"};
-        const int families[]{4,1,3,0,2,1,1,1};
-        const int models[]{-1,-1,-1,-1,-1,0,2,4};
-        for(int i=0;i<8;++i){
-            const int y=402+i*44;
-            const bool selected=type==families[i] && (models[i]<0 || model==models[i]) &&
-                (type!=1 || i!=1 || (model!=0&&model!=2&&model!=4));
-            metalPanel(dc,35,y,218,39,false);
-            fill(dc,38,y+3,212,33,selected?RGB(12,78,96):RGB(10,26,39));
-            if(selected)fill(dc,35,y,3,39,RGB(57,222,240));
-            disk(dc,227,y+19,5,selected?RGB(64,229,238):RGB(37,57,72));
-            if(i==0){
-                line(dc,47,y+11,47,y+26,RGB(126,225,234),2);
-                line(dc,47,y+11,58,y+11,RGB(126,225,234),2);
-                line(dc,47,y+26,58,y+26,RGB(126,225,234),2);
-                line(dc,58,y+11,58,y+26,RGB(126,225,234),2);
-            } else {
-                disk(dc,53,y+19,6,selected?RGB(78,214,231):RGB(89,121,140));
-                disk(dc,53,y+19,3,RGB(10,26,39));
-            }
-            text(dc,64,y+10,150,names[i],13,selected?RGB(91,239,249):RGB(184,209,223));
-        }
-        metalPanel(dc,274,365,990,440,false);
-        fill(dc,277,368,984,434,RGB(9,22,34));
-        const char* heading[]{"DIGITAL","MX ANALOG","MEMORY","REEL ECHO","OIL DRUM"};
-        disk(dc,307,398,18,RGB(4,14,23));
-        disk(dc,307,398,15,RGB(38,203,226));
-        disk(dc,307,398,11,RGB(5,25,36));
-        line(dc,305,390,311,390,RGB(203,252,255),2);
-        text(dc,327,379,385,heading[std::clamp(type,0,4)],27,RGB(231,249,252));
-        const char* subtitles[]{"PRECYZYJNE POWTÓRZENIA","MODUŁOWE ECHA ANALOGOWE","BARWNE ECHA CYFROWE","MECHANIKA TAŚMY I GŁOWIC","CIEPŁE, ORGANICZNE ECHA"};
-        text(dc,289,419,580,subtitles[std::clamp(type,0,4)],11,RGB(139,178,194));
-        text(dc,735,386,316,bank?"AKTYWNY BANK B":"AKTYWNY BANK A",13,RGB(132,202,216));
+        const int families[]{4,1,3,0,2,1,1,1},models[]{-1,-1,-1,-1,-1,0,2,4};
+        const char* engine=names[0];
+        for(int i=0;i<8;++i) if(type==families[i]&&(models[i]<0||model==models[i])&&(type!=1||i!=1||(model!=0&&model!=2&&model!=4))) engine=names[i];
+        bevel(dc,35,207,206,34,RGB(14,39,53)); text(dc,43,214,182,engine,12,RGB(88,229,244)); text(dc,219,213,18,"v",13,RGB(183,212,225));
+        text(dc,264,214,145,"AKTYWNY BANK",10,RGB(134,187,205));
+        for(int b=0;b<2;++b){const int bx=412+b*132;fill(dc,bx,207,126,34,bank==b?RGB(14,112,137):RGB(18,39,53));text(dc,bx,215,126,b==0?"A — AKTYWNY":"B — AKTYWNY",11,bank==b?RGB(230,251,255):RGB(154,186,202));}
         const bool bypass=value(layout().slotBypass[bank])>=.5;
-        bevel(dc,928,413,124,31,bypass?RGB(86,36,48):RGB(18,76,58));
-        text(dc,932,420,116,bypass?"BYPASS / OFF":"ON / AKTYWNY",11,RGB(226,247,244));
-        line(dc,281,455,1061,455,RGB(31,68,88));
-        text(dc,281,489,33,"A",19,bank==0?RGB(56,220,239):RGB(132,173,195));
-        text(dc,611,489,33,"B",19,bank==1?RGB(177,131,247):RGB(132,173,195));
-        for(size_t i=0;i<controls.size();++i){
-            const auto &c=controls[i];
-            if(c.y==465) referenceKnob(dc,c,(i%2)?"FEEDBACK":"CZAS DELAYA",40,i<2?RGB(53,215,236):RGB(174,128,247));
-        }
-        line(dc,281,648,1061,648,RGB(31,68,88));
-        const char* groups[]{"FILTRACJA","MODULACJA","SATURACJA","STEREO / MECHANIKA"};
-        for(int group=0;group<4;++group){
-            const int gx=279+group*198;
-            metalPanel(dc,gx,652,193,145,false);
-            fill(dc,gx+3,655,187,139,RGB(11,25,37));
-            text(dc,gx+5,658,183,groups[group],12,RGB(202,222,231));
-        }
-        const char* labels[5][8]={{"FILTER","LEVEL"},{"IN TRIM","OUT TRIM","MACHINE","PAN","FX AMOUNT","FX RATE","FX DEPTH","DUCK"},
-          {"BOOST","SQUELCH","DEPTH","MOD RATE","LEVEL","BLEND"},
-          {"WOW","FLUTTER","AGE","MOTOR","SATURATION","BIAS","WIDTH","HISS"},
-          {"IN TONE","OUT TONE","DEPTH","SPEED","IN SAT","OUT SAT","WIDTH","DRIFT"}};
-        for(const auto &c:controls) if(c.y==689) {
-            for(int i=0;i<8;++i)if(delayFeature(i)==c.id) {
-                referenceKnob(dc,c,labels[std::clamp(type,0,4)][i],26,i<2?RGB(64,212,231):RGB(173,126,236));break;
-            }
-        }
-        metalPanel(dc,1074,459,181,186,false);
-        fill(dc,1077,462,175,180,RGB(11,25,38));
-        text(dc,1080,467,169,"TRYB PRACY",13,RGB(217,236,243));
+        fill(dc,1007,207,207,34,bypass?RGB(76,31,43):RGB(17,76,57)); text(dc,1007,215,207,bypass?"BYPASS / WYŁĄCZONY":"ON / AKTYWNY",11,RGB(226,247,244));
+        line(dc,28,250,1251,250,RGB(31,68,88));
+        const char* primaryLabels[]{"CZAS DELAYA","FEEDBACK","CZAS DELAYA","FEEDBACK"};
+        for(size_t i=0;i<controls.size();++i){const auto &c=controls[i];if(c.y==260)referenceKnob(dc,c,primaryLabels[i%4],40,i<2?RGB(53,215,236):RGB(174,128,247));}
+        text(dc,1010,263,211,"TRYB PRACY",13,RGB(217,236,243));
         const char* routes[]{"SZEREGOWY A > B","RÓWNOLEGŁY","MIX A / B"};
         const int routing=int(plain(layout().delayMode,float(value(layout().delayMode))));
-        for(int i=0;i<3;++i){
-            const int y=493+i*45;
-            metalPanel(dc,1082,y,165,39,false);
-            fill(dc,1085,y+3,159,33,routing==i?RGB(23,124,153):RGB(15,36,52));
-            lamp(dc,1096,y+19,routing==i,RGB(75,231,246));
-            text(dc,1104,y+10,137,routes[i],11,RGB(223,240,246));
+        for(int i=0;i<3;++i){const int y=282+i*44;metalPanel(dc,1007,y,207,36,false);fill(dc,1010,y+3,201,30,routing==i?RGB(23,124,153):RGB(15,36,52));lamp(dc,1023,y+18,routing==i,RGB(75,231,246));text(dc,1035,y+9,168,routes[i],11,RGB(223,240,246));}
+        line(dc,28,415,1251,415,RGB(31,68,88));
+        int featureCount=0;for(int i=0;i<8&&delayFeature(i)>=0;++i)++featureCount;
+        const int groupCount=(featureCount+1)/2,totalWidth=groupCount*298+std::max(0,groupCount-1)*8;
+        const int groupStart=(W-totalWidth)/2;
+        const char* groups[5][4]={{"DIGITAL TONE","","",""},{"INPUT / MACHINE","MODULATION","EFFECTS","STEREO / DUCK"},
+          {"TONE / DEPTH","MODULATION","LEVEL / BLEND",""},{"WOW / FLUTTER","TAPE AGE","SATURATION","WIDTH / NOISE"},
+          {"FILTRACJA","MODULACJA","SATURACJA","STEREO / MECHANIKA"}};
+        for(int group=0;group<groupCount;++group){const int gx=groupStart+group*306;metalPanel(dc,gx,422,298,159,false);fill(dc,gx+3,425,292,153,RGB(11,25,37));text(dc,gx+5,429,288,groups[std::clamp(type,0,4)][group],12,RGB(202,222,231));}
+        const char* labels[5][8]={{"FILTER","LEVEL"},{"IN TRIM","OUT TRIM","MACHINE","PAN","FX AMOUNT","FX RATE","FX DEPTH","DUCK"},{"BOOST","SQUELCH","DEPTH","MOD RATE","LEVEL","BLEND"},{"WOW","FLUTTER","AGE","MOTOR","SATURATION","BIAS","WIDTH","HISS"},{"IN TONE","OUT TONE","DEPTH","SPEED","IN SAT","OUT SAT","WIDTH","DRIFT"}};
+        for(const auto &stored:controls)if(stored.y==449)for(int i=0;i<featureCount;++i)if(delayFeature(i)==stored.id){
+            const int group=i/2,local=i%2,gx=groupStart+group*306;
+            Control c=stored;c.x=gx+27+local*135;c.w=130;
+            referenceKnob(dc,c,labels[std::clamp(type,0,4)][i],featureCount<=2?34:26,i<2?RGB(64,212,231):RGB(173,126,236));break;
         }
-        text(dc,286,808,676,"Prawy klik na regulatorze: MIDI Learn. Wszystkie parametry: USTAWIENIA.",10,RGB(123,171,191));
+        line(dc,28,607,1251,607,RGB(31,68,88));
+        text(dc,35,621,676,"PRAWY KLIK: MIDI LEARN     •     PEŁNA LISTA PARAMETRÓW: USTAWIENIA",10,RGB(123,171,191));
+        char status[96];snprintf(status,sizeof(status),"GR %.1f dB   /   PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
+        text(dc,948,621,273,status,10,RGB(166,208,222));
+        if(engineMenuOpen){
+            metalPanel(dc,35,241,206,210,false);fill(dc,38,244,200,204,RGB(8,21,32));
+            for(int i=0;i<8;++i){const int y=245+i*25;const bool selected=std::string_view(engine)==names[i];
+                if(selected)fill(dc,39,y,198,24,RGB(14,84,104));
+                text(dc,48,y+5,184,names[i],11,selected?RGB(104,236,247):RGB(202,222,231));
+            }
+        }
     }
 
     void rebuild() {
@@ -677,11 +780,14 @@ class Editor final : public Steinberg::CPluginView {
             for (int bank = 0; bank < 2; ++bank)
                 for (int kind = 0; kind < 2; ++kind) {
                     const int id = delayControl(bank, kind);
-                    if (id >= 0) controls.push_back({id, 278 + bank * 330 + kind * 157, 465, 145, 150, false});
+                    if (id >= 0) controls.push_back({id, 45 + bank * 470 + kind * 200, 260, 150, 145, false});
                 }
-            for (int i = 0; i < 8; ++i) {
+            int featureCount=0;for(int i=0;i<8&&delayFeature(i)>=0;++i)++featureCount;
+            const int groupCount=(featureCount+1)/2,totalWidth=groupCount*298+std::max(0,groupCount-1)*8;
+            const int groupStart=(W-totalWidth)/2;
+            for (int i = 0; i < featureCount; ++i) {
                 const int id = delayFeature(i);
-                if (id >= 0) controls.push_back({id, 279 + i * 99, 689, 94, 106, false});
+                if (id >= 0) controls.push_back({id, groupStart+(i/2)*306+27+(i%2)*135, 449, 130, 120, false});
             }
         } else {
             State s = state();
@@ -709,12 +815,12 @@ class Editor final : public Steinberg::CPluginView {
                 const bool isCompact=index<int(compact.size());
                 const int id=isCompact?compact[index]:knobs[index-int(compact.size())];
                 const int local=index-controlPage*6;
-                int x=28+(local%3)*411,y=375+(local/3)*131;
+                int x=28+(local%3)*411,y=228+(local/3)*132;
                 if(grouped){
                     const int count=isCompact?visibleCompact:visibleKnobs;
                     const int inRow=isCompact?local:local-visibleCompact;
                     x=28+(3-count)*205+inRow*411;
-                    y=isCompact?(visibleKnobs?385:420):(visibleCompact?460:420);
+                    y=isCompact?(visibleKnobs?238:280):(visibleCompact?370:280);
                 }
                 controls.push_back({id,x,y,388,isCompact?54:126,isCompact});
             }
@@ -724,7 +830,7 @@ class Editor final : public Steinberg::CPluginView {
             if (p.choices.empty() && !(p.steps > 1 && p.steps <= 64))
                 continue;
             const int yy = c.y - scroll;
-            if (yy < 370 || yy + 55 > controlBottom)
+            if (yy < controlTop || yy + 55 > controlBottom)
                 continue;
             HWND h = CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
                                    int(c.x / sx), int((yy + 23) / sy), int(c.w / sx), 240, window,
@@ -760,8 +866,11 @@ class Editor final : public Steinberg::CPluginView {
             SendMessage(h, CB_SETCURSEL, choice, 0);
             combos.push_back(h);
         }
-        HWND factory = referenceDelay() ? nullptr : CreateWindowA("COMBOBOX", "", WS_CHILD | CBS_DROPDOWNLIST, int(430 / sx),
-                                     int(46 / sy), int(300 / sx), 260, window,
+#ifdef MULTIFX_JUCE_GUI
+        rebuildJuceParameterSliders();
+#endif
+        HWND factory = referenceDelay() ? nullptr : CreateWindowA("COMBOBOX", "", WS_CHILD | CBS_DROPDOWNLIST, int(405 / sx),
+                                     int(34 / sy), int(245 / sx), 260, window,
                                      reinterpret_cast<HMENU>(INT_PTR(10000 + layout().factoryProgram)),
                                      instance, nullptr);
         if (factory) {
@@ -841,78 +950,78 @@ class Editor final : public Steinberg::CPluginView {
         }
         HDC dc=target;
         chrome(dc);
-        text(dc,24,297,1190,"KLIKNIJ BLOK U GÓRY → WYBIERZ EFEKT PONIŻEJ → USTAW PARAMETRY    •    PRAWY KLIK: MIDI LEARN",13,RGB(169,211,225));
+        text(dc,24,157,1190,"WYBIERZ BLOK I SEKCJĘ, POTEM USTAW PARAMETRY    •    PRAWY KLIK: MIDI LEARN",11,RGB(169,211,225));
         auto sections = sectionNames(view.block);
         for (size_t i = 0; i < sections.size(); ++i) {
             int x = 28 + int(i) * 214;
-            fill(dc, x, 316, 205, 36, int(i) == view.section ? RGB(32,106,125) : RGB(20,42,59));
-            text(dc, x, 323, 205, sections[i].c_str(), 16,
+            fill(dc, x, 177, 205, 34, int(i) == view.section ? RGB(32,106,125) : RGB(20,42,59));
+            text(dc, x, 184, 205, sections[i].c_str(), 14,
                  int(i) == view.section ? RGB(238, 252, 255) : RGB(157, 187, 202));
         }
         if (view.block == 2 && view.advanced) {
-            fill(dc, 900, 316, 160, 36, RGB(28, 59, 77));
-            text(dc, 900, 323, 160, "MX A / B", 15, RGB(221,244,250));
+            fill(dc, 900, 177, 160, 34, RGB(28, 59, 77));
+            text(dc, 900, 184, 160, "MX A / B", 13, RGB(221,244,250));
         }
-        fill(dc, 1075, 316, 175, 36, RGB(28, 59, 77));
-        text(dc, 1075, 323, 175, view.advanced ? "BASIC" : "USTAWIENIA", 15, RGB(221,244,250));
-        fill(dc, 20, 364, 1240, 302, RGB(16,31,47));
-        line(dc,20,364,1260,364,RGB(37,85,105));
-        bevel(dc, 24, 674, 1232, 112, RGB(15,33,49));
+        fill(dc, 1075, 177, 175, 34, RGB(28, 59, 77));
+        text(dc, 1075, 184, 175, view.advanced ? "BASIC" : "USTAWIENIA", 13, RGB(221,244,250));
+        fill(dc, 20, 218, 1240, 302, RGB(16,31,47));
+        line(dc,20,218,1260,218,RGB(37,85,105));
+        bevel(dc, 24, 528, 1232, 82, RGB(15,33,49));
         if (view.block == 2 && !globalSettings) {
             const char *labels[]{"MIDI LEARN / TIME", "MIDI LEARN / FEEDBACK", "MIDI LEARN / MIX"};
             for (int i = 0; i < 3; ++i) {
-                bevel(dc, 250 + i * 250, 700, 230, 48, RGB(24, 58, 72));
-                text(dc, 255 + i * 250, 713, 220, labels[i], 14, RGB(219, 244, 250));
+                bevel(dc, 250 + i * 250, 545, 230, 38, RGB(24, 58, 72));
+                text(dc, 255 + i * 250, 555, 220, labels[i], 12, RGB(219, 244, 250));
             }
-            text(dc, 250, 758, 740, "Same CC follows the selected DELAY engine", 12, RGB(158, 197, 211));
+            text(dc, 250, 586, 740, "To samo CC steruje wybranym silnikiem DELAY", 10, RGB(158, 197, 211));
         }
         if (view.block == 2 && view.advanced && !globalSettings)
-            text(dc,250,700,400,view.mxSlot == 0 ? "MX ENGINE A" : "MX ENGINE B",24,RGB(226,245,251));
-        for (int x : {30,1248}) for(int y : {374,778}) {
+            text(dc,35,555,200,view.mxSlot == 0 ? "MX ENGINE A" : "MX ENGINE B",15,RGB(226,245,251));
+        for (int x : {30,1248}) for(int y : {228,603}) {
             disk(dc,x,y,5,RGB(198,199,184));
             line(dc,x-3,y,x+3,y,RGB(50,51,46));
         }
         if (view.block == 1 && !globalSettings) {
             if (view.section == 1) {
 
-                text(dc, 250, 695, 260, "ATTACK / DECAY", 27, RGB(226, 245, 251));
-                fill(dc, 525, 704, 230, 36, RGB(55, 61, 62));
-                text(dc, 525, 711, 230, "TRIGGER", 16, RGB(238, 225, 198));
+                text(dc, 250, 545, 260, "ATTACK / DECAY", 22, RGB(226, 245, 251));
+                fill(dc, 525, 545, 180, 32, RGB(55, 61, 62));
+                text(dc, 525, 552, 180, "TRIGGER", 14, RGB(238, 225, 198));
             } else
-                text(dc, 250, 694, 340, view.section == 0 ? "CLONE COLLECTION" : "ATOMIC CLUSTER", 27,
+                text(dc, 250, 545, 340, view.section == 0 ? "CLONE COLLECTION" : "ATOMIC CLUSTER", 22,
                      RGB(226,245,251));
         }
         if (effectBypass() >= 0 && !globalSettings) {
-            const int cx = view.section == 1 ? 1080 : W / 2, cy = 735;
+            const int cx = view.section == 1 ? 1080 : W / 2, cy = 570;
             toggleSwitch(dc,cx,cy,value(effectBypass())<.5,2);
-            text(dc, cx - 110, 765, 220, value(effectBypass()) >= .5 ? "BYPASS / OFF" : "EFFECT ON", 13,
+            text(dc, cx - 110, 592, 220, value(effectBypass()) >= .5 ? "BYPASS / OFF" : "EFFECT ON", 11,
                  RGB(232,221,190));
             lamp(dc,cx,cy-37,true,value(effectBypass()) >= .5 ? RGB(241,81,99) : RGB(65,236,143));
         }
         if (!globalSettings && view.block == 0 && view.section == 2 && value(layout().fuzzModel) * 19 >= 5.5)
-            text(dc, 248, 755, 990,
+            text(dc, 248, 585, 990,
                  "Circuit models use the original nonlinear solver and require much more CPU. Legacy models "
                  "are lighter for live use.",
                  14, RGB(232,221,190));
         if (globalSettings)
-            text(dc, 248, 735, 990,
+            text(dc, 248, 570, 990,
                  "The audio device and buffer are configured in your DAW. Effect latency is reported to the "
                  "host.",
                  15, RGB(232,221,190));
         if (view.block == 4 && !controller->fileStatus.empty())
-            text(dc, 248, 755, 990, controller->fileStatus.c_str(), 15, RGB(222,245,250));
+            text(dc, 248, 585, 990, controller->fileStatus.c_str(), 13, RGB(222,245,250));
         char status[96];
         snprintf(status,sizeof(status),"GR %.1f dB / PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
-        text(dc,1007,682,235,status,12,RGB(166,208,222));
+        text(dc,30,533,320,status,10,RGB(166,208,222));
 #ifdef MULTIFX_JUCE_GUI
         juceGraphics->saveState();
-        juceGraphics->reduceClipRegion(20,370,1240,controlBottom-370);
+        juceGraphics->reduceClipRegion(20,controlTop,1240,controlBottom-controlTop);
 #else
-        canvas->PushAxisAlignedClip(rect(20,370,1240,float(controlBottom-370)),D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        canvas->PushAxisAlignedClip(rect(20,controlTop,1240,float(controlBottom-controlTop)),D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 #endif
         for (auto &c : controls) {
             int y = c.y - scroll;
-            if (y + c.h < 370 || y > controlBottom)
+            if (y + c.h < controlTop || y > controlBottom)
                 continue;
             const auto &p = controlUI()[c.id].definition;
             const auto label = controlTitle(c.id);
@@ -955,20 +1064,20 @@ class Editor final : public Steinberg::CPluginView {
 #else
         canvas->PopAxisAlignedClip();
 #endif
-        bevel(dc,1031,638,48,22,RGB(21,51,67));
-        text(dc,1031,639,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
-        bevel(dc,1083,638,100,22,RGB(15,36,50));
+        bevel(dc,1031,532,48,22,RGB(21,51,67));
+        text(dc,1031,533,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
+        bevel(dc,1083,532,100,22,RGB(15,36,50));
         char pageLabel[32];snprintf(pageLabel,sizeof(pageLabel),"STRONA %d/%d",controlPage+1,controlPages);
-        text(dc,1083,642,100,pageLabel,11,RGB(215,235,244));
-        bevel(dc,1187,638,48,22,RGB(21,51,67));
-        text(dc,1187,639,48,">",14,controlPage+1<controlPages?RGB(229,246,252):RGB(87,117,131));
+        text(dc,1083,536,100,pageLabel,10,RGB(215,235,244));
+        bevel(dc,1187,532,48,22,RGB(21,51,67));
+        text(dc,1187,533,48,">",14,controlPage+1<controlPages?RGB(229,246,252):RGB(87,117,131));
         const char *buttons[]{"WCZYTAJ IR WAV", "WCZYTAJ PRESET", "ZAPISZ PRESET", "MASTER BYPASS"};
         buttons[3]=value(layout().bypass)>=.5 ? "MASTER WYŁĄCZONY" : "MASTER AKTYWNY";
         for (int i = 0; i < 4; ++i) {
-            fill(dc, 28 + i * 250, 805, 238, 32, RGB(26,53,72));
-            text(dc, 28 + i * 250, 811, 238, buttons[i], 14, RGB(226,248,252));
+            fill(dc, 28 + i * 250, 638, 238, 38, RGB(26,53,72));
+            text(dc, 28 + i * 250, 648, 238, buttons[i], 12, RGB(226,248,252));
         }
-        text(dc, 1028, 807, 225, "Prawy klik: MIDI Learn", 13, RGB(160, 191, 205));
+        text(dc, 1028, 680, 225, "Prawy klik: MIDI Learn", 11, RGB(160, 191, 205));
         finish();
     }
     int hit(int x, int y) const {
@@ -978,7 +1087,7 @@ class Editor final : public Steinberg::CPluginView {
             return -1;
         }
         for (auto &c : controls)
-            if (y >= 370 && y < controlBottom && x >= c.x && x < c.x + c.w && y + scroll >= c.y && y + scroll < c.y + c.h)
+            if (y >= controlTop && y < controlBottom && x >= c.x && x < c.x + c.w && y + scroll >= c.y && y + scroll < c.y + c.h)
                 return c.id;
         return -1;
     }
@@ -1071,7 +1180,7 @@ class Editor final : public Steinberg::CPluginView {
             return 1;
         case WM_SIZE:
 #ifdef MULTIFX_JUCE_GUI
-            if(juceCanvas)juceCanvas->setSize(LOWORD(lp),HIWORD(lp));
+            fitJuceCanvas(LOWORD(lp),HIWORD(lp));
 #endif
             if (window)
                 PostMessage(window, WM_APP + 1, 0, 0);
@@ -1079,6 +1188,14 @@ class Editor final : public Steinberg::CPluginView {
         case WM_APP + 1:
             rebuild();
             return 0;
+#ifdef MULTIFX_JUCE_GUI
+        case WM_APP + 29:
+            if(juceCanvas)
+                if(auto *peer=juceCanvas->getPeer())
+                    if(const auto custom=peer->getCustomPlatformScaleFactor())
+                        return LRESULT(std::lround(*custom*1000.0));
+            return 0;
+#endif
         case WM_TIMER: {
             if (w == 2) {
                 KillTimer(window, 2);
@@ -1090,6 +1207,9 @@ class Editor final : public Steinberg::CPluginView {
                 return current + (std::max(0.f,target)-current) * (target>current ? .65f : .18f);
             };
             const float previousIn=needleIn,previousOut=needleOut;
+#ifdef MULTIFX_JUCE_GUI
+            syncJuceParameterSliders();
+#endif
             needleIn=follow(needleIn,controller->meterIn.load());
             needleOut=follow(needleOut,controller->meterOut.load());
             if (drag < 0 && selectionSignature() != signature)
@@ -1129,102 +1249,84 @@ class Editor final : public Steinberg::CPluginView {
             }
             return 0;
         case WM_LBUTTONDOWN: {
+#ifdef MULTIFX_JUCE_GUI
+            if(!jucePointerDispatch)
+#endif
             SetFocus(window);
             if (referenceDelay()) {
                 const int bank=std::clamp(view.section,0,1);
-                if(y>=36&&y<76){
-                    if(x>=397&&x<430){change(layout().factoryProgram,std::max(0.0,value(layout().factoryProgram)-1./7));return 0;}
-                    if(x>=704&&x<735){change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;}
-                    if(x>=430&&x<704){
-                        HMENU menu=CreatePopupMenu();
-                        for(int i=0;i<8;++i)AppendMenuA(menu,MF_STRING,20000+i,presetNames[i]);
-                        POINT point{int(430/sx),int(76/sy)};ClientToScreen(window,&point);
-                        const int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_LEFTALIGN|TPM_TOPALIGN,
-                                                       point.x,point.y,0,window,nullptr);
-                        DestroyMenu(menu);
-                        if(choice>=20000&&choice<20008)change(layout().factoryProgram,double(choice-20000)/7);
-                        return 0;
-                    }
-                    if(x>=744&&x<784){file("savePreset",true);return 0;}
-                    if(x>=962&&x<1118){view.advanced=true;rebuild();return 0;}
-                    if(x>=1126&&x<1253){MessageBoxA(window,"Choose a block, then adjust its controls. Right-click any control for MIDI Learn. Use SETTINGS for all parameters.","Jerzy MultiFX",MB_OK|MB_ICONINFORMATION);return 0;}
+                if(y>=28&&y<65){
+                    if(x>=371&&x<402){change(layout().factoryProgram,std::max(0.0,value(layout().factoryProgram)-1./7));return 0;}
+                    if(x>=650&&x<687){change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;}
+                    if(x>=405&&x<650){HMENU menu=CreatePopupMenu();for(int i=0;i<8;++i)AppendMenuA(menu,MF_STRING,20000+i,presetNames[i]);POINT pt{int(405/sx),int(65/sy)};ClientToScreen(window,&pt);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_LEFTALIGN|TPM_TOPALIGN,pt.x,pt.y,0,window,nullptr);DestroyMenu(menu);if(choice>=20000&&choice<20008)change(layout().factoryProgram,double(choice-20000)/7);return 0;}
+                    if(x>=696&&x<752){file("savePreset",true);return 0;}
+                    if(x>=920&&x<1082){view.advanced=true;rebuild();return 0;}
+                    if(x>=1091&&x<1255){MessageBoxA(window,"Choose a block, then adjust its controls. Right-click any control for MIDI Learn. Use SETTINGS for all parameters.","Jerzy MultiFX",MB_OK|MB_ICONINFORMATION);return 0;}
                 }
-                if(y>=97&&y<287&&x>=24&&x<1135){
-                    const int at=std::clamp((x-24)/222,0,4);
-                    const int local=x-(24+at*222);
-                    if(local<183){
-                        auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
-                        if(y>=250){const int id=layout().blockBypass[order[at]];change(id,value(id)>=.5?0:1);}
-                        else {reorder=at;reorderHorizontal=true;view.block=order[at];view.section=0;scroll=0;controlPage=0;rebuild();SetCapture(window);}
-                        return 0;
-                    }
+                if(y>=87&&y<146&&x>=20&&x<1100){
+                    const int at=std::clamp((x-20)/216,0,4),local=x-(20+at*216);
+                    auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
+                    if(local>=135){const int id=layout().blockBypass[order[at]];change(id,value(id)>=.5?0:1);return 0;}
+                    reorder=at;reorderHorizontal=true;view.block=order[at];view.section=0;scroll=0;controlPage=0;rebuild();capturePointer();return 0;
                 }
-                if(y>=313&&y<360&&x>=852&&x<1193){
-                    const int id=layout().digital[bank]+2;
-                    change(id,double(x-852)/340);
-                    drag=id;startX=x;startY=y;startValue=value(id);SetCapture(window);return 0;
-                }
-                if(y>=402&&y<754&&x>=35&&x<253){
-                    const int choice=(y-402)/44;
-                    if(choice>=0&&choice<8){
-                        const int families[]{4,1,3,0,2,1,1,1};
-                        const int models[]{-1,-1,-1,-1,-1,0,2,4};
-                        change(layout().delayType[bank],double(families[choice])/4);
-                        if(models[choice]>=0)change(layout().mxAlgorithms[bank][0],double(models[choice])/8);
+                if(y>=180&&y<197&&x>=866&&x<1163){const int id=layout().digital[bank]+2;change(id,double(x-868)/294);drag=id;startX=x;startY=y;startValue=value(id);capturePointer();return 0;}
+                if(engineMenuOpen){
+                    if(x>=35&&x<241&&y>=245&&y<445){
+                        const int choice=std::clamp((y-245)/25,0,7);
+                        const int fam[]{4,1,3,0,2,1,1,1},mod[]{-1,-1,-1,-1,-1,0,2,4};
+                        change(layout().delayType[bank],double(fam[choice])/4);
+                        if(mod[choice]>=0)change(layout().mxAlgorithms[bank][0],double(mod[choice])/8);
                         if(value(layout().digital[bank]+2)<.01)change(layout().digital[bank]+2,.5);
-                        rebuild();return 0;
+                        engineMenuOpen=false;rebuild();return 0;
                     }
+                    engineMenuOpen=false;requestRepaint();
                 }
-                if(y>=493&&y<622&&x>=1082&&x<1247){
-                    const int route=(y-493)/45;
-                    if(route<3)change(layout().delayMode,double(route)/2);
-                    return 0;
+                if(y>=207&&y<242){
+                    if(x>=35&&x<241){engineMenuOpen=true;requestRepaint();return 0;}
+                    if(x>=412&&x<670){view.section=x<538?0:1;rebuild();return 0;}
+                    if(x>=1007&&x<1214){const int id=layout().slotBypass[bank];change(id,value(id)>=.5?0:1);return 0;}
                 }
-                if(y>=413&&y<444&&x>=928&&x<1052){
-                    const int id=layout().slotBypass[bank];change(id,value(id)>=.5?0:1);return 0;
-                }
-                if(y>=377&&y<418&&x>=735&&x<1050){view.section=1-bank;rebuild();return 0;}
-                const int id=hit(x,y);
-                if(id>=0){drag=id;startX=x;startY=y;startValue=value(id);SetCapture(window);return 0;}
+                if(y>=282&&y<414&&x>=1007&&x<1214){const int route=(y-282)/44;if(route<3)change(layout().delayMode,double(route)/2);return 0;}
+                const int id=hit(x,y);if(id>=0){drag=id;startX=x;startY=y;startValue=value(id);capturePointer();return 0;}
                 return 0;
             }
             if (const int id = delayMidiTarget(x, y); id >= 0) {
                 change(layout().midiLearn, double(id + 1) / layout().controlCount);
                 return 0;
             }
-            if (view.block == 1 && !globalSettings && y >= 700 && y <= 768) {
+            if (view.block == 1 && !globalSettings && y >= 545 && y <= 610) {
                 const int center = view.section == 1 ? 1080 : W / 2;
                 if (x >= center - 40 && x <= center + 40) {
                     const int id = effectBypass();
                     change(id, value(id) >= .5 ? 0 : 1);
                     return 0;
                 }
-                if (view.section == 1 && x >= 525 && x <= 755) {
+                if (view.section == 1 && x >= 525 && x <= 705) {
                     change(layout().attackTrigger, 1);
                     SetTimer(window, 2, 120, nullptr);
                     return 0;
                 }
             }
-            if (y >= 36 && y < 76 && x >= 397 && x < 430) {
+            if (y >= 28 && y < 65 && x >= 371 && x < 402) {
                 change(layout().factoryProgram,std::max(0.0,value(layout().factoryProgram)-1./7));return 0;
             }
-            if (y >= 36 && y < 76 && x >= 704 && x < 735) {
+            if (y >= 28 && y < 65 && x >= 650 && x < 687) {
                 change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;
             }
-            if (y >= 36 && y < 76 && x >= 744 && x < 784) {file("savePreset",true);return 0;}
-            if(y>=36&&y<76&&x>=430&&x<704){showChoice(layout().factoryProgram,430,76);return 0;}
-            if (y >= 36 && y < 76 && x >= 962 && x < 1118) {
+            if (y >= 28 && y < 65 && x >= 696 && x < 752) {file("savePreset",true);return 0;}
+            if(y>=28&&y<65&&x>=405&&x<650){showChoice(layout().factoryProgram,405,65);return 0;}
+            if (y >= 28 && y < 65 && x >= 920 && x < 1082) {
                 if(view.block==2)view.advanced=!view.advanced;
                 else globalSettings=!globalSettings;
                 scroll = 0;controlPage=0;
                 rebuild();
                 return 0;
             }
-            if (y >= 97 && y < 287 && x >= 24 && x < 1135) {
-                int at = std::clamp((x - 24) / 222, 0, 4);
+            if (y >= 87 && y < 146 && x >= 20 && x < 1100) {
+                int at = std::clamp((x - 20) / 216, 0, 4);
                 auto order = permutation(int(plain(layout().order, float(value(layout().order)))));
-                if (x - (24 + at * 222) >= 183) return 0;
-                if (y >= 250)
+                if (x - (20 + at * 216) >= 135) {const int id=layout().blockBypass[order[at]];change(id,value(id)>=.5?0:1);return 0;}
+                if (y >= 122)
                     change(layout().blockBypass[order[at]],
                            value(layout().blockBypass[order[at]]) >= .5 ? 0 : 1);
                 else {
@@ -1235,11 +1337,11 @@ class Editor final : public Steinberg::CPluginView {
                     globalSettings = false;
                     scroll = 0;controlPage=0;
                     rebuild();
-                    SetCapture(window);
+                    capturePointer();
                 }
                 return 0;
             }
-            if (y >= 316 && y < 352) {
+            if (y >= 177 && y < 211) {
                 auto sections = sectionNames(view.block);
                 if (x >= 1075)
                     view.advanced = !view.advanced;
@@ -1251,13 +1353,13 @@ class Editor final : public Steinberg::CPluginView {
                 rebuild();
                 return 0;
             }
-            if(y>=638&&y<661&&x>=1031&&x<1235){
+            if(y>=532&&y<555&&x>=1031&&x<1235){
                 if(x<1079&&controlPage>0)--controlPage;
                 if(x>=1187&&controlPage+1<controlPages)++controlPage;
                 rebuild();
                 return 0;
             }
-            if (y >= 805 && x >= 28 && x < 1028) {
+            if (y >= 638 && x >= 28 && x < 1028) {
                 int b = (x - 28) / 250;
                 if (b == 0)
                     file("loadIR");
@@ -1269,7 +1371,7 @@ class Editor final : public Steinberg::CPluginView {
                     change(layout().bypass, value(layout().bypass) >= .5 ? 0 : 1);
                 return 0;
             }
-            if (y < 370 || y > controlBottom)
+            if (y < controlTop || y > controlBottom)
                 return 0;
             int id = hit(x, y);
             if (id >= 0) {
@@ -1287,7 +1389,7 @@ class Editor final : public Steinberg::CPluginView {
                 startX = x;
                 startY = y;
                 startValue = value(id);
-                SetCapture(window);
+                capturePointer();
             }
             return 0;
         }
@@ -1305,7 +1407,7 @@ class Editor final : public Steinberg::CPluginView {
             return 0;
         case WM_LBUTTONUP:
             if (reorder >= 0) {
-                int dest = reorderHorizontal ? std::clamp((x - 24) / 222, 0, 4)
+                int dest = reorderHorizontal ? std::clamp((x - 20) / 216, 0, 4)
                                              : std::clamp((y - 90) / 113, 0, 4);
                 auto order = permutation(int(plain(layout().order, float(value(layout().order)))));
                 std::swap(order[reorder], order[dest]);
@@ -1320,18 +1422,18 @@ class Editor final : public Steinberg::CPluginView {
                 reorderHorizontal = false;
             }
             drag = -1;
-            ReleaseCapture();
+            releasePointer();
             return 0;
         case WM_RBUTTONUP: {
             if(referenceDelay()){
                 int id=-1;
                 const int bank=std::clamp(view.section,0,1);
-                if(y>=97&&y<287&&x>=24&&x<1135){
-                    const int at=std::clamp((x-24)/222,0,4);
-                    if(x-(24+at*222)<183&&y>=250){auto order=permutation(int(plain(layout().order,float(value(layout().order)))));id=layout().blockBypass[order[at]];}
+                if(y>=87&&y<146&&x>=20&&x<1100){
+                    const int at=std::clamp((x-20)/216,0,4);
+                    if(x-(20+at*216)>=135){auto order=permutation(int(plain(layout().order,float(value(layout().order)))));id=layout().blockBypass[order[at]];}
                 }
-                if(y>=313&&y<360&&x>=852&&x<1193)id=layout().digital[bank]+2;
-                if(y>=413&&y<444&&x>=928&&x<1052)id=layout().slotBypass[bank];
+                if(y>=180&&y<197&&x>=866&&x<1163)id=layout().digital[bank]+2;
+                if(y>=207&&y<242&&x>=1007&&x<1214)id=layout().slotBypass[bank];
                 if(id<0)id=hit(x,y);
                 for(int b=0;b<2;++b)for(int kind=0;kind<2;++kind)
                     if(id==delayControl(b,kind))id=parameterId(std::string(b?"delayB.":"delayA.")+(kind?"feedback":"time"));
@@ -1340,17 +1442,17 @@ class Editor final : public Steinberg::CPluginView {
             }
             int id = delayMidiTarget(x, y);
             if (id < 0) id = hit(x, y);
-            if (view.block == 1 && y >= 695 && y <= 785) {
+            if (view.block == 1 && y >= 545 && y <= 610) {
                 const int center = view.section == 1 ? 1080 : W / 2;
                 if (std::abs(x - center) < 60)
                     id = effectBypass();
             }
-            if (y >= 250 && y < 287 && x >= 24 && x < 1135) {
+            if (y >= 122 && y < 146 && x >= 20 && x < 1100) {
                 auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
-                const int at=std::clamp((x-24)/222,0,4);
-                if(x-(24+at*222)<183)id=layout().blockBypass[order[at]];
+                const int at=std::clamp((x-20)/216,0,4);
+                if(x-(20+at*216)>=135)id=layout().blockBypass[order[at]];
             }
-            if (y >= 805 && y < 837 && x >= 778 && x < 1016) id=layout().bypass;
+            if (y >= 638 && y < 676 && x >= 778 && x < 1016) id=layout().bypass;
             if (id >= 0)
                 change(layout().midiLearn, double(id + 1) / layout().controlCount);
             return 0;
@@ -1387,10 +1489,7 @@ class Editor final : public Steinberg::CPluginView {
 #ifndef MULTIFX_JUCE_GUI
         D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,&drawFactory);
 #endif
-        const double fit = std::clamp(std::min(double(GetSystemMetrics(SM_CXSCREEN) - 80) / W,
-                                               double(GetSystemMetrics(SM_CYSCREEN) - 120) / H),
-                                      .6, 1.);
-        Steinberg::ViewRect r(0, 0, int(W * fit), int(H * fit));
+        Steinberg::ViewRect r(0, 0, DefaultW, DefaultH);
         setRect(r);
         sx = float(W) / r.getWidth();
         sy = float(H) / r.getHeight();
@@ -1431,8 +1530,8 @@ class Editor final : public Steinberg::CPluginView {
 #ifdef MULTIFX_JUCE_GUI
         if(!juceInitialiser)juceInitialiser=std::make_unique<juce::ScopedJuceInitialiser_GUI>();
         juceCanvas=std::make_unique<JuceCanvas>(*this);
-        juceCanvas->setSize(getRect().getWidth(),getRect().getHeight());
         juceCanvas->addToDesktop(0,window);
+        fitJuceCanvas(getRect().getWidth(),getRect().getHeight());
         juceCanvas->setVisible(true);
 #endif
         systemWindow = parent;
@@ -1444,6 +1543,7 @@ class Editor final : public Steinberg::CPluginView {
     Steinberg::tresult PLUGIN_API removed() override {
         if (window) {
 #ifdef MULTIFX_JUCE_GUI
+            juceParameterSliders.clear();
             if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
 #endif
             if (value(layout().attackTrigger) >= .5)
@@ -1461,8 +1561,17 @@ class Editor final : public Steinberg::CPluginView {
     Steinberg::tresult PLUGIN_API canResize() override {
         return Steinberg::kResultTrue;
     }
+    Steinberg::tresult PLUGIN_API checkSizeConstraint(Steinberg::ViewRect *r) override {
+        if (!r)
+            return Steinberg::kInvalidArgument;
+        int width=std::clamp(((r->getWidth()+8)/16)*16,640,1920);
+        const int height=width*9/16;
+        r->right=r->left+width;
+        r->bottom=r->top+height;
+        return Steinberg::kResultOk;
+    }
     Steinberg::tresult PLUGIN_API onSize(Steinberg::ViewRect *r) override {
-        if (!r || r->getWidth() < 640 || r->getHeight() < 425)
+        if (!r || r->getWidth() < 640 || r->getHeight() < 360)
             return Steinberg::kResultFalse;
         setRect(*r);
         if (window) {

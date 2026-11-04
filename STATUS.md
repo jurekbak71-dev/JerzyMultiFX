@@ -1,3 +1,30 @@
+## Preview 31 — natywne kontrolki JUCE i test rzeczywistej ścieżki wejścia
+
+- Diagnostyka po fizycznym teście preview 30 wykazała błąd w strategii testowej: `EditorSmoke` wysyłał zdarzenia bezpośrednio do ukrytego HWND edytora, więc omijał widoczną powierzchnię JUCE używaną przez FL Studio. Test nie mógł wykryć awarii wejścia zgłoszonej przez użytkownika.
+- Regulatory ciągłe są teraz rzeczywistymi komponentami `juce::Slider` ułożonymi nad zachowanym rysunkiem wektorowym. JUCE prowadzi hit-testing, capture, drag, wheel i skalowanie obszaru interakcji, a VST3 otrzymuje pełny gest `beginEdit` / `performEdit` / `endEdit`. Pozostałe zdarzenia powierzchni nie są już synchronicznie przepuszczane przez natywną kolejkę ukrytego okna.
+- Test Windows kieruje kliknięcia, przeciąganie i prawy przycisk do natywnego HWND powierzchni JUCE, sprawdza zmianę wartości kontrolera oraz pojedynczy kompletny gest automatyzacji. Testy sygnałowe istniejącego procesora nadal weryfikują przekazanie zmian parametrów do rzeczywistego DLL i wyjścia audio. Fizyczny test FL Studio pozostaje testem odbiorczym i nie będzie deklarowany jako zaliczony przez CI.
+
+## Preview 30 — działające sterowanie myszy na powierzchni JUCE
+
+- Przekazywanie zdarzenia `mouseDown` do natywnego edytora nie przenosi już przechwycenia myszy z powierzchni JUCE na ukryty HWND rodzica. Poprzednie przeniesienie wywoływało w JUCE natychmiastowy `mouseUp`, przez co widoczne pokrętła nie reagowały na przeciąganie w FL Studio. Powierzchnia JUCE utrzymuje teraz przechwycenie przez `mouseDrag` aż do rzeczywistego puszczenia przycisku.
+- Zachowano korektę DPI, układ 1024×576 i widoczny numer wersji. DSP, ID parametrów, presety, routing i MIDI nie zostały zmienione. Fizyczny test FL Studio preview 30 pozostaje testem odbiorczym.
+
+## Preview 29 — natywna korekta DPI okna podrzędnego FL Studio
+
+- W preview 28 wyłączono skalowanie na poziomie komponentu, ale JUCE dla powierzchni osadzonej w obcym HWND nadal pobierało platformową skalę z okna rodzica FL Studio. Preview 29 ustawia `ComponentPeer::setCustomPlatformScaleFactor(1.0)` już po `addToDesktop`, a następnie dopasowuje powierzchnię do fizycznych wymiarów przekazanych przez host. To usuwa drugie skalowanie 125/150%, które zachowywało zbyt duży panel mimo właściwego pliku instalacyjnego.
+- GUI pokazuje własną wersję w nagłówku. Instalator raportuje wersję, commit i SHA256, sprawdza sumę po instalacji i zapisuje potwierdzenie w bundle. Testy automatyczne i fizyczny test FL Studio zostaną odnotowane oddzielnie; DSP, parametry, presety i funkcje nie zostały zmienione.
+- Lokalnie: cross-build Windows x64/JUCE PASS, natywne testy wspólnego DSP i RPi 3/3 PASS. Test Windows/MSVC, walidator bundle i pakowanie instalatora są przekazane do CI. Odbiór w fizycznym FL Studio nadal wymaga zrzutu z widocznym numerem preview 29.
+
+## Preview 28 — próba korekty osadzenia JUCE przy skalowaniu DPI
+
+- Komponent otrzymał skalę pulpitu 1.0, lecz fizyczny test FL Studio wykazał, że natywne okno podrzędne JUCE nadal dziedziczyło skalę DPI z HWND rodzica. Domyślny rozmiar zgłaszany hostowi zmniejszono do 1024×576, ale ta wersja nie rozwiązała przycięcia w rzeczywistym FL Studio.
+- Zastosowano wzorzec rozmiaru z JerzyAutoTune: jedna powierzchnia projektu, stałe proporcje 16:9 i jawne granice resize przekazywane hostowi. Test Windows porównuje rozmiar natywnej powierzchni JUCE z obszarem hosta dla 1280×720, 1024×576, 1600×900 i 1920×1080. DSP, ID parametrów, presety, routing i MIDI nie zostały zmienione. Ponowny zrzut w fizycznym FL Studio pozostaje testem odbiorczym po instalacji preview 28.
+
+## Preview 27 — kompaktowy edytor VST3 dla FL Studio
+
+- Zatwierdzony wariant GUI nr 2 wdraża bazowy obszar 1280×720: zwarty nagłówek i poziomy łańcuch efektów, kompletny panel DELAY A+B oraz sekcje parametrów zależne od silnika. Puste grupy dolne są ukrywane; strony pozostałych efektów, ustawienia, bypass, presety, routing i MIDI Learn mieszczą się w tym samym widoku. Zachowano wszystkie parametry, istniejące akcje i DSP.
+- Zweryfikowano Windows VST3 cross-build oraz rzeczywisty edytor DLL pod Wine: edycja parametrów, silniki Oil Drum A/B, routing, bypass, MIDI Learn, kolejność bloków, strony i zamknięcie. Zrzuty ekranu: 1280×720, 1024×576, 1600×900 i 1920×1080. Natywny zestaw DSP/RPi: 3/3 testy PASS. Weryfikacja MSVC/JUCE z GitHub Actions oraz FL Studio na Windows pozostaje do wykonania; nie wykonano fizycznego FL Studio.
+
 # Jerzy MultiFX — status
 
 ## Preview 26 — czyste linie wektorowe GUI

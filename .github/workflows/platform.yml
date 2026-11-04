@@ -135,7 +135,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: JerzyMultiFX-Windows-VST3-installable-${{ github.run_id }}
-          path: dist/JerzyMultiFX-VST3-Windows-x64-v*.zip
+          path: |
+            dist/JerzyMultiFX-VST3-Windows-x64-v*.zip
+            dist/MULTI_FX_FIXED_Windows_x64.zip
           retention-days: 7
           if-no-files-found: error
       - name: Upload double-click Raspberry Pi installer

@@ -37,6 +37,7 @@ jobs:
   validate-pull-request:
     if: github.event_name == 'pull_request'
     strategy:
+      fail-fast: false
       matrix:
         platform: [windows, arm64]
     permissions:
