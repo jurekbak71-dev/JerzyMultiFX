@@ -18,7 +18,9 @@ class ReleaseTests(unittest.TestCase):
         for version in ('../private','1.0.0\nsecret','1.0.0;echo'):
             with self.assertRaises(ValueError):release.release_tag(version,1,1)
     def test_only_expected_product_assets_are_uploaded(self):
-        self.assertEqual(release.asset_names('windows','0.1.0-preview.1'),['JerzyMultiFX-VST3-Windows-x64-v0.1.0-preview.1.zip','INSTALACJA_VST3_PL.md'])
+        self.assertEqual(release.asset_names('windows','0.1.0-preview.1'),
+                         ['JerzyMultiFX-VST3-Windows-x64-v0.1.0-preview.1.zip',
+                          'MULTI_FX_FIXED_Windows_x64.zip','INSTALACJA_VST3_PL.md'])
         self.assertNotIn('SHA256SUMS',release.asset_names('arm64','0.1.0-preview.1'))
         self.assertIn('JerzyMultiFX-RPi-aarch64-v0.1.0-preview.1.deb',release.asset_names('arm64','0.1.0-preview.1'))
         with self.assertRaises(ValueError):release.asset_names('other','0.1.0-preview.1')
