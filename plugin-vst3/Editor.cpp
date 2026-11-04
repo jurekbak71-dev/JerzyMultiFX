@@ -229,9 +229,26 @@ class Editor final : public Steinberg::CPluginView {
         }
         int parameterId() const {return parameter;}
     };
+    // Route buttons are actual JUCE mouse targets, not merely painted areas.
+    // This avoids relying on forwarding synthetic pointer messages from the
+    // desktop child HWND to the hidden VST3 parent for this discrete control.
+    class JuceRoutingButton final : public juce::Component {
+        Editor &owner;
+        int route;
+    public:
+        JuceRoutingButton(Editor &editor, int selected) : owner(editor), route(selected) {
+            setInterceptsMouseClicks(true, false);
+        }
+        void paint(juce::Graphics &) override {} // The parent draws the hardware-style button.
+        void mouseUp(const juce::MouseEvent &event) override {
+            if (event.mouseWasClicked() && !event.mods.isRightButtonDown())
+                owner.change(layout().delayMode, double(route) / 2.0);
+        }
+    };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
     std::unique_ptr<JuceCanvas> juceCanvas;
     std::vector<std::unique_ptr<JuceParameterSlider>> juceParameterSliders;
+    std::vector<std::unique_ptr<JuceRoutingButton>> juceRoutingButtons;
     juce::Graphics *juceGraphics=nullptr;
     MonoAnalogLook juceLook;
     juce::Slider drawingSlider;
@@ -245,9 +262,15 @@ class Editor final : public Steinberg::CPluginView {
         juceCanvas->setBounds(0,0,width,height);
         const float scaleX=float(width)/W,scaleY=float(height)/H;
         for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+        for(int i=0;i<int(juceRoutingButtons.size());++i)
+            juceRoutingButtons[i]->setBounds(int(std::lround(1007*scaleX)),
+                                             int(std::lround((282+i*44)*scaleY)),
+                                             std::max(1,int(std::lround(207*scaleX))),
+                                             std::max(1,int(std::lround(36*scaleY))));
     }
     void rebuildJuceParameterSliders(){
         juceParameterSliders.clear();
+        juceRoutingButtons.clear();
         if(!juceCanvas)return;
         auto add=[&](int id,bool horizontal,juce::Rectangle<int> bounds){
             if(id<0)return;
@@ -271,6 +294,18 @@ class Editor final : public Steinberg::CPluginView {
         const float scaleX=float(std::max(1L,client.right))/W;
         const float scaleY=float(std::max(1L,client.bottom))/H;
         for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+        if(referenceDelay()){
+            for(int i=0;i<3;++i){
+                auto button=std::make_unique<JuceRoutingButton>(*this,i);
+                button->setBounds(int(std::lround(1007*scaleX)),
+                                  int(std::lround((282+i*44)*scaleY)),
+                                  std::max(1,int(std::lround(207*scaleX))),
+                                  std::max(1,int(std::lround(36*scaleY))));
+                juceCanvas->addAndMakeVisible(*button);
+                button->toFront(false);
+                juceRoutingButtons.push_back(std::move(button));
+            }
+        }
     }
     void syncJuceParameterSliders(){
         for(auto &slider:juceParameterSliders){
@@ -1556,6 +1591,7 @@ class Editor final : public Steinberg::CPluginView {
         if (window) {
 #ifdef MULTIFX_JUCE_GUI
             juceParameterSliders.clear();
+            juceRoutingButtons.clear();
             if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
 #endif
             if (value(layout().attackTrigger) >= .5)
