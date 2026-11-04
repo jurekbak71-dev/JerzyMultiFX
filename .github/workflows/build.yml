@@ -15,6 +15,11 @@ on:
         default: false
 permissions:
   contents: read
+# Prevent obsolete edits of the same PR from consuming Windows builders.
+# The newest push must still pass the complete Windows and ARM64 test matrix.
+concurrency:
+  group: multifx-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   release-windows:
     if: github.event_name != 'pull_request' && !(github.event_name == 'workflow_dispatch' && inputs.rpi_only)
