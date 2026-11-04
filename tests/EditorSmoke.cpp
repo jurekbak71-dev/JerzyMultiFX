@@ -202,8 +202,22 @@ int main(int argc, char **argv) try {
               "reference TIME knob controls the Oil Drum engine");
         check(edits.begins==1&&edits.performs>0&&edits.ends==1&&edits.lastId==ParamID(oilTime),
               "visible JUCE knob sends one complete VST3 automation gesture to the host");
+        // Record the actual route value before and after a real editor click.
+        // This distinguishes lost JUCE pointer dispatch from incorrect VST3
+        // parameter normalization, without hiding the regression.
+        const auto routingBefore = c->getParamNormalized(layout().delayMode);
+        edits.reset();
         click(pointerTarget,1100,340);
-        check(std::abs(c->getParamNormalized(layout().delayMode)-.5)<1e-6,
+        const auto routingAfter = c->getParamNormalized(layout().delayMode);
+        std::cerr << "Routing click diagnostic: before=" << routingBefore
+                  << " after=" << routingAfter
+                  << " expected=0.5"
+                  << " edits=" << edits.begins << "/" << edits.performs
+                  << "/" << edits.ends
+                  << " lastParam=" << edits.lastId
+                  << " expectedParam=" << layout().delayMode
+                  << " lastValue=" << edits.lastValue << '\\n';
+        check(std::abs(routingAfter-.5)<1e-6,
               "reference routing button selects real parallel DSP mode");
         click(pointerTarget,1100,220);
         check(c->getParamNormalized(layout().slotBypass[0])==1,"reference bank bypass switches off");
