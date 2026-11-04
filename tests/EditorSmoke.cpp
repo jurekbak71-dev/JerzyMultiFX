@@ -216,7 +216,7 @@ int main(int argc, char **argv) try {
                   << "/" << edits.ends
                   << " lastParam=" << edits.lastId
                   << " expectedParam=" << layout().delayMode
-                  << " lastValue=" << edits.lastValue << '\\n';
+                  << " lastValue=" << edits.lastValue << '\n';
         check(std::abs(routingAfter-.5)<1e-6,
               "reference routing button selects real parallel DSP mode");
         click(pointerTarget,1100,220);
