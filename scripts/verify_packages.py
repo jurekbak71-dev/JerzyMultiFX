@@ -44,6 +44,19 @@ for package in packages:
         assert not any('REQUIREMENTS_PL.md' in n or 'JERZY_MULTIFX_MATERIALY_REFERENCYJNE.zip' in n or n.endswith(('.png','.jpeg')) and 'references/' in n for n in names)
         if 'Windows' in package.name:assert 'JerzyMultiFX/dependencies/vst3sdk/REVISION' in names
     print('PASS',package.name,len(files),'files; all internal SHA256, actual architecture, sources, installer or validated VST3 verified')
+fixed=root/'dist'/'MULTI_FX_FIXED_Windows_x64.zip'
+if fixed.exists():
+    with zipfile.ZipFile(fixed) as archive:
+        assert archive.testzip() is None
+        names=set(archive.namelist())
+        prefix='MULTI_FX_FIXED_Windows_x64/'
+        required={prefix+'Jerzy MultiFX.vst3/Contents/x86_64-win/Jerzy MultiFX.vst3',
+                  prefix+'INSTALACJA.txt',prefix+'CHANGELOG.txt',prefix+'TEST_REPORT.txt',
+                  prefix+'ZAINSTALUJ-VST3.cmd',prefix+'SHA256SUMS'}
+        assert required.issubset(names),required-names
+        dll=archive.read(prefix+'Jerzy MultiFX.vst3/Contents/x86_64-win/Jerzy MultiFX.vst3')
+        assert dll[:2]==b'MZ' and struct.unpack_from('<H',dll,struct.unpack_from('<I',dll,0x3c)[0]+4)[0]==0x8664
+    print('PASS',fixed.name,'requested installable x64 bundle and text reports verified')
 deb=root/'dist'/f'JerzyMultiFX-RPi-aarch64-v{VERSION}.deb'
 arm=packages[1]
 if deb.exists():

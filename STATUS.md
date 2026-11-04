@@ -1,3 +1,9 @@
+## Preview 31 — natywne kontrolki JUCE i test rzeczywistej ścieżki wejścia
+
+- Diagnostyka po fizycznym teście preview 30 wykazała błąd w strategii testowej: `EditorSmoke` wysyłał zdarzenia bezpośrednio do ukrytego HWND edytora, więc omijał widoczną powierzchnię JUCE używaną przez FL Studio. Test nie mógł wykryć awarii wejścia zgłoszonej przez użytkownika.
+- Regulatory ciągłe są teraz rzeczywistymi komponentami `juce::Slider` ułożonymi nad zachowanym rysunkiem wektorowym. JUCE prowadzi hit-testing, capture, drag, wheel i skalowanie obszaru interakcji, a VST3 otrzymuje pełny gest `beginEdit` / `performEdit` / `endEdit`. Pozostałe zdarzenia powierzchni nie są już synchronicznie przepuszczane przez natywną kolejkę ukrytego okna.
+- Test Windows kieruje kliknięcia, przeciąganie i prawy przycisk do natywnego HWND powierzchni JUCE, sprawdza zmianę wartości kontrolera oraz pojedynczy kompletny gest automatyzacji. Testy sygnałowe istniejącego procesora nadal weryfikują przekazanie zmian parametrów do rzeczywistego DLL i wyjścia audio. Fizyczny test FL Studio pozostaje testem odbiorczym i nie będzie deklarowany jako zaliczony przez CI.
+
 ## Preview 30 — działające sterowanie myszy na powierzchni JUCE
 
 - Przekazywanie zdarzenia `mouseDown` do natywnego edytora nie przenosi już przechwycenia myszy z powierzchni JUCE na ukryty HWND rodzica. Poprzednie przeniesienie wywoływało w JUCE natychmiastowy `mouseUp`, przez co widoczne pokrętła nie reagowały na przeciąganie w FL Studio. Powierzchnia JUCE utrzymuje teraz przechwycenie przez `mouseDrag` aż do rzeczywistego puszczenia przycisku.

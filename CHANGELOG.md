@@ -1,3 +1,9 @@
+# 0.1.0-preview.31
+
+- Zastąpiono ręczne przekazywanie ruchu narysowanych regulatorów prawdziwymi komponentami `juce::Slider`, zgodnie ze sprawdzonym wzorcem JerzyAutoTuneVST3. Każda widoczna gałka i ciągły suwak ma teraz własny obszar interakcji JUCE, obsługę drag, Shift-drag, wheel, reset dwuklikiem oraz synchronizację z automatyzacją hosta.
+- Gest regulatora rozpoczyna jedno `beginEdit`, wysyła kolejne `performEdit` i kończy jednym `endEdit`. Zdarzenia pozostałych elementów są obsługiwane bez ponownego wysyłania komunikatów przez ukryty HWND rodzica i bez odbierania focus/capture widocznej powierzchni.
+- Test edytora kieruje teraz zdarzenia do rzeczywistego natywnego okna JUCE zamiast omijać je przez ukryte okno rodzica. Sprawdza zmianę wartości gałki i kompletny gest automatyzacji VST3. Dodano wynikową paczkę `MULTI_FX_FIXED_Windows_x64.zip` z binarium, instalatorem i raportami tekstowymi.
+
 # 0.1.0-preview.30
 
 - Naprawiono obsługę myszy na osadzonej powierzchni JUCE. Edytor nie przenosi już natywnego przechwycenia myszy z widocznej powierzchni na ukryte okno rodzica, co wcześniej kończyło przeciąganie pokrętła natychmiast po naciśnięciu. Gałki, suwaki i przeciąganie kolejności zachowują przechwycenie do rzeczywistego puszczenia przycisku.

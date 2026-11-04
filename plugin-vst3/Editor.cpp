@@ -110,12 +110,43 @@ class Editor final : public Steinberg::CPluginView {
     ID2D1Factory *drawFactory = nullptr;
     ID2D1DCRenderTarget *canvas = nullptr;
     std::map<COLORREF,ID2D1SolidColorBrush*> vectorBrushes;
+    double preparedParameterValue(int id,double v) const {
+        if(id<0)return 0;
+        v=clean(float(v));
+        const int steps=controlUI()[id].definition.steps;
+        return steps>0?std::round(v*steps)/steps:v;
+    }
+    void beginParameterGesture(int id){
+        if(id>=0)controller->beginEdit(id);
+    }
+    void performParameterGesture(int id,double v){
+        if(id<0)return;
+        v=preparedParameterValue(id,v);
+        controller->setParamNormalized(id,v);
+        controller->performEdit(id,v);
+        requestRepaint();
+    }
+    void endParameterGesture(int id){
+        if(id>=0)controller->endEdit(id);
+    }
+    void learnParameter(int id){
+        if(id<0)return;
+        if(referenceDelay()){
+            for(int bank=0;bank<2;++bank)for(int kind=0;kind<2;++kind)
+                if(id==delayControl(bank,kind))
+                    id=parameterId(std::string(bank?"delayB.":"delayA.")+(kind?"feedback":"time"));
+        }
+        change(layout().midiLearn,double(id+1)/layout().controlCount);
+    }
 #ifdef MULTIFX_JUCE_GUI
     bool jucePointerDispatch=false;
     void dispatchJucePointer(UINT message,WPARAM flags,LPARAM position){
         const bool previous=jucePointerDispatch;
         jucePointerDispatch=true;
-        SendMessage(window,message,flags,position);
+        // Keep pointer handling inside the JUCE event callback. Sending the
+        // message through the hidden parent HWND changes native focus/capture
+        // in some hosts (including FL Studio) before JUCE can finish its drag.
+        this->message(message,flags,position);
         jucePointerDispatch=previous;
     }
     class JuceCanvas final : public juce::Component {
@@ -153,8 +184,54 @@ class Editor final : public Steinberg::CPluginView {
                                       MAKEWPARAM(e.mods.isCtrlDown()?MK_CONTROL:0,delta),MAKELPARAM(p.x,p.y));
         }
     };
+    class JuceParameterSlider final : public juce::Slider {
+        Editor &owner;
+        int parameter=-1;
+        bool gesture=false;
+        juce::Rectangle<int> designBounds;
+    public:
+        JuceParameterSlider(Editor &e,int id,bool horizontal,juce::Rectangle<int> bounds)
+            :juce::Slider(horizontal?juce::Slider::LinearHorizontal:
+                                     juce::Slider::RotaryHorizontalVerticalDrag,
+                          juce::Slider::NoTextBox),owner(e),parameter(id),designBounds(bounds){
+            setRange(0.0,1.0,0.0);
+            setValue(owner.value(parameter),juce::dontSendNotification);
+            setMouseDragSensitivity(180);
+            setScrollWheelEnabled(true);
+            setDoubleClickReturnValue(true,controlUI()[parameter].definition.initial);
+            setWantsKeyboardFocus(false);
+            onDragStart=[this]{gesture=true;owner.beginParameterGesture(parameter);};
+            onValueChange=[this]{
+                if(gesture)owner.performParameterGesture(parameter,getValue());
+                else owner.change(parameter,getValue());
+            };
+            onDragEnd=[this]{
+                if(gesture){owner.endParameterGesture(parameter);gesture=false;}
+            };
+        }
+        void paint(juce::Graphics &) override {}
+        void mouseDown(const juce::MouseEvent &e) override {
+            if(e.mods.isRightButtonDown()){
+                owner.learnParameter(parameter);
+                return;
+            }
+            juce::Slider::mouseDown(e);
+        }
+        void mouseUp(const juce::MouseEvent &e) override {
+            if(e.mods.isRightButtonDown())return;
+            juce::Slider::mouseUp(e);
+        }
+        void fit(float scaleX,float scaleY){
+            setBounds(int(std::lround(designBounds.getX()*scaleX)),
+                      int(std::lround(designBounds.getY()*scaleY)),
+                      std::max(1,int(std::lround(designBounds.getWidth()*scaleX))),
+                      std::max(1,int(std::lround(designBounds.getHeight()*scaleY))));
+        }
+        int parameterId() const {return parameter;}
+    };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
     std::unique_ptr<JuceCanvas> juceCanvas;
+    std::vector<std::unique_ptr<JuceParameterSlider>> juceParameterSliders;
     juce::Graphics *juceGraphics=nullptr;
     MonoAnalogLook juceLook;
     juce::Slider drawingSlider;
@@ -166,6 +243,41 @@ class Editor final : public Steinberg::CPluginView {
         // the child HWND for a second time and clip its right and bottom edges.
         if(auto *peer=juceCanvas->getPeer())peer->setCustomPlatformScaleFactor(1.0);
         juceCanvas->setBounds(0,0,width,height);
+        const float scaleX=float(width)/W,scaleY=float(height)/H;
+        for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+    }
+    void rebuildJuceParameterSliders(){
+        juceParameterSliders.clear();
+        if(!juceCanvas)return;
+        auto add=[&](int id,bool horizontal,juce::Rectangle<int> bounds){
+            if(id<0)return;
+            auto slider=std::make_unique<JuceParameterSlider>(*this,id,horizontal,bounds);
+            juceCanvas->addAndMakeVisible(*slider);
+            slider->toFront(false);
+            juceParameterSliders.push_back(std::move(slider));
+        };
+        if(referenceDelay()){
+            const int bank=std::clamp(view.section,0,1);
+            add(layout().digital[bank]+2,true,{866,177,298,23});
+        }
+        for(const auto &c:controls){
+            const auto &definition=controlUI()[c.id].definition;
+            if(isToggle(c.id)||!definition.choices.empty()||definition.steps>0)continue;
+            const int y=c.y-scroll;
+            if(referenceDelay()||(y>=controlTop&&y+c.h<=controlBottom))
+                add(c.id,c.compact,{c.x,y,c.w,c.h});
+        }
+        RECT client{};GetClientRect(window,&client);
+        const float scaleX=float(std::max(1L,client.right))/W;
+        const float scaleY=float(std::max(1L,client.bottom))/H;
+        for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+    }
+    void syncJuceParameterSliders(){
+        for(auto &slider:juceParameterSliders){
+            const double current=value(slider->parameterId());
+            if(std::abs(slider->getValue()-current)>1.0e-7)
+                slider->setValue(current,juce::dontSendNotification);
+        }
     }
     static juce::Colour juceColor(COLORREF c){
         return juce::Colour::fromRGB(GetRValue(c),GetGValue(c),GetBValue(c));
@@ -253,15 +365,9 @@ class Editor final : public Steinberg::CPluginView {
     void change(int id, double v) {
         if (id < 0)
             return;
-        const int steps = controlUI()[id].definition.steps;
-        v = clean(float(v));
-        if (steps > 0)
-            v = std::round(v * steps) / steps;
-        controller->beginEdit(id);
-        controller->setParamNormalized(id, v);
-        controller->performEdit(id, v);
-        controller->endEdit(id);
-        requestRepaint();
+        beginParameterGesture(id);
+        performParameterGesture(id,v);
+        endParameterGesture(id);
     }
     void destroyCombos() {
         for (auto h : combos)
@@ -760,6 +866,9 @@ class Editor final : public Steinberg::CPluginView {
             SendMessage(h, CB_SETCURSEL, choice, 0);
             combos.push_back(h);
         }
+#ifdef MULTIFX_JUCE_GUI
+        rebuildJuceParameterSliders();
+#endif
         HWND factory = referenceDelay() ? nullptr : CreateWindowA("COMBOBOX", "", WS_CHILD | CBS_DROPDOWNLIST, int(405 / sx),
                                      int(34 / sy), int(245 / sx), 260, window,
                                      reinterpret_cast<HMENU>(INT_PTR(10000 + layout().factoryProgram)),
@@ -1098,6 +1207,9 @@ class Editor final : public Steinberg::CPluginView {
                 return current + (std::max(0.f,target)-current) * (target>current ? .65f : .18f);
             };
             const float previousIn=needleIn,previousOut=needleOut;
+#ifdef MULTIFX_JUCE_GUI
+            syncJuceParameterSliders();
+#endif
             needleIn=follow(needleIn,controller->meterIn.load());
             needleOut=follow(needleOut,controller->meterOut.load());
             if (drag < 0 && selectionSignature() != signature)
@@ -1137,6 +1249,9 @@ class Editor final : public Steinberg::CPluginView {
             }
             return 0;
         case WM_LBUTTONDOWN: {
+#ifdef MULTIFX_JUCE_GUI
+            if(!jucePointerDispatch)
+#endif
             SetFocus(window);
             if (referenceDelay()) {
                 const int bank=std::clamp(view.section,0,1);
@@ -1428,6 +1543,7 @@ class Editor final : public Steinberg::CPluginView {
     Steinberg::tresult PLUGIN_API removed() override {
         if (window) {
 #ifdef MULTIFX_JUCE_GUI
+            juceParameterSliders.clear();
             if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
 #endif
             if (value(layout().attackTrigger) >= .5)

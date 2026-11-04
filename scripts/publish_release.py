@@ -19,7 +19,8 @@ def release_tag(version,run_id,attempt):
 
 def asset_names(platform,version):
     if platform=='windows':
-        return [f'JerzyMultiFX-VST3-Windows-x64-v{version}.zip','INSTALACJA_VST3_PL.md']
+        return [f'JerzyMultiFX-VST3-Windows-x64-v{version}.zip','MULTI_FX_FIXED_Windows_x64.zip',
+                'INSTALACJA_VST3_PL.md']
     if platform=='arm64':
         return [f'JerzyMultiFX-RPi-aarch64-v{version}.tar.gz',f'JerzyMultiFX-RPi-aarch64-v{version}.deb','JerzyMultiFX-INSTALATOR.zip','INSTALACJA_RPI_PROSTO.txt','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md']
     raise ValueError('Unsupported platform')
@@ -99,7 +100,7 @@ def main():
     output=ROOT/'dist';staging=ROOT/'.build'/'release-upload'/a.platform;staging.mkdir(parents=True,exist_ok=True)
     selected=[]
     for name in asset_names(a.platform,VERSION):
-        source=(output/name) if name.startswith('JerzyMultiFX-') else ROOT/name
+        source=(output/name) if (output/name).is_file() else ROOT/name
         if not source.is_file():raise FileNotFoundError('Required product file missing: '+name)
         destination=staging/name
         destination.write_bytes(source.read_bytes());selected.append(destination)
