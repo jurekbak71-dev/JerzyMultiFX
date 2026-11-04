@@ -43,12 +43,22 @@ static void pump() {
         DispatchMessage(&m);
     }
 }
+static void movePointer(HWND h, int x, int y) {
+    // A real user has to move the pointer into the target before clicking.
+    // JUCE maintains a hovered component and mouse capture state, so sending
+    // button messages to distant coordinates without a preceding WM_MOUSEMOVE
+    // can incorrectly target the slider from the previous interaction.
+    SendMessage(h, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+    pump();
+}
 static void click(HWND h, int x, int y) {
+    movePointer(h, x, y);
     SendMessage(h, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
     SendMessage(h, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
     pump();
 }
 static void drag(HWND h, int x, int y, int endX, int endY) {
+    movePointer(h, x, y);
     SendMessage(h,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(x,y));
     pump();
     Sleep(10);
@@ -59,6 +69,7 @@ static void drag(HWND h, int x, int y, int endX, int endY) {
     pump();
 }
 static void rightClick(HWND h,int x,int y) {
+    movePointer(h, x, y);
     SendMessage(h,WM_RBUTTONDOWN,MK_RBUTTON,MAKELPARAM(x,y));
     SendMessage(h,WM_RBUTTONUP,0,MAKELPARAM(x,y));
     pump();
