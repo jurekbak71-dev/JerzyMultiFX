@@ -333,8 +333,14 @@ int main(int argc, char **argv) try {
         SendMessage(child,WM_COMMAND,MAKEWPARAM(10000+model,CBN_SELCHANGE),reinterpret_cast<LPARAM>(modelList));
         check(c->getParamNormalized(model)!=previousModel,"Chorus choice updates host parameter");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
+        const auto pageBefore=SendMessage(child,WM_APP+31,0,0);
         click(pointerTarget,1210,543);
-        check(GetDlgItem(child,10000+model)==nullptr,"next page replaces visible controls");
+        const auto pageAfter=SendMessage(child,WM_APP+31,0,0);
+        const auto stillModel=GetDlgItem(child,10000+model);
+        std::cerr << "Page navigation: before=" << LOWORD(pageBefore) << "/" << HIWORD(pageBefore)
+                  << " after=" << LOWORD(pageAfter) << "/" << HIWORD(pageAfter)
+                  << " modelCombo=" << (stillModel?1:0) << "\n";
+        check(stillModel==nullptr,"next page replaces visible controls");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone-page2.bmp").c_str());
         click(pointerTarget,1055,543);
         check(GetDlgItem(child,10000+model)!=nullptr,"previous page restores its controls");
