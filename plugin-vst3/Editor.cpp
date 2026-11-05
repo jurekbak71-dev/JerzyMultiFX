@@ -308,8 +308,9 @@ class Editor final : public Steinberg::CPluginView {
         void paint(juce::Graphics &) override {}
         void mouseDown(const juce::MouseEvent &event) override {
             if(event.mods.isRightButtonDown())return;
-            const int next=std::clamp(owner.controlPage+direction,0,owner.controlPages-1);
-            if(next!=owner.controlPage){owner.controlPage=next;owner.rebuild();}
+            // Rebuilding destroys the current page button. Defer it until this
+            // JUCE callback returns instead of deleting `this` on its own stack.
+            PostMessage(owner.window,WM_APP+30,direction>0?1:0,0);
         }
     };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
@@ -1369,6 +1370,11 @@ class Editor final : public Steinberg::CPluginView {
         case WM_APP + 1:
             rebuild();
             return 0;
+        case WM_APP + 30: {
+            const int next=std::clamp(controlPage+(w?1:-1),0,controlPages-1);
+            if(next!=controlPage){controlPage=next;rebuild();}
+            return 0;
+        }
 #ifdef MULTIFX_JUCE_GUI
         case WM_APP + 29:
             if(juceCanvas)
