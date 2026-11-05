@@ -244,7 +244,11 @@ class Editor final : public Steinberg::CPluginView {
             // Discrete routing selection must commit on mouse DOWN. Some VST3
             // hosts transfer capture before mouseUp, so waiting for mouseUp
             // silently discards a valid routing click.
-            if (event.mods.isLeftButtonDown())
+            // A synthetic WM_LBUTTONDOWN from a VST3 host/test may not
+            // update Windows' global VK_LBUTTON state. JUCE has already
+            // dispatched mouseDown to this component, so do not discard it
+            // merely because the global modifier snapshot says "up".
+            if (!event.mods.isRightButtonDown())
                 owner.change(layout().delayMode, double(route) / 2.0);
         }
     };
