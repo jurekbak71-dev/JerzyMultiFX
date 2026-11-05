@@ -63,6 +63,11 @@ static void drag(HWND h, int x, int y, int endX, int endY) {
     SendMessage(h,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(x,y));
     pump();
     Sleep(10);
+    // Keep the actual OS pointer and simulated JUCE drag destination in sync.
+    // JUCE's rotary drag uses the desktop pointer delta on Windows.
+    POINT endScreen{endX,endY};
+    check(ClientToScreen(h,&endScreen)!=0, "convert drag endpoint to screen");
+    check(SetCursorPos(endScreen.x,endScreen.y)!=0, "position cursor at drag endpoint");
     SendMessage(h,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(endX,endY));
     pump();
     Sleep(10);
