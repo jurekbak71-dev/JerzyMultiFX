@@ -306,12 +306,11 @@ class Editor final : public Steinberg::CPluginView {
     public:
         JucePageButton(Editor &editor,int delta):owner(editor),direction(delta){setInterceptsMouseClicks(true,false);}
         void paint(juce::Graphics &) override {}
-        void mouseUp(const juce::MouseEvent &event) override {
-            if(event.mods.isRightButtonDown() || !event.mouseWasClicked())return;
-            // A page rebuild removes this component from the JUCE tree.
-            // Never post on mouseDown: the queued rebuild can execute before
-            // mouseUp and destroy JUCE's still-active mouse capture target.
-            // Queue only after releasing the pointer; process on the next turn.
+        void mouseDown(const juce::MouseEvent &event) override {
+            if(event.mods.isRightButtonDown())return;
+            // Unlike parameter controls, page arrows must survive the rebuild.
+            // They are persistent JUCE components, so forwarding on mouseDown
+            // is safe and works for native Windows SendInput and FL Studio alike.
             PostMessage(owner.window,WM_APP+30,direction>0?1:0,0);
         }
     };
@@ -347,7 +346,8 @@ class Editor final : public Steinberg::CPluginView {
     void rebuildJuceParameterSliders(){
         juceParameterSliders.clear();
         juceRoutingButtons.clear();
-        jucePageButtons.clear();
+        // Do NOT delete the page button receiving this click. JUCE maintains
+        // capture and drag bookkeeping until mouseUp, even after callbacks.
         if(!juceCanvas)return;
         auto add=[&](int id,bool horizontal,juce::Rectangle<int> bounds){
             if(id<0)return;
@@ -382,17 +382,26 @@ class Editor final : public Steinberg::CPluginView {
                 button->toFront(false);
                 juceRoutingButtons.push_back(std::move(button));
             }
-        }else if(controlPages>1){
+        }
+        // Persistent navigation controls: never recreate them when switching
+        // pages or sections. Hide them when this view has no paginated controls.
+        if(jucePageButtons.empty()){
             for(int i=0;i<2;++i){
                 auto button=std::make_unique<JucePageButton>(*this,i?1:-1);
-                button->setBounds(int(std::lround((i?1187:1031)*scaleX)),
-                                  int(std::lround(532*scaleY)),
-                                  std::max(1,int(std::lround(48*scaleX))),
-                                  std::max(1,int(std::lround(23*scaleY))));
                 juceCanvas->addAndMakeVisible(*button);
-                button->toFront(false);
                 jucePageButtons.push_back(std::move(button));
             }
+        }
+        const bool paged=!referenceDelay()&&controlPages>1;
+        for(int i=0;i<int(jucePageButtons.size());++i){
+            auto &button=jucePageButtons[i];
+            button->setBounds(int(std::lround((i?1187:1031)*scaleX)),
+                              int(std::lround(532*scaleY)),
+                              std::max(1,int(std::lround(48*scaleX))),
+                              std::max(1,int(std::lround(23*scaleY))));
+            button->setVisible(paged);
+            button->setInterceptsMouseClicks(paged,false);
+            if(paged)button->toFront(false);
         }
     }
     void syncJuceParameterSliders(){
