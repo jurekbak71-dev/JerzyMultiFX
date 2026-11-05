@@ -240,8 +240,11 @@ class Editor final : public Steinberg::CPluginView {
             setInterceptsMouseClicks(true, false);
         }
         void paint(juce::Graphics &) override {} // The parent draws the hardware-style button.
-        void mouseUp(const juce::MouseEvent &event) override {
-            if (event.mouseWasClicked() && !event.mods.isRightButtonDown())
+        void mouseDown(const juce::MouseEvent &event) override {
+            // Discrete routing selection must commit on mouse DOWN. Some VST3
+            // hosts transfer capture before mouseUp, so waiting for mouseUp
+            // silently discards a valid routing click.
+            if (event.mods.isLeftButtonDown())
                 owner.change(layout().delayMode, double(route) / 2.0);
         }
     };
