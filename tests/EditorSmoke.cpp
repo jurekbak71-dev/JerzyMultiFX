@@ -74,6 +74,10 @@ static void click(HWND h, int x, int y) {
     mouseInput(MOUSEEVENTF_LEFTDOWN);
     Sleep(8);
     mouseInput(MOUSEEVENTF_LEFTUP);
+    // JUCE action components may defer rebuilding the component tree until
+    // their mouse callback has returned. Run the next message-loop turn too.
+    Sleep(10);
+    pump();
 }
 static void drag(HWND h, int x, int y, int endX, int endY) {
     movePointer(h, x, y);
@@ -96,6 +100,8 @@ static void rightClick(HWND h,int x,int y) {
     mouseInput(MOUSEEVENTF_RIGHTDOWN);
     Sleep(8);
     mouseInput(MOUSEEVENTF_RIGHTUP);
+    Sleep(10);
+    pump();
 }
 static void shiftRightClick(HWND h,int x,int y) {
     INPUT key{};key.type=INPUT_KEYBOARD;key.ki.wVk=VK_SHIFT;
