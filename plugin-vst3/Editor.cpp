@@ -1386,6 +1386,10 @@ class Editor final : public Steinberg::CPluginView {
             if(next!=controlPage){controlPage=next;rebuild();}
             return 0;
         }
+        case WM_APP + 31:
+            // Test-only, read-only window diagnostics: low word is current page,
+            // high word is page count; no audio or parameter state is changed.
+            return MAKELRESULT(controlPage,controlPages);
 #ifdef MULTIFX_JUCE_GUI
         case WM_APP + 29:
             if(juceCanvas)
