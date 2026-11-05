@@ -206,6 +206,10 @@ class Editor final : public Steinberg::CPluginView {
         void paint(juce::Graphics &g) override {owner.paint(nullptr,&g);}
         void mouseDown(const juce::MouseEvent &e) override {
             rightPressed=e.mods.isRightButtonDown();
+            // Page navigation is part of the native JUCE canvas, not a
+            // transient child control. Forward it through the existing editor
+            // hit-test just like section and preset navigation.
+            // This preserves one input path across Windows/FL Studio hosts.
             owner.dispatchJucePointer(rightPressed?WM_RBUTTONDOWN:WM_LBUTTONDOWN,
                                       rightPressed?MK_RBUTTON:MK_LBUTTON,point(e));
         }
@@ -300,25 +304,10 @@ class Editor final : public Steinberg::CPluginView {
                 owner.change(layout().delayMode, double(route) / 2.0);
         }
     };
-    class JucePageButton final : public juce::Component {
-        Editor &owner;
-        int direction;
-    public:
-        JucePageButton(Editor &editor,int delta):owner(editor),direction(delta){setInterceptsMouseClicks(true,false);}
-        void paint(juce::Graphics &) override {}
-        void mouseDown(const juce::MouseEvent &event) override {
-            if(event.mods.isRightButtonDown())return;
-            // Unlike parameter controls, page arrows must survive the rebuild.
-            // They are persistent JUCE components, so forwarding on mouseDown
-            // is safe and works for native Windows SendInput and FL Studio alike.
-            PostMessage(owner.window,WM_APP+30,direction>0?1:0,0);
-        }
-    };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
     std::unique_ptr<JuceCanvas> juceCanvas;
     std::vector<std::unique_ptr<JuceParameterSlider>> juceParameterSliders;
     std::vector<std::unique_ptr<JuceRoutingButton>> juceRoutingButtons;
-    std::vector<std::unique_ptr<JucePageButton>> jucePageButtons;
     juce::Graphics *juceGraphics=nullptr;
     MonoAnalogLook juceLook;
     juce::Slider drawingSlider;
@@ -337,11 +326,7 @@ class Editor final : public Steinberg::CPluginView {
                                              int(std::lround((282+i*44)*scaleY)),
                                              std::max(1,int(std::lround(207*scaleX))),
                                              std::max(1,int(std::lround(36*scaleY))));
-        for(int i=0;i<int(jucePageButtons.size());++i)
-            jucePageButtons[i]->setBounds(int(std::lround((i?1187:1031)*scaleX)),
-                                          int(std::lround(532*scaleY)),
-                                          std::max(1,int(std::lround(48*scaleX))),
-                                          std::max(1,int(std::lround(23*scaleY))));
+
     }
     void rebuildJuceParameterSliders(){
         juceParameterSliders.clear();
@@ -383,26 +368,7 @@ class Editor final : public Steinberg::CPluginView {
                 juceRoutingButtons.push_back(std::move(button));
             }
         }
-        // Persistent navigation controls: never recreate them when switching
-        // pages or sections. Hide them when this view has no paginated controls.
-        if(jucePageButtons.empty()){
-            for(int i=0;i<2;++i){
-                auto button=std::make_unique<JucePageButton>(*this,i?1:-1);
-                juceCanvas->addAndMakeVisible(*button);
-                jucePageButtons.push_back(std::move(button));
-            }
-        }
-        const bool paged=!referenceDelay()&&controlPages>1;
-        for(int i=0;i<int(jucePageButtons.size());++i){
-            auto &button=jucePageButtons[i];
-            button->setBounds(int(std::lround((i?1187:1031)*scaleX)),
-                              int(std::lround(532*scaleY)),
-                              std::max(1,int(std::lround(48*scaleX))),
-                              std::max(1,int(std::lround(23*scaleY))));
-            button->setVisible(paged);
-            button->setInterceptsMouseClicks(paged,false);
-            if(paged)button->toFront(false);
-        }
+
     }
     void syncJuceParameterSliders(){
         for(auto &slider:juceParameterSliders){
@@ -1747,7 +1713,6 @@ class Editor final : public Steinberg::CPluginView {
 #ifdef MULTIFX_JUCE_GUI
             juceParameterSliders.clear();
             juceRoutingButtons.clear();
-            jucePageButtons.clear();
             if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
 #endif
             if (value(layout().attackTrigger) >= .5)
