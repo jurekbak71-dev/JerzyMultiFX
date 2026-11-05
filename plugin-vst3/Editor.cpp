@@ -300,10 +300,23 @@ class Editor final : public Steinberg::CPluginView {
                 owner.change(layout().delayMode, double(route) / 2.0);
         }
     };
+    class JucePageButton final : public juce::Component {
+        Editor &owner;
+        int direction;
+    public:
+        JucePageButton(Editor &editor,int delta):owner(editor),direction(delta){setInterceptsMouseClicks(true,false);}
+        void paint(juce::Graphics &) override {}
+        void mouseDown(const juce::MouseEvent &event) override {
+            if(event.mods.isRightButtonDown())return;
+            const int next=std::clamp(owner.controlPage+direction,0,owner.controlPages-1);
+            if(next!=owner.controlPage){owner.controlPage=next;owner.rebuild();}
+        }
+    };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
     std::unique_ptr<JuceCanvas> juceCanvas;
     std::vector<std::unique_ptr<JuceParameterSlider>> juceParameterSliders;
     std::vector<std::unique_ptr<JuceRoutingButton>> juceRoutingButtons;
+    std::vector<std::unique_ptr<JucePageButton>> jucePageButtons;
     juce::Graphics *juceGraphics=nullptr;
     MonoAnalogLook juceLook;
     juce::Slider drawingSlider;
@@ -322,10 +335,16 @@ class Editor final : public Steinberg::CPluginView {
                                              int(std::lround((282+i*44)*scaleY)),
                                              std::max(1,int(std::lround(207*scaleX))),
                                              std::max(1,int(std::lround(36*scaleY))));
+        for(int i=0;i<int(jucePageButtons.size());++i)
+            jucePageButtons[i]->setBounds(int(std::lround((i?1187:1031)*scaleX)),
+                                          int(std::lround(532*scaleY)),
+                                          std::max(1,int(std::lround(48*scaleX))),
+                                          std::max(1,int(std::lround(23*scaleY))));
     }
     void rebuildJuceParameterSliders(){
         juceParameterSliders.clear();
         juceRoutingButtons.clear();
+        jucePageButtons.clear();
         if(!juceCanvas)return;
         auto add=[&](int id,bool horizontal,juce::Rectangle<int> bounds){
             if(id<0)return;
@@ -359,6 +378,17 @@ class Editor final : public Steinberg::CPluginView {
                 juceCanvas->addAndMakeVisible(*button);
                 button->toFront(false);
                 juceRoutingButtons.push_back(std::move(button));
+            }
+        }else if(controlPages>1){
+            for(int i=0;i<2;++i){
+                auto button=std::make_unique<JucePageButton>(*this,i?1:-1);
+                button->setBounds(int(std::lround((i?1187:1031)*scaleX)),
+                                  int(std::lround(532*scaleY)),
+                                  std::max(1,int(std::lround(48*scaleX))),
+                                  std::max(1,int(std::lround(23*scaleY))));
+                juceCanvas->addAndMakeVisible(*button);
+                button->toFront(false);
+                jucePageButtons.push_back(std::move(button));
             }
         }
     }
@@ -1696,6 +1726,7 @@ class Editor final : public Steinberg::CPluginView {
 #ifdef MULTIFX_JUCE_GUI
             juceParameterSliders.clear();
             juceRoutingButtons.clear();
+            jucePageButtons.clear();
             if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
 #endif
             if (value(layout().attackTrigger) >= .5)
