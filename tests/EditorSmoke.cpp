@@ -59,6 +59,16 @@ static void mouseInput(DWORD flags) {
     check(SendInput(1,&input,sizeof(input))==1,"inject physical Windows mouse input");
     pump();
 }
+static void relativeMouseMove(int dx,int dy) {
+    INPUT input{};
+    input.type=INPUT_MOUSE;
+    input.mi.dx=dx;
+    input.mi.dy=dy;
+    input.mi.dwFlags=MOUSEEVENTF_MOVE;
+    check(SendInput(1,&input,sizeof(input))==1,"inject physical Windows mouse movement");
+    Sleep(8);
+    pump();
+}
 static void click(HWND h, int x, int y) {
     movePointer(h, x, y);
     mouseInput(MOUSEEVENTF_LEFTDOWN);
@@ -69,13 +79,16 @@ static void drag(HWND h, int x, int y, int endX, int endY) {
     movePointer(h, x, y);
     mouseInput(MOUSEEVENTF_LEFTDOWN);
     Sleep(10);
-    // Keep the actual OS pointer and simulated JUCE drag destination in sync.
-    // JUCE's rotary drag uses the desktop pointer delta on Windows.
-    POINT endScreen{endX,endY};
-    check(ClientToScreen(h,&endScreen)!=0, "convert drag endpoint to screen");
-    check(SetCursorPos(endScreen.x,endScreen.y)!=0, "position cursor at drag endpoint");
-    Sleep(20);
-    pump();
+    // Rotary sliders enable JUCE's unbounded mouse mode, which may warp the
+    // cursor back to its origin. Real relative SendInput motion supplies the
+    // same deltas as a physical mouse even while that mode is active.
+    const int steps=4;
+    int movedX=0,movedY=0;
+    for(int step=1;step<=steps;++step){
+        const int targetX=(endX-x)*step/steps,targetY=(endY-y)*step/steps;
+        relativeMouseMove(targetX-movedX,targetY-movedY);
+        movedX=targetX;movedY=targetY;
+    }
     mouseInput(MOUSEEVENTF_LEFTUP);
 }
 static void rightClick(HWND h,int x,int y) {
