@@ -177,6 +177,26 @@ int main(int argc, char **argv) try {
     const double clean = render(180);
     check(clean > .06 && clean < .08, "Actual clean gain");
     check(audio->getLatencySamples() == 0, "Clean DLL latency zero");
+
+    // End-to-end control path: the VST3 controller must notify the host,
+    // the host queues the parameter change, and the actual DLL DSP must
+    // produce a measurably attenuated signal. A moving knob alone is not enough.
+    const auto master = ParamID(layout().masterGain);
+    const auto originalGain = controller->getParamNormalized(master);
+    const auto editMaster = [&](double value) {
+        check(handler.beginEdit(master) == kResultOk, "Begin master output edit");
+        check(controller->setParamNormalized(master, value) == kResultOk, "Set master output in controller");
+        check(handler.performEdit(master, value) == kResultOk, "Host receives master output edit");
+        check(handler.endEdit(master) == kResultOk, "End master output edit");
+    };
+    editMaster(0.75); // -10.5 dB, versus the initial 0 dB.
+    const double attenuated = render(180);
+    check(attenuated / clean > .27 && attenuated / clean < .34,
+          "Real VST3 controller-to-host-to-DSP master output attenuates audio");
+    editMaster(originalGain);
+    const double restored = render(180);
+    check(restored / clean > .98 && restored / clean < 1.02,
+          "Restoring the VST3 master output restores actual audio level");
     writeWave(argv[2]);
     auto *message = new HostMessage;
     message->setMessageID("loadIR");

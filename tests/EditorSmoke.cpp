@@ -43,15 +43,31 @@ static void pump() {
         DispatchMessage(&m);
     }
 }
+static void movePointer(HWND h, int x, int y) {
+    // Native JUCE mouse dispatch can inspect the operating-system cursor
+    // position as well as the coordinates of WM_MOUSEMOVE. Match both.
+    POINT screen{x, y};
+    check(ClientToScreen(h, &screen) != 0, "convert editor pointer to screen");
+    check(SetCursorPos(screen.x, screen.y) != 0, "position OS pointer over the editor");
+    SendMessage(h, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+    pump();
+}
 static void click(HWND h, int x, int y) {
+    movePointer(h, x, y);
     SendMessage(h, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
     SendMessage(h, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
     pump();
 }
 static void drag(HWND h, int x, int y, int endX, int endY) {
+    movePointer(h, x, y);
     SendMessage(h,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(x,y));
     pump();
     Sleep(10);
+    // Keep the actual OS pointer and simulated JUCE drag destination in sync.
+    // JUCE's rotary drag uses the desktop pointer delta on Windows.
+    POINT endScreen{endX,endY};
+    check(ClientToScreen(h,&endScreen)!=0, "convert drag endpoint to screen");
+    check(SetCursorPos(endScreen.x,endScreen.y)!=0, "position cursor at drag endpoint");
     SendMessage(h,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(endX,endY));
     pump();
     Sleep(10);
@@ -59,6 +75,7 @@ static void drag(HWND h, int x, int y, int endX, int endY) {
     pump();
 }
 static void rightClick(HWND h,int x,int y) {
+    movePointer(h, x, y);
     SendMessage(h,WM_RBUTTONDOWN,MK_RBUTTON,MAKELPARAM(x,y));
     SendMessage(h,WM_RBUTTONUP,0,MAKELPARAM(x,y));
     pump();
@@ -202,8 +219,22 @@ int main(int argc, char **argv) try {
               "reference TIME knob controls the Oil Drum engine");
         check(edits.begins==1&&edits.performs>0&&edits.ends==1&&edits.lastId==ParamID(oilTime),
               "visible JUCE knob sends one complete VST3 automation gesture to the host");
+        // Record the actual route value before and after a real editor click.
+        // This distinguishes lost JUCE pointer dispatch from incorrect VST3
+        // parameter normalization, without hiding the regression.
+        const auto routingBefore = c->getParamNormalized(layout().delayMode);
+        edits.reset();
         click(pointerTarget,1100,340);
-        check(std::abs(c->getParamNormalized(layout().delayMode)-.5)<1e-6,
+        const auto routingAfter = c->getParamNormalized(layout().delayMode);
+        std::cerr << "Routing click diagnostic: before=" << routingBefore
+                  << " after=" << routingAfter
+                  << " expected=0.5"
+                  << " edits=" << edits.begins << "/" << edits.performs
+                  << "/" << edits.ends
+                  << " lastParam=" << edits.lastId
+                  << " expectedParam=" << layout().delayMode
+                  << " lastValue=" << edits.lastValue << '\n';
+        check(std::abs(routingAfter-.5)<1e-6,
               "reference routing button selects real parallel DSP mode");
         click(pointerTarget,1100,220);
         check(c->getParamNormalized(layout().slotBypass[0])==1,"reference bank bypass switches off");
