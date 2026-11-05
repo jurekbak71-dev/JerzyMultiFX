@@ -1,0 +1,919 @@
+{
+  "version": 1,
+  "design_surface": [
+    1280,
+    720
+  ],
+  "source": "User-supplied JerzyMultiFX GUI3D concept atlases; assets recreated procedurally",
+  "reference_sha256": {
+    "knobs_atlas": "e6225b53e6cf14b6fdc2f811d746c0a2b165db3646817c9509e6741f5ca8c2b0",
+    "buttons_atlas": "e9951a12742320371999c95d5cd2a54b1a3af7d9b214072f3b0f92c2fc19a1b3",
+    "panels_atlas": "d70f47f77888cc691a097f816518db3c618532a3861ab78bdc0040c374049639",
+    "meters_atlas": "6264fc9cb72aee8aa80700a28fefb7bdaa455e142f90cad728ec467f78ec508e"
+  },
+  "assets": [
+    {
+      "type": "knob_shadow",
+      "family": "master",
+      "file": "shadows/knob_master_shadow.png",
+      "width": 112,
+      "height": 112,
+      "alpha": "straight",
+      "sha256": "3f12aa3b98d946c559eaedbbe9f2e16af1a67b6dece8da09909fc3b3e57e3d0a",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "pivot": [
+        56,
+        56
+      ]
+    },
+    {
+      "type": "knob_strip",
+      "family": "master",
+      "file": "knobs/knob_master_neutral_101.png",
+      "width": 11312,
+      "height": 112,
+      "alpha": "straight",
+      "sha256": "540e9e604c5f8bbefe3e489a4eea0c92293eb3a91f51c4e68600579e3e56aac8",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 112,
+      "frame_height": 112,
+      "pivot": [
+        56,
+        56
+      ],
+      "colour": "neutral",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "master",
+      "file": "knobs/knob_master_amber_101.png",
+      "width": 11312,
+      "height": 112,
+      "alpha": "straight",
+      "sha256": "7f3bd59016c7031f8b24b0c3202fbf17e6bd20a51b6b9cd81d1edf6f38712d5f",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 112,
+      "frame_height": 112,
+      "pivot": [
+        56,
+        56
+      ],
+      "colour": "amber",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "master",
+      "file": "knobs/knob_master_cyan_101.png",
+      "width": 11312,
+      "height": 112,
+      "alpha": "straight",
+      "sha256": "d9611a786eba9fc5bb5957dcfe0bf535f25082f376b86378b653687a63fb6c57",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 112,
+      "frame_height": 112,
+      "pivot": [
+        56,
+        56
+      ],
+      "colour": "cyan",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "master",
+      "file": "knobs/knob_master_red_101.png",
+      "width": 11312,
+      "height": 112,
+      "alpha": "straight",
+      "sha256": "bde9a73d560ded1486ca78d468e2cf44dbcf2c27d6bf50999a8f23b51af5c2a1",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 112,
+      "frame_height": 112,
+      "pivot": [
+        56,
+        56
+      ],
+      "colour": "red",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "master",
+      "file": "knobs/knob_master_purple_101.png",
+      "width": 11312,
+      "height": 112,
+      "alpha": "straight",
+      "sha256": "6c052bec5dbe107a15da380c926066406a0a42ac1ccf84973f188a2af47ce7cd",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 112,
+      "frame_height": 112,
+      "pivot": [
+        56,
+        56
+      ],
+      "colour": "purple",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_shadow",
+      "family": "fx",
+      "file": "shadows/knob_fx_shadow.png",
+      "width": 88,
+      "height": 88,
+      "alpha": "straight",
+      "sha256": "15def5989559fa418038c78f72ee014bf58cc6947ef897b49808c6b39b1fe2dc",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "pivot": [
+        44,
+        44
+      ]
+    },
+    {
+      "type": "knob_strip",
+      "family": "fx",
+      "file": "knobs/knob_fx_neutral_101.png",
+      "width": 8888,
+      "height": 88,
+      "alpha": "straight",
+      "sha256": "0c894aed2f5cacd5c5c8072479822d9d7201838d277c034808bb2c05e69a9c02",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 88,
+      "frame_height": 88,
+      "pivot": [
+        44,
+        44
+      ],
+      "colour": "neutral",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "fx",
+      "file": "knobs/knob_fx_amber_101.png",
+      "width": 8888,
+      "height": 88,
+      "alpha": "straight",
+      "sha256": "42cf069ee1a581adb31180c569a3633163f0a62f111cfb31c9af4f01307e40ed",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 88,
+      "frame_height": 88,
+      "pivot": [
+        44,
+        44
+      ],
+      "colour": "amber",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "fx",
+      "file": "knobs/knob_fx_cyan_101.png",
+      "width": 8888,
+      "height": 88,
+      "alpha": "straight",
+      "sha256": "9e24e60aef34a1f6a9f2368b787ae85327a835fb5440f3bbdbbad4dffd3e5bcf",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 88,
+      "frame_height": 88,
+      "pivot": [
+        44,
+        44
+      ],
+      "colour": "cyan",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "fx",
+      "file": "knobs/knob_fx_red_101.png",
+      "width": 8888,
+      "height": 88,
+      "alpha": "straight",
+      "sha256": "73faf4995acc714cbde50e6271317271a7a9d1b4848e9a5b79a7ac6c1a64285f",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 88,
+      "frame_height": 88,
+      "pivot": [
+        44,
+        44
+      ],
+      "colour": "red",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "fx",
+      "file": "knobs/knob_fx_purple_101.png",
+      "width": 8888,
+      "height": 88,
+      "alpha": "straight",
+      "sha256": "7e6c97f7ad5581d31b44d1cbdf7f7fd9e907c6be452d56a64194dd18a7375882",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 88,
+      "frame_height": 88,
+      "pivot": [
+        44,
+        44
+      ],
+      "colour": "purple",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_shadow",
+      "family": "select",
+      "file": "shadows/knob_select_shadow.png",
+      "width": 64,
+      "height": 64,
+      "alpha": "straight",
+      "sha256": "89501197a36502f0b878f1e6e04c078c955a1d20f5561c1f1d018d7c7ca61aa0",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "pivot": [
+        32,
+        32
+      ]
+    },
+    {
+      "type": "knob_strip",
+      "family": "select",
+      "file": "knobs/knob_select_neutral_101.png",
+      "width": 6464,
+      "height": 64,
+      "alpha": "straight",
+      "sha256": "e8f3ad156e4ecaf6974b105f8e36c2cf407441147943bf8d316386e8f0699ce1",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 64,
+      "frame_height": 64,
+      "pivot": [
+        32,
+        32
+      ],
+      "colour": "neutral",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "select",
+      "file": "knobs/knob_select_amber_101.png",
+      "width": 6464,
+      "height": 64,
+      "alpha": "straight",
+      "sha256": "19ab9c9290d2c813680360a3dea9b2a26a0ade3e5c89a67985e1176501bd7ff6",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 64,
+      "frame_height": 64,
+      "pivot": [
+        32,
+        32
+      ],
+      "colour": "amber",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "select",
+      "file": "knobs/knob_select_cyan_101.png",
+      "width": 6464,
+      "height": 64,
+      "alpha": "straight",
+      "sha256": "8d038186218ddb1eedd39409f8ec922df6279061c55afafc63e4236ae760de3d",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 64,
+      "frame_height": 64,
+      "pivot": [
+        32,
+        32
+      ],
+      "colour": "cyan",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "select",
+      "file": "knobs/knob_select_red_101.png",
+      "width": 6464,
+      "height": 64,
+      "alpha": "straight",
+      "sha256": "a5d1554fec33419639c827d9357d1d6f5ee5ac094d8c7926ebd4ccc8296d9171",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 64,
+      "frame_height": 64,
+      "pivot": [
+        32,
+        32
+      ],
+      "colour": "red",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "knob_strip",
+      "family": "select",
+      "file": "knobs/knob_select_purple_101.png",
+      "width": 6464,
+      "height": 64,
+      "alpha": "straight",
+      "sha256": "a8d520db7aedcf4acc2b8699364d20a83260d0ae82d2e5a2096c2d8b6ab8963e",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "frames": 101,
+      "frame_width": 64,
+      "frame_height": 64,
+      "pivot": [
+        32,
+        32
+      ],
+      "colour": "purple",
+      "angle_min_deg": -135,
+      "angle_max_deg": 135
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_neutral_off.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "4aae1c489e0c53203636f1084f6c961f796aa23b05702c95b3506698f8b450be",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "state": "off"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_neutral_on.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "2e314d861201cd7b5692f6af9e1ef033a67499f1dbce7552e7cb9346fa64ee77",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_neutral_hover.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "2e314d861201cd7b5692f6af9e1ef033a67499f1dbce7552e7cb9346fa64ee77",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "state": "hover"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_neutral_pressed.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "bd8d8dea24e43c419bbf95bd477ed49197566115008a88f790479b9ed32375d5",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "state": "pressed"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_neutral_disabled.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "89d4a0a2dadfe26896521f436c12c41107f1e5c87d3888ba696608ca9b230490",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "state": "disabled"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_neutral_off.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "d651b19a6a508708ca2d4326b3883db72f4a8eea96d73c5bc061a24179880ea3",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "state": "off"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_neutral_on.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "481d7d71f1af757aeae7ad59b4b8b6302da2f2db7ee87383408a769104a96780",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_amber_off.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "4aae1c489e0c53203636f1084f6c961f796aa23b05702c95b3506698f8b450be",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "state": "off"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_amber_on.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "8a5493e1e607c293f79f21e4d5aa0ff06f8db3b9acdb9d3b114e16b1367f28e6",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_amber_hover.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "8a5493e1e607c293f79f21e4d5aa0ff06f8db3b9acdb9d3b114e16b1367f28e6",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "state": "hover"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_amber_pressed.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "2b10546a631d62332df719fb2f06a16ea646ca11a31df94d99edea73820f8509",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "state": "pressed"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_amber_disabled.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "89d4a0a2dadfe26896521f436c12c41107f1e5c87d3888ba696608ca9b230490",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "state": "disabled"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_amber_off.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "d651b19a6a508708ca2d4326b3883db72f4a8eea96d73c5bc061a24179880ea3",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "state": "off"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_amber_on.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "ad81463d441a5f236862d199b10b3dcf1b3f9f36bef0a88ecde2cb3ebb81f98a",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_cyan_off.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "4aae1c489e0c53203636f1084f6c961f796aa23b05702c95b3506698f8b450be",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "state": "off"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_cyan_on.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "1ec108b662d5249d0008e4591b55a988312aa1746fa44b07e8ab370d113daae0",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_cyan_hover.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "1ec108b662d5249d0008e4591b55a988312aa1746fa44b07e8ab370d113daae0",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "state": "hover"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_cyan_pressed.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "f0abce2626a0e14af1a32753db0a978872259a6cf18e992b0b81874fd157b111",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "state": "pressed"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_cyan_disabled.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "89d4a0a2dadfe26896521f436c12c41107f1e5c87d3888ba696608ca9b230490",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "state": "disabled"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_cyan_off.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "d651b19a6a508708ca2d4326b3883db72f4a8eea96d73c5bc061a24179880ea3",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "state": "off"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_cyan_on.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "decb77f0b0c2c7577d70fa866615cb232c0215e073694389422cc97ec17d3a6b",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_red_off.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "4aae1c489e0c53203636f1084f6c961f796aa23b05702c95b3506698f8b450be",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "state": "off"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_red_on.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "7b754f7f10c91873b6ae4b5cfce6518669e11611217d6e15ae4a6e355a39d054",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_red_hover.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "7b754f7f10c91873b6ae4b5cfce6518669e11611217d6e15ae4a6e355a39d054",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "state": "hover"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_red_pressed.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "329d06c6119cb0687c003e94c65aa08bfd483f9befc2b0ce21acaa70d9ce8d51",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "state": "pressed"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_red_disabled.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "89d4a0a2dadfe26896521f436c12c41107f1e5c87d3888ba696608ca9b230490",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "state": "disabled"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_red_off.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "d651b19a6a508708ca2d4326b3883db72f4a8eea96d73c5bc061a24179880ea3",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "state": "off"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_red_on.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "7f3726e6790ef18c1f46a310220eddb6335211597402002bb2bf7dc65b7119b4",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_purple_off.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "4aae1c489e0c53203636f1084f6c961f796aa23b05702c95b3506698f8b450be",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "state": "off"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_purple_on.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "cf002833c6384746277aaae72eb1f5e169fc648a7a3b77bde237d12c0ad8a61a",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "state": "on"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_purple_hover.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "cf002833c6384746277aaae72eb1f5e169fc648a7a3b77bde237d12c0ad8a61a",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "state": "hover"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_purple_pressed.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "16f375d4f376816d4716c39025432d1b71985e5eafdd7613e9a18b86018a11e8",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "state": "pressed"
+    },
+    {
+      "type": "button",
+      "family": "routing",
+      "file": "switches/button_purple_disabled.png",
+      "width": 180,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "89d4a0a2dadfe26896521f436c12c41107f1e5c87d3888ba696608ca9b230490",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "state": "disabled"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_purple_off.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "d651b19a6a508708ca2d4326b3883db72f4a8eea96d73c5bc061a24179880ea3",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "state": "off"
+    },
+    {
+      "type": "led",
+      "family": "status",
+      "file": "lights/led_purple_on.png",
+      "width": 48,
+      "height": 48,
+      "alpha": "straight",
+      "sha256": "91867dce8c267bc382e8e2590d5cd186e881d0d829fd1cd315e00782282b2ae6",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "state": "on"
+    },
+    {
+      "type": "panel",
+      "family": "chassis",
+      "file": "panels/chassis_dark_256.png",
+      "width": 256,
+      "height": 256,
+      "alpha": "straight",
+      "sha256": "3fc2ea89517825a2d42fcf418d5a1535226bfee4d282d2a27aaffa87af31b4cf",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "nine_slice": [
+        16,
+        16,
+        16,
+        16
+      ]
+    },
+    {
+      "type": "panel",
+      "family": "module",
+      "file": "panels/module_neutral_320x180.png",
+      "width": 320,
+      "height": 180,
+      "alpha": "straight",
+      "sha256": "9c7f153f1ed3896b24981d2a8e9ac9da3a39cc0f3bd2b0abd812ab7710105798",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "neutral",
+      "nine_slice": [
+        18,
+        18,
+        18,
+        18
+      ]
+    },
+    {
+      "type": "panel",
+      "family": "module",
+      "file": "panels/module_amber_320x180.png",
+      "width": 320,
+      "height": 180,
+      "alpha": "straight",
+      "sha256": "af6111907040086321bdd2ce2f42b4e2a1eae1b23bd4611b5b4be503e503d95c",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "amber",
+      "nine_slice": [
+        18,
+        18,
+        18,
+        18
+      ]
+    },
+    {
+      "type": "panel",
+      "family": "module",
+      "file": "panels/module_cyan_320x180.png",
+      "width": 320,
+      "height": 180,
+      "alpha": "straight",
+      "sha256": "85c1c4e00b0db0f8e6e963d7ce330c849317990bb5a671ea34a027d7ec36a4bf",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "cyan",
+      "nine_slice": [
+        18,
+        18,
+        18,
+        18
+      ]
+    },
+    {
+      "type": "panel",
+      "family": "module",
+      "file": "panels/module_red_320x180.png",
+      "width": 320,
+      "height": 180,
+      "alpha": "straight",
+      "sha256": "0ca56cf342a010e990ee7a39aae6ae2878a3551d0cf4fbf237c9fbe6af290376",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "red",
+      "nine_slice": [
+        18,
+        18,
+        18,
+        18
+      ]
+    },
+    {
+      "type": "panel",
+      "family": "module",
+      "file": "panels/module_purple_320x180.png",
+      "width": 320,
+      "height": 180,
+      "alpha": "straight",
+      "sha256": "d310faf10ef4ba2e4c1927b5ec8e934598a619a9b7920c4f32108f0f63971ed7",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "colour": "purple",
+      "nine_slice": [
+        18,
+        18,
+        18,
+        18
+      ]
+    },
+    {
+      "type": "meter_face",
+      "family": "vu",
+      "file": "meters/vu_face.png",
+      "width": 220,
+      "height": 90,
+      "alpha": "straight",
+      "sha256": "8de5362cc41beba5e086ff80c11b16544f5403aca20626027ccaf04415d39af1",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "pivot": [
+        110,
+        80
+      ]
+    },
+    {
+      "type": "meter_needle",
+      "family": "vu",
+      "file": "meters/vu_needle.png",
+      "width": 220,
+      "height": 90,
+      "alpha": "straight",
+      "sha256": "0f1253fefae42ad9a4ad29ea458a29118b494903b8b5bc89b22852d6041e761f",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references",
+      "pivot": [
+        110,
+        80
+      ],
+      "angle_min_deg": -58,
+      "angle_max_deg": 58
+    },
+    {
+      "type": "meter_glass",
+      "family": "vu",
+      "file": "meters/vu_glass.png",
+      "width": 220,
+      "height": 90,
+      "alpha": "straight",
+      "sha256": "518d390034f3b4da54113cfdc499bf5eef4c98ef5d8e77db510aa577da249b68",
+      "author": "Jerzy MultiFX / procedural recreation from user-approved generated references"
+    }
+  ]
+}

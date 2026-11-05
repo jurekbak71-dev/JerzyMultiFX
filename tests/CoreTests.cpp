@@ -58,6 +58,18 @@ int main() {
             require(std::abs(v[0] - expected) < .005, "Partitioned multi-block convolution");
         }
         auto &lay = multifx::layout();
+        require(lay.parameters.size() == 957, "GUI baseline parameter count must remain unchanged");
+        uint64_t parameterDigest = 1469598103934665603ULL;
+        for (const auto &parameter : lay.parameters) {
+            for (const unsigned char byte : parameter.key) {
+                parameterDigest ^= byte;
+                parameterDigest *= 1099511628211ULL;
+            }
+            parameterDigest ^= 0xff;
+            parameterDigest *= 1099511628211ULL;
+        }
+        require(parameterDigest == 0x7ef0e24299ef3c0bULL,
+                "GUI work must preserve every parameter key and its ordering");
         require(lay.parameters.size() < multifx::maxParameters, "Parameter capacity");
         std::set<uint32_t> hashes;
         for (auto &p : lay.parameters)
