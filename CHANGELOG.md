@@ -1,3 +1,9 @@
+# 0.1.0-preview.32
+
+- Zgodnie z zatwierdzonym kierunkiem 3D i wzorcem MX Analog Delay regulator otrzymał osobne, przezroczyste zasoby: trzy rodziny gałek, pięć akcentów i 101 pozycji każdej gałki. Cienie, przyciski, LED-y, panele i elementy VU są niezależnymi warstwami; tekst nadal renderuje JUCE.
+- Rzeczywiste komponenty `juce::Slider` pozostają warstwą interakcji i automatyzacji. Prawy przycisk przywraca wartość domyślną jednym gestem VST3, `Shift + prawy przycisk` zachowuje MIDI Learn. Test Windows używa systemowego `SendInput` zamiast sztucznych komunikatów okna i sprawdza drag, reset oraz routing.
+- Dodano niezmienny baseline 1280×720, klas VST3 i 957 uporządkowanych kluczy parametrów. Test blokuje zmianę ich liczby lub kolejności. Paczka Windows zawiera instalator, raport, zrzuty GUI i osobną bibliotekę GUI3D. DSP i format stanu nie zostały zmienione.
+
 # 0.1.0-preview.31
 
 - Zastąpiono ręczne przekazywanie ruchu narysowanych regulatorów prawdziwymi komponentami `juce::Slider`, zgodnie ze sprawdzonym wzorcem JerzyAutoTuneVST3. Każda widoczna gałka i ciągły suwak ma teraz własny obszar interakcji JUCE, obsługę drag, Shift-drag, wheel, reset dwuklikiem oraz synchronizację z automatyzacją hosta.

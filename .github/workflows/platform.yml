@@ -138,6 +138,8 @@ jobs:
           path: |
             dist/JerzyMultiFX-VST3-Windows-x64-v*.zip
             dist/MULTI_FX_FIXED_Windows_x64.zip
+            dist/JerzyMultiFX-GUI3D-Windows-x64.zip
+            dist/GUI3D_Library.zip
           retention-days: 7
           if-no-files-found: error
       - name: Upload double-click Raspberry Pi installer

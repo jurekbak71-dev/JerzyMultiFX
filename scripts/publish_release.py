@@ -20,7 +20,7 @@ def release_tag(version,run_id,attempt):
 def asset_names(platform,version):
     if platform=='windows':
         return [f'JerzyMultiFX-VST3-Windows-x64-v{version}.zip','MULTI_FX_FIXED_Windows_x64.zip',
-                'INSTALACJA_VST3_PL.md']
+                'JerzyMultiFX-GUI3D-Windows-x64.zip','GUI3D_Library.zip','INSTALACJA_VST3_PL.md']
     if platform=='arm64':
         return [f'JerzyMultiFX-RPi-aarch64-v{version}.tar.gz',f'JerzyMultiFX-RPi-aarch64-v{version}.deb','JerzyMultiFX-INSTALATOR.zip','INSTALACJA_RPI_PROSTO.txt','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md']
     raise ValueError('Unsupported platform')
@@ -78,6 +78,8 @@ Native Windows x64 and ARM64 jobs publish independently after their tests. Files
 ## Wykaz plików
 
 - `JerzyMultiFX-VST3-Windows-x64-v{version}.zip` — rzeczywisty bundle VST3 x64.
+- `JerzyMultiFX-GUI3D-Windows-x64.zip` — instalator VST3 z raportem i zrzutami GUI3D.
+- `GUI3D_Library.zip` — osobne produkcyjne assety, manifest i generator.
 - `JerzyMultiFX-RPi-aarch64-v{version}.tar.gz` — rzeczywisty ELF AArch64, aplikacja i instalator.
 - `JerzyMultiFX-INSTALATOR.zip` — samowystarczalny instalator RPi, uruchamiany dwuklikiem z Windows; `INSTALACJA_RPI_PROSTO.txt` — krótka instrukcja.
 - `INSTALACJA_VST3_PL.md`, `INSTALACJA_RPI_PL.md`, `WIFI_BLUETOOTH_PL.md`, `HARDWARE_TESTS_PL.md` — instrukcje i ograniczenia.

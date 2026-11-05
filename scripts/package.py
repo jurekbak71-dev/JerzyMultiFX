@@ -31,7 +31,7 @@ def source_filter(member):
 
 def sources(destination,sdk=None,juce=None):
     roots=('core','effects','vendor','plugin-vst3','rpi','ui','tests','scripts','cmake','docs','.github')
-    files=('CMakeLists.txt','VERSION','LICENSE','NOTICE','.gitignore','.gitattributes','.clang-format','README_PL.md','INSTALACJA_VST3_PL.md','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md','LICENSES.md','CHANGELOG.md','STATUS.md')
+    files=('CMakeLists.txt','VERSION','LICENSE','NOTICE','.gitignore','.gitattributes','.clang-format','README_PL.md','INSTALACJA_VST3_PL.md','INSTALACJA_RPI_PL.md','WIFI_BLUETOOTH_PL.md','HARDWARE_TESTS_PL.md','LICENSES.md','CHANGELOG.md','STATUS.md','GUI_BASELINE.json','VALIDATION_REPORT.md','GUI_BEFORE_AFTER')
     tracked_result=subprocess.run(['git','-C',str(ROOT),'ls-files','-z'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     tracked=set(tracked_result.stdout.decode().split('\0')) if tracked_result.returncode==0 else None
     def product_filter(member):
@@ -137,11 +137,27 @@ def main():
             '- fizyczne FL Studio na komputerze uzytkownika: WYMAGA WERYFIKACJI; CI nie ma FL Studio\n'
         )
         (fixed/'TEST_REPORT.txt').write_text(report,encoding='utf-8')
+        shutil.copy2(ROOT/'VALIDATION_REPORT.md',fixed/'VALIDATION_REPORT.md')
+        comparison=fixed/'GUI_BEFORE_AFTER';comparison.mkdir()
+        shutil.copy2(ROOT/'GUI_BEFORE_AFTER/README.md',comparison/'README.md')
+        for screenshot in sorted(a.build.glob('editor.bmp*.bmp')):
+            shutil.copy2(screenshot,comparison/screenshot.name)
         sums(fixed)
         fixed_output=a.out/'MULTI_FX_FIXED_Windows_x64.zip'
         with zipfile.ZipFile(fixed_output,'w',zipfile.ZIP_DEFLATED) as z:
             for f in sorted(fixed.rglob('*')):
                 if f.is_file():z.write(f,'MULTI_FX_FIXED_Windows_x64/'+f.relative_to(fixed).as_posix())
+        gui3d_output=a.out/'JerzyMultiFX-GUI3D-Windows-x64.zip'
+        with zipfile.ZipFile(gui3d_output,'w',zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(fixed.rglob('*')):
+                if f.is_file():z.write(f,'JerzyMultiFX-GUI3D-Windows-x64/'+f.relative_to(fixed).as_posix())
+        library=a.out/'GUI3D_Library.zip'
+        with zipfile.ZipFile(library,'w',zipfile.ZIP_DEFLATED) as z:
+            asset_root=ROOT/'plugin-vst3/resources/gui3d'
+            for f in sorted(asset_root.rglob('*')):
+                if f.is_file():z.write(f,'GUI3D_Library/assets/'+f.relative_to(asset_root).as_posix())
+            z.write(ROOT/'scripts/generate_gui3d_assets.py','GUI3D_Library/generate_gui3d_assets.py')
+            z.write(ROOT/'docs/GUI3D_IMPLEMENTATION.md','GUI3D_Library/README.md')
     else:
         output=a.out/(name+'.tar.gz')
         with tarfile.open(output,'w:gz') as t:t.add(stage,arcname=name,filter=lambda m:normalize(m))
