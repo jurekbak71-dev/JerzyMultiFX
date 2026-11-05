@@ -49,8 +49,8 @@ static void movePointer(HWND h, int x, int y) {
     POINT screen{x, y};
     check(ClientToScreen(h, &screen) != 0, "convert editor pointer to screen");
     check(SetCursorPos(screen.x, screen.y) != 0, "position OS pointer over the editor");
-    pump();
     Sleep(8);
+    pump();
 }
 static void mouseInput(DWORD flags) {
     INPUT input{};
@@ -74,8 +74,8 @@ static void drag(HWND h, int x, int y, int endX, int endY) {
     POINT endScreen{endX,endY};
     check(ClientToScreen(h,&endScreen)!=0, "convert drag endpoint to screen");
     check(SetCursorPos(endScreen.x,endScreen.y)!=0, "position cursor at drag endpoint");
+    Sleep(20);
     pump();
-    Sleep(10);
     mouseInput(MOUSEEVENTF_LEFTUP);
 }
 static void rightClick(HWND h,int x,int y) {
@@ -177,6 +177,9 @@ int main(int argc, char **argv) try {
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
         check(child, "editor child window");
+        ShowWindow(parent,SW_SHOW);
+        SetForegroundWindow(parent);
+        SetActiveWindow(parent);
 #ifdef MULTIFX_JUCE_GUI
         HWND vectorSurface=nullptr;
         for(HWND candidate=GetWindow(child,GW_CHILD);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT))
@@ -190,6 +193,8 @@ int main(int argc, char **argv) try {
 #ifdef MULTIFX_JUCE_GUI
         pointerTarget=vectorSurface;
 #endif
+        SetFocus(pointerTarget);
+        pump();
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
         if(std::getenv("MULTIFX_VISUAL_ONLY")) {
             check(argc>=3,"visual capture needs output path");
