@@ -306,10 +306,12 @@ class Editor final : public Steinberg::CPluginView {
     public:
         JucePageButton(Editor &editor,int delta):owner(editor),direction(delta){setInterceptsMouseClicks(true,false);}
         void paint(juce::Graphics &) override {}
-        void mouseDown(const juce::MouseEvent &event) override {
-            if(event.mods.isRightButtonDown())return;
-            // Rebuilding destroys the current page button. Defer it until this
-            // JUCE callback returns instead of deleting `this` on its own stack.
+        void mouseUp(const juce::MouseEvent &event) override {
+            if(event.mods.isRightButtonDown() || !event.mouseWasClicked())return;
+            // A page rebuild removes this component from the JUCE tree.
+            // Never post on mouseDown: the queued rebuild can execute before
+            // mouseUp and destroy JUCE's still-active mouse capture target.
+            // Queue only after releasing the pointer; process on the next turn.
             PostMessage(owner.window,WM_APP+30,direction>0?1:0,0);
         }
     };
