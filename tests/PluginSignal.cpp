@@ -184,10 +184,10 @@ int main(int argc, char **argv) try {
     const auto master = ParamID(layout().masterGain);
     const auto originalGain = controller->getParamNormalized(master);
     const auto editMaster = [&](double value) {
-        check(controller->beginEdit(master) == kResultOk, "Begin master output edit");
+        check(handler.beginEdit(master) == kResultOk, "Begin master output edit");
         check(controller->setParamNormalized(master, value) == kResultOk, "Set master output in controller");
-        check(controller->performEdit(master, value) == kResultOk, "Host receives master output edit");
-        check(controller->endEdit(master) == kResultOk, "End master output edit");
+        check(handler.performEdit(master, value) == kResultOk, "Host receives master output edit");
+        check(handler.endEdit(master) == kResultOk, "End master output edit");
     };
     editMaster(0.75); // -10.5 dB, versus the initial 0 dB.
     const double attenuated = render(180);
