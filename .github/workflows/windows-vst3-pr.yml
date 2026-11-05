@@ -1,0 +1,68 @@
+name: MultiFX emergency direct Windows VST3 validation
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-vst3-pr.yml'
+      - 'plugin-vst3/**'
+      - 'tests/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-vst3:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Pinned Steinberg SDK
+        shell: pwsh
+        run: |
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$env:RUNNER_TEMP/vst3sdk"
+          git -C "$env:RUNNER_TEMP/vst3sdk" checkout --detach 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$env:RUNNER_TEMP/vst3sdk" submodule update --init --recursive
+      - name: Build VST3 Windows x64
+        shell: pwsh
+        run: |
+          cmake -S . -B build -A x64 -DMULTIFX_VST3=ON -DVST3_SDK_ROOT="$env:RUNNER_TEMP/vst3sdk"
+          if ($LASTEXITCODE) { throw 'Configure failed' }
+          cmake --build build --config Release --parallel 3
+          if ($LASTEXITCODE) { throw 'Windows VST3 build failed' }
+      - name: DSP, editor gestures and real audio
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure --no-tests=error
+          if ($LASTEXITCODE) { throw 'Core DSP failed' }
+          $dll = Get-ChildItem build -Recurse -File -Filter JerzyMultiFX.vst3 | Select-Object -First 1
+          $test = Get-ChildItem build -Recurse -File -Filter editor_smoke.exe | Select-Object -First 1
+          if (-not $dll -or -not $test) { throw 'Missing VST3 DLL or GUI test executable' }
+          & $test.FullName $dll.FullName "$pwd/build/editor.bmp"
+          if ($LASTEXITCODE) { throw 'Real VST3 editor gestures failed' }
+          $signal = Get-ChildItem build -Recurse -File -Filter plugin_signal.exe | Select-Object -First 1
+          & $signal.FullName $dll.FullName "$pwd/build/ir-signal-test.wav"
+          if ($LASTEXITCODE) { throw 'Real VST3 signal regression failed' }
+      - name: Package installable VST3
+        shell: pwsh
+        run: |
+          python scripts/package.py windows --build build --sdk "$env:RUNNER_TEMP/vst3sdk" --juce build/_deps/juce_gui-src
+          if ($LASTEXITCODE) { throw 'Package verification failed' }
+          python scripts/verify_packages.py
+          if ($LASTEXITCODE) { throw 'Package privacy validation failed' }
+      - name: Upload verified JerzyMultiFX Windows VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMultiFX-GUI-FIXED-Windows-x64-${{ github.run_id }}
+          path: |
+            dist/JerzyMultiFX-VST3-Windows-x64-v*.zip
+            dist/MULTI_FX_FIXED_Windows_x64.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload GUI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMultiFX-GUI-check-${{ github.run_id }}
+          path: build/editor.bmp*
+          if-no-files-found: ignore
+          retention-days: 7
