@@ -17,43 +17,83 @@
 #include <memory>
 #ifdef MULTIFX_JUCE_GUI
 #include "JerzyVSTGuiKit.h"
+#include "BinaryData.h"
 #endif
 namespace multifx {
 #ifdef MULTIFX_JUCE_GUI
+struct Gui3DAssets final {
+    enum Family { master, fx, select };
+    enum Accent { neutral, amber, cyan, red, purple };
+    juce::Image knobs[3][5];
+    juce::Image shadows[3];
+    juce::Image chassis;
+    juce::Image module[5];
+    juce::Image buttons[5][5];
+    juce::Image leds[5][2];
+    juce::Image vuFace, vuNeedle, vuGlass;
+
+    static juce::Image decode(const void *data, int bytes) {
+        return juce::ImageFileFormat::loadFrom(data, size_t(bytes));
+    }
+    Gui3DAssets() {
+#define LOAD(target, resource) target = decode(BinaryData::resource, BinaryData::resource##Size)
+        LOAD(knobs[master][neutral], knob_master_neutral_101_png); LOAD(knobs[master][amber], knob_master_amber_101_png);
+        LOAD(knobs[master][cyan], knob_master_cyan_101_png); LOAD(knobs[master][red], knob_master_red_101_png);
+        LOAD(knobs[master][purple], knob_master_purple_101_png);
+        LOAD(knobs[fx][neutral], knob_fx_neutral_101_png); LOAD(knobs[fx][amber], knob_fx_amber_101_png);
+        LOAD(knobs[fx][cyan], knob_fx_cyan_101_png); LOAD(knobs[fx][red], knob_fx_red_101_png);
+        LOAD(knobs[fx][purple], knob_fx_purple_101_png);
+        LOAD(knobs[select][neutral], knob_select_neutral_101_png); LOAD(knobs[select][amber], knob_select_amber_101_png);
+        LOAD(knobs[select][cyan], knob_select_cyan_101_png); LOAD(knobs[select][red], knob_select_red_101_png);
+        LOAD(knobs[select][purple], knob_select_purple_101_png);
+        LOAD(shadows[master], knob_master_shadow_png); LOAD(shadows[fx], knob_fx_shadow_png);
+        LOAD(shadows[select], knob_select_shadow_png);
+        LOAD(chassis, chassis_dark_256_png);
+        LOAD(module[neutral], module_neutral_320x180_png); LOAD(module[amber], module_amber_320x180_png);
+        LOAD(module[cyan], module_cyan_320x180_png); LOAD(module[red], module_red_320x180_png);
+        LOAD(module[purple], module_purple_320x180_png);
+#define LOAD_BUTTON(colour) \
+        LOAD(buttons[colour][0], button_##colour##_off_png); LOAD(buttons[colour][1], button_##colour##_on_png); \
+        LOAD(buttons[colour][2], button_##colour##_hover_png); LOAD(buttons[colour][3], button_##colour##_pressed_png); \
+        LOAD(buttons[colour][4], button_##colour##_disabled_png); \
+        LOAD(leds[colour][0], led_##colour##_off_png); LOAD(leds[colour][1], led_##colour##_on_png)
+        LOAD_BUTTON(neutral); LOAD_BUTTON(amber); LOAD_BUTTON(cyan); LOAD_BUTTON(red); LOAD_BUTTON(purple);
+#undef LOAD_BUTTON
+        LOAD(vuFace, vu_face_png); LOAD(vuNeedle, vu_needle_png); LOAD(vuGlass, vu_glass_png);
+#undef LOAD
+    }
+    static Gui3DAssets &get() { static Gui3DAssets assets; return assets; }
+    static Accent closestAccent(juce::Colour c) {
+        const std::array<juce::Colour,5> colours{juce::Colour(0xffbec6c9),juce::Colour(0xffff9914),
+            juce::Colour(0xff24daf2),juce::Colour(0xffff4946),juce::Colour(0xffb84dff)};
+        int best=0; int distance=std::numeric_limits<int>::max();
+        for(int i=0;i<5;++i){
+            const int dr=int(c.getRed())-int(colours[i].getRed());
+            const int dg=int(c.getGreen())-int(colours[i].getGreen());
+            const int db=int(c.getBlue())-int(colours[i].getBlue());
+            const int candidate=dr*dr+dg*dg+db*db;
+            if(candidate<distance){distance=candidate;best=i;}
+        }
+        return Accent(best);
+    }
+};
 class MonoAnalogLook final : public JerzyAudioUI::HardwareLookAndFeel {
 public:
     MonoAnalogLook():HardwareLookAndFeel(JerzyAudioUI::steel()){}
     void drawRotarySlider(juce::Graphics& g,int x,int y,int w,int h,float p,float a0,float a1,juce::Slider& slider) override {
-        juce::Graphics::ScopedSaveState saved(g);g.setOpacity(slider.isEnabled()?1.0f:.45f);
-        auto b=juce::Rectangle<float>(float(x),float(y),float(w),float(h)).reduced(5.0f);
-        const float d=juce::jmin(b.getWidth(),b.getHeight());
-        auto r=juce::Rectangle<float>(d,d).withCentre(b.getCentre());const auto cc=r.getCentre();
-        g.setColour(juce::Colour(0xff050505).withAlpha(.8f));g.fillEllipse(r.translated(0.0f,d*.045f));
-        juce::ColourGradient rim(juce::Colour(0xffddd7c7),cc.x,r.getY(),juce::Colour(0xff292b2c),cc.x,r.getBottom(),false);
-        rim.addColour(.48,juce::Colour(0xff777a79));g.setGradientFill(rim);g.fillEllipse(r);
-        g.setColour(juce::Colour(0xff0e0f0f));g.drawEllipse(r,juce::jmax(1.0f,d*.035f));
-        auto face=r.reduced(d*.105f);
-        juce::ColourGradient body(juce::Colour(0xff4b8193),face.getX(),face.getY(),juce::Colour(0xff192c34),face.getRight(),face.getBottom(),false);
-        body.addColour(.38,juce::Colour(0xff496a76));body.addColour(.72,juce::Colour(0xff293b43));
-        g.setGradientFill(body);g.fillEllipse(face);
-        g.setColour(juce::Colour(0xff9fd6e2).withAlpha(.75f));g.drawEllipse(face,d*.018f);
-        auto inner=face.reduced(d*.18f);
-        juce::ColourGradient cap(juce::Colour(0xffd6e0df),inner.getX(),inner.getY(),juce::Colour(0xff555d60),inner.getRight(),inner.getBottom(),false);
-        cap.addColour(.5,juce::Colour(0xff929fa2));g.setGradientFill(cap);g.fillEllipse(inner);
-        const float a=a0+p*(a1-a0),tickR=d*.49f;
-        for(int i=0;i<=20;++i){
-            const float t=float(i)/20.0f,angle=a0+t*(a1-a0);
-            juce::Point<float> p1(cc.x+std::sin(angle)*(tickR-d*.035f),cc.y-std::cos(angle)*(tickR-d*.035f));
-            juce::Point<float> p2(cc.x+std::sin(angle)*(tickR+(i%5==0?d*.005f:-d*.01f)),cc.y-std::cos(angle)*(tickR+(i%5==0?d*.005f:-d*.01f)));
-            g.setColour(t<=p?juce::Colour(0xff67e3ee):juce::Colour(0xff71858d));
-            g.drawLine(p1.x,p1.y,p2.x,p2.y,juce::jmax(1.0f,d*.012f));
-        }
-        juce::Path arc;arc.addCentredArc(cc.x,cc.y,tickR,tickR,0.0f,a0,a,true);
-        g.setColour(juce::Colour(0xff45cadc));g.strokePath(arc,juce::PathStrokeType(juce::jmax(2.0f,d*.035f)));
-        juce::Path pointer;pointer.startNewSubPath(cc.x,cc.y-d*.10f);pointer.lineTo(cc.x,cc.y-d*.39f);
-        pointer.applyTransform(juce::AffineTransform::rotation(a,cc.x,cc.y));
-        g.setColour(juce::Colour(0xff09232d));g.strokePath(pointer,juce::PathStrokeType(juce::jmax(4.0f,d*.09f),juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
-        g.setColour(juce::Colour(0xffe1faff));g.strokePath(pointer,juce::PathStrokeType(juce::jmax(2.0f,d*.04f),juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
+        juce::Graphics::ScopedSaveState saved(g);
+        g.setOpacity(slider.isEnabled()?1.0f:.45f);
+        auto &assets=Gui3DAssets::get();
+        const int diameter=juce::jmin(w,h);
+        const auto family=diameter>=100?Gui3DAssets::master:(diameter>=78?Gui3DAssets::fx:Gui3DAssets::select);
+        const auto accent=Gui3DAssets::closestAccent(slider.findColour(juce::Slider::rotarySliderFillColourId));
+        const auto &strip=assets.knobs[family][accent];
+        const auto &shadow=assets.shadows[family];
+        const int frameWidth=strip.getHeight();
+        const int frame=juce::jlimit(0,100,int(std::lround(juce::jlimit(0.0f,1.0f,p)*100.0f)));
+        const int d=juce::jmin(w,h),dx=x+(w-d)/2,dy=y+(h-d)/2;
+        if(shadow.isValid())g.drawImage(shadow,dx,dy,d,d,0,0,shadow.getWidth(),shadow.getHeight());
+        if(strip.isValid())g.drawImage(strip,dx,dy,d,d,frame*frameWidth,0,frameWidth,strip.getHeight());
     }
 };
 #endif
@@ -212,7 +252,15 @@ class Editor final : public Steinberg::CPluginView {
         void paint(juce::Graphics &) override {}
         void mouseDown(const juce::MouseEvent &e) override {
             if(e.mods.isRightButtonDown()){
-                owner.learnParameter(parameter);
+                // MX Delay convention: a plain right click restores the declared
+                // parameter default. Shift+right click keeps Jerzy MultiFX MIDI Learn.
+                if(e.mods.isShiftDown())owner.learnParameter(parameter);
+                else{
+                    const double initial=controlUI()[parameter].definition.initial;
+                    owner.change(parameter,initial);
+                    setValue(initial,juce::dontSendNotification);
+                    repaint();
+                }
                 return;
             }
             juce::Slider::mouseDown(e);
@@ -512,7 +560,16 @@ class Editor final : public Steinberg::CPluginView {
     void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
 #ifdef MULTIFX_JUCE_GUI
         auto area=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
-        if(raised)JerzyAudioUI::paintPanel(*juceGraphics,area,juceLook.getTheme(),4.0f);
+        if(raised){
+            JerzyAudioUI::paintPanel(*juceGraphics,area,juceLook.getTheme(),4.0f);
+            auto &texture=Gui3DAssets::get().module[Gui3DAssets::neutral];
+            if(texture.isValid()){
+                juce::Graphics::ScopedSaveState saved(*juceGraphics);
+                juceGraphics->reduceClipRegion(area.getSmallestIntegerContainer());
+                juceGraphics->setOpacity(.16f);
+                juceGraphics->drawImage(texture,area);
+            }
+        }
         else{
             juceGraphics->setGradientFill(juce::ColourGradient(juce::Colour(0xff0c1923),area.getTopLeft(),
                 juce::Colour(0xff1c2c36),area.getBottomRight(),false));
@@ -537,6 +594,14 @@ class Editor final : public Steinberg::CPluginView {
         line(dc,x-2,y+1,x+2,y-1,RGB(157,169,171));
     }
     void lamp(HDC dc,int x,int y,bool on,COLORREF tint){
+#ifdef MULTIFX_JUCE_GUI
+        const auto accent=Gui3DAssets::closestAccent(juceColor(tint));
+        const auto &image=Gui3DAssets::get().leds[accent][on?1:0];
+        if(image.isValid()){
+            juceGraphics->drawImage(image,juce::Rectangle<float>(float(x-12),float(y-12),24.0f,24.0f));
+            return;
+        }
+#endif
         disk(dc,x,y,10,RGB(2,8,13));
         disk(dc,x,y,8,RGB(102,132,141));
         disk(dc,x,y,6,on?tint:RGB(79,47,52));
@@ -607,6 +672,22 @@ class Editor final : public Steinberg::CPluginView {
             line(dc,cx,cy,cx+int(std::sin((i-1)*.62)*7),cy-int(std::cos((i-1)*.62)*7),RGB(226,240,240),2);
         }
     }
+#ifdef MULTIFX_JUCE_GUI
+    void miniVu(int x,int y,int w,int h,float amplitude){
+        auto &assets=Gui3DAssets::get();
+        const auto target=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
+        if(assets.vuFace.isValid())juceGraphics->drawImage(assets.vuFace,target);
+        const float db=20.0f*std::log10(std::max(amplitude,1.e-6f));
+        const float normalized=std::clamp((db+54.0f)/54.0f,0.0f,1.0f);
+        const float angle=juce::degreesToRadians(-58.0f+116.0f*normalized);
+        const float cx=x+w*.5f,cy=y+h*.89f,length=h*.72f;
+        juceGraphics->setColour(juce::Colour(0xff49130b));
+        juceGraphics->drawLine(cx,cy,cx+std::sin(angle)*length,cy-std::cos(angle)*length,2.2f);
+        juceGraphics->setColour(juce::Colour(0xffff4e2e));
+        juceGraphics->drawLine(cx,cy,cx+std::sin(angle)*length,cy-std::cos(angle)*length,1.0f);
+        if(assets.vuGlass.isValid())juceGraphics->drawImage(assets.vuGlass,target);
+    }
+#endif
     void chrome(HDC dc) {
 #ifdef MULTIFX_JUCE_GUI
         JerzyAudioUI::paintChassis(*juceGraphics,juce::Rectangle<float>(0,0,float(W),float(H)),juceLook.getTheme());
@@ -670,10 +751,15 @@ class Editor final : public Steinberg::CPluginView {
         const float levels[]{needleIn,needleOut};const char* meterNames[]{"IN","OUT"};
         for(int row=0;row<2;++row){
             const int y=99+row*22;const float db=20.f*std::log10(std::max(levels[row],1.e-6f));
+#ifdef MULTIFX_JUCE_GUI
+            text(dc,1115,y,25,meterNames[row],8,RGB(224,238,242));
+            miniVu(1140,y-6,111,21,levels[row]);
+#else
             const int lit=std::clamp(int((db+36.f)/2.5f),0,12);
             text(dc,1117,y,27,meterNames[row],9,RGB(190,219,229));
             for(int i=0;i<12;++i)fill(dc,1145+i*5,y+2,4,8,i<lit?(i>9?RGB(245,174,78):RGB(55,222,155)):RGB(27,52,65));
             char dbText[20];snprintf(dbText,sizeof(dbText),"%.0f",db);text(dc,1208,y,42,dbText,9,RGB(190,219,229));
+#endif
         }
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
@@ -684,6 +770,7 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
 #ifdef MULTIFX_JUCE_GUI
         const int diameter=int(std::round(r*2.65f));
+        drawingSlider.setColour(juce::Slider::rotarySliderFillColourId,juceColor(color));
         juceLook.drawRotarySlider(*juceGraphics,int(cx)-diameter/2,int(cy)-diameter/2,
             diameter,diameter,float(value(c.id)),juce::MathConstants<float>::pi*1.25f,
             juce::MathConstants<float>::pi*2.75f,drawingSlider);
@@ -784,7 +871,17 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,1010,263,211,"TRYB PRACY",13,RGB(217,236,243));
         const char* routes[]{"SZEREGOWY A > B","RÓWNOLEGŁY","MIX A / B"};
         const int routing=int(plain(layout().delayMode,float(value(layout().delayMode))));
-        for(int i=0;i<3;++i){const int y=282+i*44;metalPanel(dc,1007,y,207,36,false);fill(dc,1010,y+3,201,30,routing==i?RGB(23,124,153):RGB(15,36,52));lamp(dc,1023,y+18,routing==i,RGB(75,231,246));text(dc,1035,y+9,168,routes[i],11,RGB(223,240,246));}
+        for(int i=0;i<3;++i){
+            const int y=282+i*44;
+#ifdef MULTIFX_JUCE_GUI
+            const auto &button=Gui3DAssets::get().buttons[Gui3DAssets::cyan][routing==i?1:0];
+            if(button.isValid())juceGraphics->drawImage(button,juce::Rectangle<float>(1007.0f,float(y),207.0f,36.0f));
+            else metalPanel(dc,1007,y,207,36,false);
+#else
+            metalPanel(dc,1007,y,207,36,false);fill(dc,1010,y+3,201,30,routing==i?RGB(23,124,153):RGB(15,36,52));
+#endif
+            lamp(dc,1023,y+18,routing==i,RGB(75,231,246));text(dc,1035,y+9,168,routes[i],11,RGB(223,240,246));
+        }
         line(dc,28,415,1251,415,RGB(31,68,88));
         int featureCount=0;for(int i=0;i<8&&delayFeature(i)>=0;++i)++featureCount;
         const int groupCount=(featureCount+1)/2,totalWidth=groupCount*298+std::max(0,groupCount-1)*8;

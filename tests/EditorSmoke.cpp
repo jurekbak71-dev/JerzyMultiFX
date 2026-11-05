@@ -49,35 +49,47 @@ static void movePointer(HWND h, int x, int y) {
     POINT screen{x, y};
     check(ClientToScreen(h, &screen) != 0, "convert editor pointer to screen");
     check(SetCursorPos(screen.x, screen.y) != 0, "position OS pointer over the editor");
-    SendMessage(h, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+    pump();
+    Sleep(8);
+}
+static void mouseInput(DWORD flags) {
+    INPUT input{};
+    input.type=INPUT_MOUSE;
+    input.mi.dwFlags=flags;
+    check(SendInput(1,&input,sizeof(input))==1,"inject physical Windows mouse input");
     pump();
 }
 static void click(HWND h, int x, int y) {
     movePointer(h, x, y);
-    SendMessage(h, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-    SendMessage(h, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
-    pump();
+    mouseInput(MOUSEEVENTF_LEFTDOWN);
+    Sleep(8);
+    mouseInput(MOUSEEVENTF_LEFTUP);
 }
 static void drag(HWND h, int x, int y, int endX, int endY) {
     movePointer(h, x, y);
-    SendMessage(h,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(x,y));
-    pump();
+    mouseInput(MOUSEEVENTF_LEFTDOWN);
     Sleep(10);
     // Keep the actual OS pointer and simulated JUCE drag destination in sync.
     // JUCE's rotary drag uses the desktop pointer delta on Windows.
     POINT endScreen{endX,endY};
     check(ClientToScreen(h,&endScreen)!=0, "convert drag endpoint to screen");
     check(SetCursorPos(endScreen.x,endScreen.y)!=0, "position cursor at drag endpoint");
-    SendMessage(h,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(endX,endY));
     pump();
     Sleep(10);
-    SendMessage(h,WM_LBUTTONUP,0,MAKELPARAM(endX,endY));
-    pump();
+    mouseInput(MOUSEEVENTF_LEFTUP);
 }
 static void rightClick(HWND h,int x,int y) {
     movePointer(h, x, y);
-    SendMessage(h,WM_RBUTTONDOWN,MK_RBUTTON,MAKELPARAM(x,y));
-    SendMessage(h,WM_RBUTTONUP,0,MAKELPARAM(x,y));
+    mouseInput(MOUSEEVENTF_RIGHTDOWN);
+    Sleep(8);
+    mouseInput(MOUSEEVENTF_RIGHTUP);
+}
+static void shiftRightClick(HWND h,int x,int y) {
+    INPUT key{};key.type=INPUT_KEYBOARD;key.ki.wVk=VK_SHIFT;
+    check(SendInput(1,&key,sizeof(key))==1,"press Shift for MIDI Learn");
+    rightClick(h,x,y);
+    key.ki.dwFlags=KEYEVENTF_KEYUP;
+    check(SendInput(1,&key,sizeof(key))==1,"release Shift after MIDI Learn");
     pump();
 }
 static void checkSurfaceBounds(HWND editor, HWND surface, const char *message) {
@@ -219,6 +231,12 @@ int main(int argc, char **argv) try {
               "reference TIME knob controls the Oil Drum engine");
         check(edits.begins==1&&edits.performs>0&&edits.ends==1&&edits.lastId==ParamID(oilTime),
               "visible JUCE knob sends one complete VST3 automation gesture to the host");
+        edits.reset();
+        rightClick(pointerTarget,120,330);
+        check(std::abs(c->getParamNormalized(oilTime)-controlUI()[oilTime].definition.initial)<1e-6,
+              "right click restores the knob default value");
+        check(edits.begins==1&&edits.performs==1&&edits.ends==1&&edits.lastId==ParamID(oilTime),
+              "right click reset sends one complete VST3 automation gesture");
         // Record the actual route value before and after a real editor click.
         // This distinguishes lost JUCE pointer dispatch from incorrect VST3
         // parameter normalization, without hiding the regression.
@@ -251,7 +269,7 @@ int main(int argc, char **argv) try {
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
         click(pointerTarget, 900, 650);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        rightClick(pointerTarget,427,443);
+        shiftRightClick(pointerTarget,427,443);
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
         drag(pointerTarget,100,110,545,110);
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
@@ -310,7 +328,7 @@ int main(int argc, char **argv) try {
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
         click(pointerTarget, 100, 110);
         pump(); // Reordered MD block is now first.
-        rightClick(pointerTarget,120,330);
+        shiftRightClick(pointerTarget,120,330);
         check(std::abs(c->getParamNormalized(layout().midiLearn) -
                        double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
               "reference DELAY TIME knob learns the common MIDI macro");
