@@ -17,43 +17,83 @@
 #include <memory>
 #ifdef MULTIFX_JUCE_GUI
 #include "JerzyVSTGuiKit.h"
+#include "BinaryData.h"
 #endif
 namespace multifx {
 #ifdef MULTIFX_JUCE_GUI
+struct Gui3DAssets final {
+    enum Family { master, fx, select };
+    enum Accent { neutral, amber, cyan, red, purple };
+    juce::Image knobs[3][5];
+    juce::Image shadows[3];
+    juce::Image chassis;
+    juce::Image module[5];
+    juce::Image buttons[5][5];
+    juce::Image leds[5][2];
+    juce::Image vuFace, vuNeedle, vuGlass;
+
+    static juce::Image decode(const void *data, int bytes) {
+        return juce::ImageFileFormat::loadFrom(data, size_t(bytes));
+    }
+    Gui3DAssets() {
+#define LOAD(target, resource) target = decode(BinaryData::resource, BinaryData::resource##Size)
+        LOAD(knobs[master][neutral], knob_master_neutral_101_png); LOAD(knobs[master][amber], knob_master_amber_101_png);
+        LOAD(knobs[master][cyan], knob_master_cyan_101_png); LOAD(knobs[master][red], knob_master_red_101_png);
+        LOAD(knobs[master][purple], knob_master_purple_101_png);
+        LOAD(knobs[fx][neutral], knob_fx_neutral_101_png); LOAD(knobs[fx][amber], knob_fx_amber_101_png);
+        LOAD(knobs[fx][cyan], knob_fx_cyan_101_png); LOAD(knobs[fx][red], knob_fx_red_101_png);
+        LOAD(knobs[fx][purple], knob_fx_purple_101_png);
+        LOAD(knobs[select][neutral], knob_select_neutral_101_png); LOAD(knobs[select][amber], knob_select_amber_101_png);
+        LOAD(knobs[select][cyan], knob_select_cyan_101_png); LOAD(knobs[select][red], knob_select_red_101_png);
+        LOAD(knobs[select][purple], knob_select_purple_101_png);
+        LOAD(shadows[master], knob_master_shadow_png); LOAD(shadows[fx], knob_fx_shadow_png);
+        LOAD(shadows[select], knob_select_shadow_png);
+        LOAD(chassis, chassis_dark_256_png);
+        LOAD(module[neutral], module_neutral_320x180_png); LOAD(module[amber], module_amber_320x180_png);
+        LOAD(module[cyan], module_cyan_320x180_png); LOAD(module[red], module_red_320x180_png);
+        LOAD(module[purple], module_purple_320x180_png);
+#define LOAD_BUTTON(colour) \
+        LOAD(buttons[colour][0], button_##colour##_off_png); LOAD(buttons[colour][1], button_##colour##_on_png); \
+        LOAD(buttons[colour][2], button_##colour##_hover_png); LOAD(buttons[colour][3], button_##colour##_pressed_png); \
+        LOAD(buttons[colour][4], button_##colour##_disabled_png); \
+        LOAD(leds[colour][0], led_##colour##_off_png); LOAD(leds[colour][1], led_##colour##_on_png)
+        LOAD_BUTTON(neutral); LOAD_BUTTON(amber); LOAD_BUTTON(cyan); LOAD_BUTTON(red); LOAD_BUTTON(purple);
+#undef LOAD_BUTTON
+        LOAD(vuFace, vu_face_png); LOAD(vuNeedle, vu_needle_png); LOAD(vuGlass, vu_glass_png);
+#undef LOAD
+    }
+    static Gui3DAssets &get() { static Gui3DAssets assets; return assets; }
+    static Accent closestAccent(juce::Colour c) {
+        const std::array<juce::Colour,5> colours{juce::Colour(0xffbec6c9),juce::Colour(0xffff9914),
+            juce::Colour(0xff24daf2),juce::Colour(0xffff4946),juce::Colour(0xffb84dff)};
+        int best=0; int distance=std::numeric_limits<int>::max();
+        for(int i=0;i<5;++i){
+            const int dr=int(c.getRed())-int(colours[i].getRed());
+            const int dg=int(c.getGreen())-int(colours[i].getGreen());
+            const int db=int(c.getBlue())-int(colours[i].getBlue());
+            const int candidate=dr*dr+dg*dg+db*db;
+            if(candidate<distance){distance=candidate;best=i;}
+        }
+        return Accent(best);
+    }
+};
 class MonoAnalogLook final : public JerzyAudioUI::HardwareLookAndFeel {
 public:
     MonoAnalogLook():HardwareLookAndFeel(JerzyAudioUI::steel()){}
     void drawRotarySlider(juce::Graphics& g,int x,int y,int w,int h,float p,float a0,float a1,juce::Slider& slider) override {
-        juce::Graphics::ScopedSaveState saved(g);g.setOpacity(slider.isEnabled()?1.0f:.45f);
-        auto b=juce::Rectangle<float>(float(x),float(y),float(w),float(h)).reduced(5.0f);
-        const float d=juce::jmin(b.getWidth(),b.getHeight());
-        auto r=juce::Rectangle<float>(d,d).withCentre(b.getCentre());const auto cc=r.getCentre();
-        g.setColour(juce::Colour(0xff050505).withAlpha(.8f));g.fillEllipse(r.translated(0.0f,d*.045f));
-        juce::ColourGradient rim(juce::Colour(0xffddd7c7),cc.x,r.getY(),juce::Colour(0xff292b2c),cc.x,r.getBottom(),false);
-        rim.addColour(.48,juce::Colour(0xff777a79));g.setGradientFill(rim);g.fillEllipse(r);
-        g.setColour(juce::Colour(0xff0e0f0f));g.drawEllipse(r,juce::jmax(1.0f,d*.035f));
-        auto face=r.reduced(d*.105f);
-        juce::ColourGradient body(juce::Colour(0xff4b8193),face.getX(),face.getY(),juce::Colour(0xff192c34),face.getRight(),face.getBottom(),false);
-        body.addColour(.38,juce::Colour(0xff496a76));body.addColour(.72,juce::Colour(0xff293b43));
-        g.setGradientFill(body);g.fillEllipse(face);
-        g.setColour(juce::Colour(0xff9fd6e2).withAlpha(.75f));g.drawEllipse(face,d*.018f);
-        auto inner=face.reduced(d*.18f);
-        juce::ColourGradient cap(juce::Colour(0xffd6e0df),inner.getX(),inner.getY(),juce::Colour(0xff555d60),inner.getRight(),inner.getBottom(),false);
-        cap.addColour(.5,juce::Colour(0xff929fa2));g.setGradientFill(cap);g.fillEllipse(inner);
-        const float a=a0+p*(a1-a0),tickR=d*.49f;
-        for(int i=0;i<=20;++i){
-            const float t=float(i)/20.0f,angle=a0+t*(a1-a0);
-            juce::Point<float> p1(cc.x+std::sin(angle)*(tickR-d*.035f),cc.y-std::cos(angle)*(tickR-d*.035f));
-            juce::Point<float> p2(cc.x+std::sin(angle)*(tickR+(i%5==0?d*.005f:-d*.01f)),cc.y-std::cos(angle)*(tickR+(i%5==0?d*.005f:-d*.01f)));
-            g.setColour(t<=p?juce::Colour(0xff67e3ee):juce::Colour(0xff71858d));
-            g.drawLine(p1.x,p1.y,p2.x,p2.y,juce::jmax(1.0f,d*.012f));
-        }
-        juce::Path arc;arc.addCentredArc(cc.x,cc.y,tickR,tickR,0.0f,a0,a,true);
-        g.setColour(juce::Colour(0xff45cadc));g.strokePath(arc,juce::PathStrokeType(juce::jmax(2.0f,d*.035f)));
-        juce::Path pointer;pointer.startNewSubPath(cc.x,cc.y-d*.10f);pointer.lineTo(cc.x,cc.y-d*.39f);
-        pointer.applyTransform(juce::AffineTransform::rotation(a,cc.x,cc.y));
-        g.setColour(juce::Colour(0xff09232d));g.strokePath(pointer,juce::PathStrokeType(juce::jmax(4.0f,d*.09f),juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
-        g.setColour(juce::Colour(0xffe1faff));g.strokePath(pointer,juce::PathStrokeType(juce::jmax(2.0f,d*.04f),juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
+        juce::Graphics::ScopedSaveState saved(g);
+        g.setOpacity(slider.isEnabled()?1.0f:.45f);
+        auto &assets=Gui3DAssets::get();
+        const int diameter=juce::jmin(w,h);
+        const auto family=diameter>=100?Gui3DAssets::master:(diameter>=78?Gui3DAssets::fx:Gui3DAssets::select);
+        const auto accent=Gui3DAssets::closestAccent(slider.findColour(juce::Slider::rotarySliderFillColourId));
+        const auto &strip=assets.knobs[family][accent];
+        const auto &shadow=assets.shadows[family];
+        const int frameWidth=strip.getHeight();
+        const int frame=juce::jlimit(0,100,int(std::lround(juce::jlimit(0.0f,1.0f,p)*100.0f)));
+        const int d=juce::jmin(w,h),dx=x+(w-d)/2,dy=y+(h-d)/2;
+        if(shadow.isValid())g.drawImage(shadow,dx,dy,d,d,0,0,shadow.getWidth(),shadow.getHeight());
+        if(strip.isValid())g.drawImage(strip,dx,dy,d,d,frame*frameWidth,0,frameWidth,strip.getHeight());
     }
 };
 #endif
@@ -80,8 +120,41 @@ class Editor final : public Steinberg::CPluginView {
     std::vector<HWND> combos;
     std::string signature;
     bool globalSettings = false;
+    bool rackHome = true; // approved Rack Hybrid: detail editor stays available.
     bool engineMenuOpen = false;
-    bool referenceDelay() const { return view.block == 2 && !view.advanced && !globalSettings; }
+    struct DelayEngineChoice {
+        const char *label;
+        int family;    // existing delayA/B.type: 0 Digital, 1 MX, 2 Memory, 3 Reel, 4 Oil
+        int algorithm; // existing MX slot0 algorithm, -1 for a non-MX engine
+    };
+    static constexpr std::array<DelayEngineChoice,13> delayEngineChoices(){return {{
+        {"DIGITAL",0,-1},
+        {"VOLANTE / MULTIHEAD",1,0},
+        {"EL CAPISTAN / TAPE",1,1},
+        {"OLIVERA / OIL CAN",1,2},
+        {"EC-1 / TUBE",1,3},
+        {"BRIG / BBD",1,4},
+        {"DECO / DOUBLETRACK",1,5},
+        {"DIG / DUAL DIGITAL",1,6},
+        {"SPACE ECHO 202",1,7},
+        {"DM-101",1,8},
+        {"MEMORY DELAY",2,-1},
+        {"REEL ECHO",3,-1},
+        {"OIL DRUM",4,-1}
+    }}; }
+    static constexpr int delayMenuX=35,delayMenuY=246;
+    static constexpr int delayMenuWidth=493,delayMenuHeight=226;
+    static constexpr int delayMenuColWidth=244,delayMenuRowHeight=29;
+    static int delayMenuChoiceAt(int x,int y){
+        if(x<delayMenuX+7||x>=delayMenuX+delayMenuWidth-7||
+           y<delayMenuY+8||y>=delayMenuY+delayMenuHeight-7)return -1;
+        const int column=(x-(delayMenuX+7))/delayMenuColWidth;
+        const int row=(y-(delayMenuY+8))/delayMenuRowHeight;
+        if(column<0||column>=2||row<0||row>=7)return -1;
+        const int i=column*7+row;
+        return i<int(delayEngineChoices().size())?i:-1;
+    }
+    bool referenceDelay() const { return !rackHome && view.block == 2 && !view.advanced && !globalSettings; }
     int delayControl(int bank, int kind) const {
         static const DelayMidiRoutes routes;
         const State s = state();
@@ -166,6 +239,10 @@ class Editor final : public Steinberg::CPluginView {
         void paint(juce::Graphics &g) override {owner.paint(nullptr,&g);}
         void mouseDown(const juce::MouseEvent &e) override {
             rightPressed=e.mods.isRightButtonDown();
+            // Page navigation is part of the native JUCE canvas, not a
+            // transient child control. Forward it through the existing editor
+            // hit-test just like section and preset navigation.
+            // This preserves one input path across Windows/FL Studio hosts.
             owner.dispatchJucePointer(rightPressed?WM_RBUTTONDOWN:WM_LBUTTONDOWN,
                                       rightPressed?MK_RBUTTON:MK_LBUTTON,point(e));
         }
@@ -212,7 +289,21 @@ class Editor final : public Steinberg::CPluginView {
         void paint(juce::Graphics &) override {}
         void mouseDown(const juce::MouseEvent &e) override {
             if(e.mods.isRightButtonDown()){
-                owner.learnParameter(parameter);
+                // MX Delay convention: a plain right click restores the declared
+                // parameter default. Shift+right click keeps Jerzy MultiFX MIDI Learn.
+                // Some Windows hosts omit keyboard modifiers from JUCE's
+                // right-click snapshot while SHIFT is physically held.
+                // Honor both JUCE modifiers and actual Windows key state.
+                const bool learn=e.mods.isShiftDown() ||
+                                 (GetAsyncKeyState(VK_SHIFT)&0x8000)!=0 ||
+                                 (GetKeyState(VK_SHIFT)&0x8000)!=0;
+                if(learn)owner.learnParameter(parameter);
+                else{
+                    const double initial=controlUI()[parameter].definition.initial;
+                    owner.change(parameter,initial);
+                    setValue(initial,juce::dontSendNotification);
+                    repaint();
+                }
                 return;
             }
             juce::Slider::mouseDown(e);
@@ -252,8 +343,74 @@ class Editor final : public Steinberg::CPluginView {
                 owner.change(layout().delayMode, double(route) / 2.0);
         }
     };
+    // Native JUCE overlay: the popup must be a child above all knobs.
+    // Merely drawing it in JuceCanvas is not enough in FL Studio hosts.
+    class JuceEnginePopup final : public juce::Component {
+        Editor &owner;
+    public:
+        explicit JuceEnginePopup(Editor &editor):owner(editor){
+            setOpaque(true);
+            setInterceptsMouseClicks(true,false);
+        }
+        void fit(float scaleX,float scaleY){
+            setBounds(int(std::lround(delayMenuX*scaleX)),
+                      int(std::lround(delayMenuY*scaleY)),
+                      std::max(1,int(std::lround(delayMenuWidth*scaleX))),
+                      std::max(1,int(std::lround(delayMenuHeight*scaleY))));
+        }
+        void paint(juce::Graphics &g) override {
+            g.fillAll(juce::Colour(0xff10151c));
+            const float sx=float(getWidth())/delayMenuWidth;
+            const float sy=float(getHeight())/delayMenuHeight;
+            g.addTransform(juce::AffineTransform::scale(sx,sy));
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xff303137),0,0,
+                juce::Colour(0xff0d1116),float(delayMenuWidth),float(delayMenuHeight),false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(0,0,delayMenuWidth,delayMenuHeight),6.f);
+            g.setColour(juce::Colour(0xffad8550));
+            g.drawRoundedRectangle(juce::Rectangle<float>(1,1,delayMenuWidth-2,delayMenuHeight-2),6.f,1.4f);
+            const int bank=std::clamp(owner.view.section,0,1);
+            const int family=int(std::lround(owner.value(layout().delayType[bank])*4));
+            const int algorithm=int(std::lround(owner.value(layout().mxAlgorithms[bank][0])*8));
+            const auto engines=delayEngineChoices();
+            for(int i=0;i<int(engines.size());++i){
+                const int col=i/7,row=i%7;
+                const int xx=7+col*delayMenuColWidth,yy=8+row*delayMenuRowHeight;
+                const bool selected=family==engines[i].family &&
+                    (engines[i].algorithm<0||algorithm==engines[i].algorithm);
+                if(selected){
+                    g.setColour(juce::Colour(0xff654a27));
+                    g.fillRoundedRectangle(juce::Rectangle<float>(xx+2,yy+2,delayMenuColWidth-6,delayMenuRowHeight-3),3.f);
+                }
+                g.setColour(selected?juce::Colour(0xffffdda2):juce::Colour(0xffe6ebef));
+                g.setFont(juce::Font(juce::FontOptions(12.f).withStyle("Bold")));
+                g.drawFittedText(engines[i].label,xx+9,yy+3,delayMenuColWidth-17,24,
+                                 juce::Justification::centredLeft,1,0.8f);
+            }
+        }
+        void mouseDown(const juce::MouseEvent &e) override {
+            if(e.mods.isRightButtonDown())return;
+            const int x=delayMenuX+int(float(e.x)*delayMenuWidth/std::max(1,getWidth()));
+            const int y=delayMenuY+int(float(e.y)*delayMenuHeight/std::max(1,getHeight()));
+            const int selected=delayMenuChoiceAt(x,y);
+            owner.engineMenuOpen=false;
+            setVisible(false);
+            for(auto &slider:owner.juceParameterSliders)slider->setVisible(true);
+            if(selected>=0){
+                const auto engine=delayEngineChoices()[selected];
+                const int bank=std::clamp(owner.view.section,0,1);
+                owner.change(layout().delayType[bank],double(engine.family)/4);
+                if(engine.algorithm>=0)
+                    owner.change(layout().mxAlgorithms[bank][0],double(engine.algorithm)/8);
+                if(owner.value(layout().digital[bank]+2)<.01)
+                    owner.change(layout().digital[bank]+2,.5);
+                // Avoid deleting the active popup during this JUCE callback.
+                PostMessage(owner.window,WM_APP+33,0,0);
+            }else owner.requestRepaint();
+        }
+    };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
     std::unique_ptr<JuceCanvas> juceCanvas;
+    std::unique_ptr<JuceEnginePopup> juceEnginePopup;
     std::vector<std::unique_ptr<JuceParameterSlider>> juceParameterSliders;
     std::vector<std::unique_ptr<JuceRoutingButton>> juceRoutingButtons;
     juce::Graphics *juceGraphics=nullptr;
@@ -269,16 +426,25 @@ class Editor final : public Steinberg::CPluginView {
         juceCanvas->setBounds(0,0,width,height);
         const float scaleX=float(width)/W,scaleY=float(height)/H;
         for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+        if(juceEnginePopup)juceEnginePopup->fit(scaleX,scaleY);
         for(int i=0;i<int(juceRoutingButtons.size());++i)
             juceRoutingButtons[i]->setBounds(int(std::lround(1007*scaleX)),
                                              int(std::lround((282+i*44)*scaleY)),
                                              std::max(1,int(std::lround(207*scaleX))),
                                              std::max(1,int(std::lround(36*scaleY))));
+
     }
     void rebuildJuceParameterSliders(){
         juceParameterSliders.clear();
         juceRoutingButtons.clear();
+        // Do NOT delete the page button receiving this click. JUCE maintains
+        // capture and drag bookkeeping until mouseUp, even after callbacks.
         if(!juceCanvas)return;
+        if(!juceEnginePopup){
+            juceEnginePopup=std::make_unique<JuceEnginePopup>(*this);
+            juceCanvas->addChildComponent(*juceEnginePopup);
+        }
+        juceEnginePopup->setVisible(engineMenuOpen&&referenceDelay());
         auto add=[&](int id,bool horizontal,juce::Rectangle<int> bounds){
             if(id<0)return;
             auto slider=std::make_unique<JuceParameterSlider>(*this,id,horizontal,bounds);
@@ -300,7 +466,16 @@ class Editor final : public Steinberg::CPluginView {
         RECT client{};GetClientRect(window,&client);
         const float scaleX=float(std::max(1L,client.right))/W;
         const float scaleY=float(std::max(1L,client.bottom))/H;
-        for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+        for(auto &slider:juceParameterSliders){
+            slider->fit(scaleX,scaleY);
+            // An open engine menu is the mouse modal layer of this panel.
+            // Otherwise hidden rotary children intercept the popup choices.
+            slider->setVisible(!engineMenuOpen);
+        }
+        if(juceEnginePopup){
+            juceEnginePopup->fit(scaleX,scaleY);
+            if(juceEnginePopup->isVisible())juceEnginePopup->toFront(false);
+        }
         if(referenceDelay()){
             for(int i=0;i<3;++i){
                 auto button=std::make_unique<JuceRoutingButton>(*this,i);
@@ -313,6 +488,7 @@ class Editor final : public Steinberg::CPluginView {
                 juceRoutingButtons.push_back(std::move(button));
             }
         }
+
     }
     void syncJuceParameterSliders(){
         for(auto &slider:juceParameterSliders){
@@ -503,6 +679,23 @@ class Editor final : public Steinberg::CPluginView {
 #endif
     }
     void bevel(HDC dc, int x, int y, int w, int h, COLORREF tint) {
+#ifdef MULTIFX_JUCE_GUI
+        if(!rackHome){
+            auto r=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
+            auto tintColor=juceColor(tint);
+            // Keep each legacy control's size and hit target but give its
+            // native JUCE face the same chamfered graphite rack material.
+            auto base=juce::Colour(0xff292c31).interpolatedWith(tintColor,.14f);
+            juceGraphics->setColour(juce::Colours::black.withAlpha(.76f));
+            juceGraphics->fillRoundedRectangle(r.translated(1,2),4);
+            juceGraphics->setGradientFill(juce::ColourGradient(base.brighter(.20f),
+                r.getTopLeft(),base.darker(.62f),r.getBottomRight(),false));
+            juceGraphics->fillRoundedRectangle(r,4);
+            juceGraphics->setColour(juce::Colour(0xff71777f));
+            juceGraphics->drawRoundedRectangle(r,4,.9f);
+            return;
+        }
+#endif
         fill(dc, x, y, w, h, tint);
         line(dc, x, y, x+w-1, y, RGB(69,88,103));
         line(dc, x, y, x, y+h-1, RGB(51,69,84));
@@ -512,7 +705,27 @@ class Editor final : public Steinberg::CPluginView {
     void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
 #ifdef MULTIFX_JUCE_GUI
         auto area=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
-        if(raised)JerzyAudioUI::paintPanel(*juceGraphics,area,juceLook.getTheme(),4.0f);
+        if(!rackHome){
+            juceGraphics->setColour(juce::Colours::black.withAlpha(.65f));
+            juceGraphics->fillRoundedRectangle(area.translated(1,3),6);
+            const auto metal=raised?juce::Colour(0xff35373c):juce::Colour(0xff23262c);
+            juceGraphics->setGradientFill(juce::ColourGradient(metal.brighter(.17f),
+                area.getTopLeft(),metal.darker(.65f),area.getBottomRight(),false));
+            juceGraphics->fillRoundedRectangle(area,6);
+            juceGraphics->setColour(juce::Colour(0xff73787f));
+            juceGraphics->drawRoundedRectangle(area,6,1);
+            return;
+        }
+        if(raised){
+            JerzyAudioUI::paintPanel(*juceGraphics,area,juceLook.getTheme(),4.0f);
+            auto &texture=Gui3DAssets::get().module[Gui3DAssets::neutral];
+            if(texture.isValid()){
+                juce::Graphics::ScopedSaveState saved(*juceGraphics);
+                juceGraphics->reduceClipRegion(area.getSmallestIntegerContainer());
+                juceGraphics->setOpacity(.16f);
+                juceGraphics->drawImage(texture,area);
+            }
+        }
         else{
             juceGraphics->setGradientFill(juce::ColourGradient(juce::Colour(0xff0c1923),area.getTopLeft(),
                 juce::Colour(0xff1c2c36),area.getBottomRight(),false));
@@ -537,6 +750,14 @@ class Editor final : public Steinberg::CPluginView {
         line(dc,x-2,y+1,x+2,y-1,RGB(157,169,171));
     }
     void lamp(HDC dc,int x,int y,bool on,COLORREF tint){
+#ifdef MULTIFX_JUCE_GUI
+        const auto accent=Gui3DAssets::closestAccent(juceColor(tint));
+        const auto &image=Gui3DAssets::get().leds[accent][on?1:0];
+        if(image.isValid()){
+            juceGraphics->drawImage(image,juce::Rectangle<float>(float(x-12),float(y-12),24.0f,24.0f));
+            return;
+        }
+#endif
         disk(dc,x,y,10,RGB(2,8,13));
         disk(dc,x,y,8,RGB(102,132,141));
         disk(dc,x,y,6,on?tint:RGB(79,47,52));
@@ -573,7 +794,17 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,x+7,46,58,label,12,RGB(238,248,250));
         text(dc,x+126,47,59,"PEAK VU",9,RGB(160,191,206));
     }
-    COLORREF accent() const { return view.block == 2 && view.section ? RGB(176,124,255) : RGB(60,213,231); }
+    COLORREF accent() const {
+        // The same effect-specific color drives both the engraved rack accents
+        // and the animated 101-frame physical knob sprites on every subpage.
+        switch(std::clamp(view.block,0,4)){
+        case 0: return RGB(240,91,87);    // DRIVE: red
+        case 1: return RGB(38,211,238);   // MODULATION: cyan
+        case 2: return view.section ? RGB(249,175,52) : RGB(244,160,44); // DELAY: amber
+        case 3: return RGB(183,120,237);  // REVERB: purple
+        default:return RGB(164,198,203);  // CAB/IR: neutral steel
+        }
+    }
     std::string formatted(int id) const {
         return parameterText(id, float(value(id)), value(parameterId("attack.poly")) >= .5);
     }
@@ -607,8 +838,316 @@ class Editor final : public Steinberg::CPluginView {
             line(dc,cx,cy,cx+int(std::sin((i-1)*.62)*7),cy-int(std::cos((i-1)*.62)*7),RGB(226,240,240),2);
         }
     }
+#ifdef MULTIFX_JUCE_GUI
+    void miniVu(int x,int y,int w,int h,float amplitude){
+        auto &assets=Gui3DAssets::get();
+        const auto target=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
+        if(assets.vuFace.isValid())juceGraphics->drawImage(assets.vuFace,target);
+        const float db=20.0f*std::log10(std::max(amplitude,1.e-6f));
+        const float normalized=std::clamp((db+54.0f)/54.0f,0.0f,1.0f);
+        const float angle=juce::degreesToRadians(-58.0f+116.0f*normalized);
+        const float cx=x+w*.5f,cy=y+h*.89f,length=h*.72f;
+        juceGraphics->setColour(juce::Colour(0xff49130b));
+        juceGraphics->drawLine(cx,cy,cx+std::sin(angle)*length,cy-std::cos(angle)*length,2.2f);
+        juceGraphics->setColour(juce::Colour(0xffff4e2e));
+        juceGraphics->drawLine(cx,cy,cx+std::sin(angle)*length,cy-std::cos(angle)*length,1.0f);
+        if(assets.vuGlass.isValid())juceGraphics->drawImage(assets.vuGlass,target);
+    }
+#endif
+
+    int rackParameter(int block,int column) const {
+        static constexpr const char *keys[5][3]={
+            {"drive.gain","drive.tone","drive.level"},
+            {"clone.rate","clone.depth","clone.mix"},
+            {"delayA.time","delayA.feedback","delayA.mix"},
+            {"reverb.size","reverb.damping","reverb.mix"},
+            {"ir.mix","ir.output","ir.mix"}
+        };
+        if(block==2 && column<2) return delayControl(0,column);
+        return parameterId(keys[std::clamp(block,0,4)][column]);
+    }
+#ifdef MULTIFX_JUCE_GUI
+    void paintRackHome() {
+        auto &g=*juceGraphics;
+        auto &a=Gui3DAssets::get();
+        const juce::Colour ink(0xffe4e5e7),muted(0xffa0a9b0),gold(0xfff9ac33);
+        // Hardware colour codes follow the *effect*, not its mutable chain slot:
+        // amber = delay, cyan = modulation, red = drive, violet = reverb.
+        const juce::Colour accents[5]={juce::Colour(0xfff05b57),juce::Colour(0xff26d3ee),
+            juce::Colour(0xfff4a02c),juce::Colour(0xffb778ed),juce::Colour(0xffa4c6cb)};
+        const char *names[5]={"DRIVE","CHORUS","DELAY","REVERB","CAB / IR"};
+        const char *labels[5][3]={{"GAIN","TONE","LEVEL"},{"RATE","DEPTH","MIX"},
+            {"TIME","FEEDBACK","MIX"},{"SIZE","DAMP","MIX"},{"MIX","OUTPUT","MIX"}};
+        const auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
+        auto title=[&](juce::String text,int x,int y,int w,int h,float size,juce::Colour color) {
+            g.setColour(color);g.setFont(size);
+            g.drawFittedText(text,juce::Rectangle<int>(x,y,w,h),juce::Justification::centred,1);
+        };
+        auto panel=[&](juce::Rectangle<float> r,juce::Colour base,float rad) {
+            g.setColour(juce::Colours::black.withAlpha(.85f));
+            g.fillRoundedRectangle(r.translated(1,5),rad);
+            g.setGradientFill(juce::ColourGradient(base.brighter(.22f),r.getTopLeft(),
+                base.darker(.64f),r.getBottomRight(),false));
+            g.fillRoundedRectangle(r,rad);
+            g.setColour(juce::Colour(0xff767b82));g.drawRoundedRectangle(r,rad,1.15f);
+        };
+        auto bolt=[&](float x,float y) {
+            g.setColour(juce::Colour(0xff08090b));g.fillEllipse(x-6,y-6,12,12);
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xffd4d5d6),x-4,y-4,
+                juce::Colour(0xff3a4045),x+4,y+4,false));g.fillEllipse(x-4,y-4,8,8);
+            g.setColour(juce::Colour(0xff17191b));g.drawLine(x-2,y+2,x+2,y-2,1.5f);
+        };
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff2b3038),0,0,
+            juce::Colour(0xff050608),1280,720,false));g.fillAll();
+        panel({10,12,1260,692},juce::Colour(0xff292c30),20);
+        g.setColour(juce::Colour(0xff08090c));
+        g.fillRoundedRectangle(juce::Rectangle<float>(23,91,1234,473),12);
+        g.setColour(juce::Colour(0xff777a7e));
+        g.drawRoundedRectangle(juce::Rectangle<float>(23,91,1234,473),12,1.7f);
+        for(int xx:{29,1251})for(int yy:{28,687})bolt(float(xx),float(yy));
+        title("Jerzy",41,25,112,46,35,ink);
+        title("MultiFX",150,25,185,46,37,gold);
+        title("MULTI EFFECTS PROCESSOR",340,34,209,30,13,muted);
+        panel({559,28,330,47},juce::Colour(0xff17181b),7);
+        title("Factory / Analog Space",569,34,309,34,19,ink);
+        panel({902,28,146,47},juce::Colour(0xff1b1e21),7);
+        title("PRESET",906,35,137,32,16,ink);
+        panel({1059,28,194,47},juce::Colour(0xff30353d),7);
+        title("SZCZEGOLY  >",1062,35,187,32,17,gold);
+        // Two independent hardware-inspired meter and trim columns.
+        for(int side=0;side<2;++side) {
+            const int x=side?1090:31;
+            const float v=side?needleOut:needleIn;
+            const int id=side?layout().masterGain:parameterId("comp.input");
+            panel({float(x),112,158,439},juce::Colour(0xff242426),12);
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xffffd99b),float(x+12),130,
+                juce::Colour(0xffb87829),float(x+147),273,false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+12,130,134,149),8);
+            g.setColour(juce::Colour(0xff533413));
+            g.drawRoundedRectangle(juce::Rectangle<float>(x+12,130,134,149),8,2);
+            const float cx=x+79,cy=256;
+            for(int t=0;t<=10;++t) {
+                const float angle=juce::degreesToRadians(-68.0f+13.6f*t);
+                g.setColour(juce::Colour(0xff4e2e18));
+                g.drawLine(cx+std::sin(angle)*90,cy-std::cos(angle)*90,
+                           cx+std::sin(angle)*79,cy-std::cos(angle)*79,1.25f);
+            }
+            static const char *vuDb[11]={"-20","-10","-7","-5","-3","-1","0","+1","+2","+3","+4"};
+            for(int n=0;n<=10;++n) {
+                const float t=juce::degreesToRadians(-68.0f+13.6f*n);
+                const int px=int(cx+std::sin(t)*64-10),py=int(cy-std::cos(t)*64-9);
+                title(vuDb[n],px,py,20,16,10,n>=8?juce::Colour(0xffa1381d):juce::Colour(0xff49331f));
+            }
+            title("VU",x+45,197,70,27,19,juce::Colour(0xff4e2912));
+            g.setGradientFill(juce::ColourGradient(juce::Colours::white.withAlpha(.22f),
+                float(x+18),135,juce::Colours::white.withAlpha(0.f),float(x+137),217,false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+20,134,118,54),8);
+            const float db=20*std::log10(std::max(v,1.e-6f));
+            const float needle=juce::degreesToRadians(-68.0f+136.0f*std::clamp((db+48)/48,0.0f,1.0f));
+            g.setColour(juce::Colour(0xff562118));
+            g.drawLine(cx,cy,cx+std::sin(needle)*82,cy-std::cos(needle)*82,2.5f);
+            g.setColour(juce::Colour(0xff271411));g.fillEllipse(cx-5,cy-5,10,10);
+            title(side?"OUTPUT":"INPUT",x+11,302,136,30,20,ink);
+            const auto &strip=a.knobs[Gui3DAssets::master][Gui3DAssets::amber];
+            if(strip.isValid()&&id>=0){
+                const int fw=strip.getHeight(),frame=std::clamp(int(std::round(value(id)*100)),0,100);
+                g.drawImage(strip,x+25,344,108,108,frame*fw,0,fw,strip.getHeight());
+            }
+            title(side?"MASTER OUTPUT":"COMP INPUT",x+10,457,138,26,12,muted);
+            if(id>=0)title(juce::String(formatted(id)),x+9,483,139,25,14,gold);
+            bolt(x+13,125);bolt(x+145,535);
+        }
+        for(int slot=0;slot<4;++slot){
+            const int block=order[slot],x=199+slot*220;
+            const juce::Colour accent=accents[block];
+            panel({float(x),112,213,439},juce::Colour(0xff242629),11);
+            g.setColour(juce::Colour(0xff090b0e));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+5,118,203,426),8);
+            g.setGradientFill(juce::ColourGradient(accent.darker(.46f),float(x+8),123,
+                              juce::Colour(0xff181b20),float(x+203),202,false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+8,121,197,77),7);
+            g.setColour(accent);
+            g.drawRoundedRectangle(juce::Rectangle<float>(x+6,120,201,424),8,1.8f);
+            g.setColour(juce::Colour(0xffcbd4d5).withAlpha(.045f));
+            for(int line=208;line<526;line+=9)
+                g.drawLine(float(x+12),float(line),float(x+201),float(line),.55f);
+            g.setColour(accent.withAlpha(.30f));
+            g.drawLine(x+12.0f,203,x+201.0f,203,1.0f);
+            title("FX "+juce::String(slot+1),x+9,132,49,29,17,accent);
+            title(names[block],x+55,130,142,32,19,ink);
+            g.setColour(value(layout().blockBypass[block])>=.5?juce::Colour(0xff743c40):accent);
+            g.fillEllipse(x+17.0f,173,15,15);
+            title("POWER",x+34,170,75,23,11,muted);
+            title("EDIT >",x+132,170,66,23,12,accent);
+            for(int k=0;k<3;++k){
+                const int id=rackParameter(block,k);
+                if(id<0)continue;
+                const int xx=x+11+k*65;
+                const auto &strip=a.knobs[Gui3DAssets::fx][Gui3DAssets::closestAccent(accent)];
+                if(strip.isValid()){
+                    const int fw=strip.getHeight(),frame=std::clamp(int(std::round(value(id)*100)),0,100);
+                    g.drawImage(strip,xx,252,62,62,frame*fw,0,fw,strip.getHeight());
+                }
+                title(labels[block][k],xx-3,316,69,25,12,ink);
+                title(juce::String(formatted(id)),xx-4,346,70,23,11,muted);
+            }
+            g.setColour(juce::Colour(0xff464c51));g.drawLine(x+17.0f,397,x+196.0f,397,1);
+            const auto &selectorImage=a.buttons[Gui3DAssets::closestAccent(accent)][0];
+            if(selectorImage.isValid())g.drawImage(selectorImage,juce::Rectangle<float>(x+14.0f,428,185,47));
+            else panel({float(x+14),428,185,47},juce::Colour(0xff1e2124),6);
+            const int selector=block==0?parameterId("drive.type"):block==1?parameterId("clone.model"):
+                block==2?layout().delayType[0]:block==3?parameterId("reverb.engine"):-1;
+            title(selector>=0?juce::String(formatted(selector)):"CAB / IR",x+18,435,178,31,14,ink);
+            title("TYPE / MODEL     v",x+23,491,166,26,12,accent);
+            bolt(x+15,127);bolt(x+199,127);bolt(x+15,536);bolt(x+199,536);
+        }
+        panel({37,582,1207,101},juce::Colour(0xff26282b),12);
+        title("DELAY A/B",48,601,144,26,15,muted);
+        const int route=std::clamp(int(std::round(value(layout().delayMode)*2)),0,2);
+        for(int i=0;i<2;++i) {
+            const int bx=202+i*166;
+            const auto &routeImage=a.buttons[Gui3DAssets::amber][route==i?1:0];
+            if(routeImage.isValid())g.drawImage(routeImage,juce::Rectangle<float>(float(bx),603,155,51));
+            else panel({float(bx),603,155,51},route==i?juce::Colour(0xff71471b):juce::Colour(0xff1e2023),7);
+            title(i==0?"SERIAL":"PARALLEL",bx+7,609,142,37,15,route==i?gold:ink);
+        }
+        title("CHAIN",556,608,111,29,16,muted);
+        for(int i=0;i<4;++i){
+            const int block=order[i],xx=672+i*138;
+            panel({float(xx),599,112,57},juce::Colour(0xff21242a),7);
+            title(juce::String(i+1)+"  "+names[block],xx+2,608,108,34,13,accents[block]);
+            if(i<3)title(">",xx+108,608,28,34,15,ink);
+        }
+        title("CAB / IR + WSZYSTKIE PARAMETRY W SZCZEGOLACH",674,656,554,23,12,muted);
+    }
+#endif
+
+#ifdef MULTIFX_JUCE_GUI
+    juce::Colour rackDetailAccent() const {
+        // Same color per engine on Home and in all detail/advanced pages.
+        static const juce::Colour colors[5]={
+            juce::Colour(0xfff05b57),juce::Colour(0xff26d3ee),
+            juce::Colour(0xfff4a02c),juce::Colour(0xffb778ed),
+            juce::Colour(0xffa4c6cb)};
+        return colors[std::clamp(view.block,0,4)];
+    }
+    void drawDetailHardwarePanel(juce::Rectangle<float> r,juce::Colour color,int radius=8) {
+        auto &g=*juceGraphics;
+        g.setColour(juce::Colours::black.withAlpha(.72f));
+        g.fillRoundedRectangle(r.translated(1.5f,3.5f),float(radius));
+        g.setGradientFill(juce::ColourGradient(color.brighter(.14f),r.getTopLeft(),
+            color.darker(.55f),r.getBottomRight(),false));
+        g.fillRoundedRectangle(r,float(radius));
+        g.setColour(juce::Colour(0xff6c7177));
+        g.drawRoundedRectangle(r,float(radius),1.0f);
+        g.setColour(juce::Colours::white.withAlpha(.10f));
+        g.drawHorizontalLine(int(r.getY()+2),r.getX()+8,r.getRight()-8);
+        // Fine milled metal edge and corner fasteners, independent of controls.
+        if(r.getWidth()>160.f&&r.getHeight()>90.f){
+            g.setColour(juce::Colours::black.withAlpha(.25f));
+            g.drawRoundedRectangle(r.reduced(4.f),float(std::max(2,radius-2)),.65f);
+            for(auto p:{juce::Point<float>(r.getX()+11,r.getY()+11),
+                        juce::Point<float>(r.getRight()-11,r.getY()+11),
+                        juce::Point<float>(r.getX()+11,r.getBottom()-11),
+                        juce::Point<float>(r.getRight()-11,r.getBottom()-11)}){
+                g.setColour(juce::Colour(0xff090b0e));g.fillEllipse(p.x-4,p.y-4,8,8);
+                g.setColour(juce::Colour(0xff888d93));g.drawEllipse(p.x-3,p.y-3,6,6,1);
+                g.setColour(juce::Colour(0xff17191c));g.drawLine(p.x-2,p.y+2,p.x+2,p.y-2,1);
+            }
+        }
+    }
+    // The same hardware language as Rack Home is applied to every editor page.
+    // Hit boxes and parameter IDs are deliberately unchanged.
+    void paintDetailChrome(HDC dc) {
+        auto &g=*juceGraphics;
+        const auto accent=rackDetailAccent();
+        const juce::Colour bright(0xffe6e9ec),muted(0xffaeb8c0);
+        const char *names[5]={"DRIVE / PREAMP","MODULATION","MD MULTIDELAY","REVERB","CABINET / IR"};
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff30343b),0,0,
+            juce::Colour(0xff080a0d),1280,720,false));
+        g.fillRect(0,0,W,H);
+        drawDetailHardwarePanel({11,11,1258,695},juce::Colour(0xff292b2f),15);
+        // All clickable coordinates in the top strip match the old editor.
+        drawDetailHardwarePanel({20,18,333,50},juce::Colour(0xff1b1d22),7);
+        text(dc,23,22,128,"JERZY",24,RGB(226,229,232));
+        text(dc,153,22,186,"MULTIFX",24,RGB(246,167,54));
+        drawDetailHardwarePanel({365,28,322,36},juce::Colour(0xff1c2024),6);
+        const int preset=std::clamp(int(std::round(value(layout().factoryProgram)*7)),0,7);
+        char presetLabel[96];
+        snprintf(presetLabel,sizeof(presetLabel),"%02d  %s",preset+1,presetNames[preset]);
+        text(dc,365,9,322,"PRESET",11,RGB(181,189,200));
+        text(dc,371,34,18,"<",16,RGB(229,234,237));
+        text(dc,405,37,245,presetLabel,13,RGB(234,237,240));
+        text(dc,668,34,18,">",16,RGB(229,234,237));
+        drawDetailHardwarePanel({696,28,56,36},juce::Colour(0xff38302a),6);
+        text(dc,697,37,54,"SAVE",10,RGB(255,200,113));
+        drawDetailHardwarePanel({765,28,144,36},juce::Colour(0xff20262a),6);
+        bool mapped=false;
+        for(int i=0;i<128;++i)if(value(layout().midiMap+i)>0){mapped=true;break;}
+        text(dc,765,7,144,"MIDI MAPPING",10,RGB(192,200,209));
+        text(dc,774,37,126,mapped?"ACTIVE":"MIDI LEARN",12,RGB(115,232,192));
+        drawDetailHardwarePanel({920,28,162,36},juce::Colour(0xff22282c),6);
+        const char *modeLabel=view.block==2?
+            (view.advanced?"BASIC":"ADVANCED"):
+            (globalSettings?"BACK":"SETTINGS");
+        text(dc,923,36,156,modeLabel,12,RGB(221,232,235));
+        drawDetailHardwarePanel({1091,28,164,36},juce::Colour(0xff47321c),6);
+        text(dc,1094,35,158,"RACK HOME",14,RGB(255,190,90));
+        // Current block and serial order are visible on every submenu.
+        drawDetailHardwarePanel({12,79,1256,74},juce::Colour(0xff15191e),9);
+        const auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
+        for(int slot=0;slot<5;++slot){
+            const int block=order[slot],x=20+slot*216;
+            const bool selected=block==view.block;
+            const juce::Colour colors[5]={juce::Colour(0xfff05b57),juce::Colour(0xff26d3ee),
+                juce::Colour(0xfff4a02c),juce::Colour(0xffb778ed),juce::Colour(0xffa4c6cb)};
+            drawDetailHardwarePanel({float(x),87,201,58},
+                selected?juce::Colour(0xff343338):juce::Colour(0xff24262a),6);
+            g.setColour(selected?colors[block]:juce::Colour(0xff555c64));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+3,89,195,3),1);
+            const bool bypass=value(layout().blockBypass[block])>=.5;
+            g.setColour(bypass?juce::Colour(0xffcc4b4e):colors[block]);
+            g.fillEllipse(x+169.0f,108,12,12);
+            text(dc,x+7,106,30,std::to_string(slot+1).c_str(),17,RGB(222,227,232));
+            text(dc,x+32,100,148,names[block],12,
+                selected?RGB(245,247,249):RGB(177,187,195));
+            text(dc,x+34,123,128,bypass?"BYPASS":"ON / ACTIVE",11,
+                bypass?RGB(232,107,110):RGB(142,220,174));
+        }
+        drawDetailHardwarePanel({1109,87,151,58},juce::Colour(0xff1d2428),6);
+        const float levels[2]={needleIn,needleOut};
+        for(int i=0;i<2;++i){
+            const int y=98+i*22;
+            text(dc,1116,y,27,i?"OUT":"IN",9,RGB(225,229,233));
+            miniVu(1140,y-6,111,21,levels[i]);
+        }
+        // Standard section panel and footer match Rack Home graphite/aluminium.
+        drawDetailHardwarePanel({13,157,1254,468},juce::Colour(0xff202328),11);
+        g.setColour(accent);g.fillRoundedRectangle(juce::Rectangle<float>(26,160,1228,3),1.5f);
+        // Dedicated engraved module identification on every subpage.
+        if(!referenceDelay()){
+            const auto sections=sectionNames(view.block);
+            const std::string section=globalSettings?"GLOBAL / MASTER":
+                sections.empty()?std::string("MODULE PARAMETERS"):
+                sections[std::clamp(view.section,0,int(sections.size())-1)];
+            text(dc,30,155,377,names[std::clamp(view.block,0,4)],19,RGB(241,243,245));
+            text(dc,409,161,436,section.c_str(),12,RGB(183,192,203));
+            g.setColour(accent.withAlpha(.85f));
+            g.fillRoundedRectangle(juce::Rectangle<float>(862,169,192,3),1.5f);
+        }
+        drawDetailHardwarePanel({20,631,1240,60},juce::Colour(0xff1a1d22),9);
+        // The generic editor draws its own live footer buttons. The basic
+        // dual-delay editor returns early, so give only that view a footer
+        // legend here (without duplicate button labels).
+        if(referenceDelay()){
+            text(dc,34,641,609,"DELAY A / B  |  EDIT ENGINE  |  BANK ROUTING",12,RGB(228,231,235));
+            text(dc,668,641,570,"SHIFT + RIGHT CLICK: MIDI LEARN",12,RGB(182,191,201));
+        }
+    }
+#endif
     void chrome(HDC dc) {
 #ifdef MULTIFX_JUCE_GUI
+        if(!rackHome){paintDetailChrome(dc);return;}
         JerzyAudioUI::paintChassis(*juceGraphics,juce::Rectangle<float>(0,0,float(W),float(H)),juceLook.getTheme());
 #else
         fill(dc,0,0,W,H,RGB(7,17,27));
@@ -640,7 +1179,7 @@ class Editor final : public Steinberg::CPluginView {
         bevel(dc,920,28,162,36,RGB(14,32,47));
         text(dc,923,36,156,globalSettings||view.advanced?"WRÓĆ":"USTAWIENIA",11,RGB(204,231,240));
         bevel(dc,1091,28,164,36,RGB(14,32,47));
-        text(dc,1094,36,158,"POMOC",11,RGB(204,231,240));
+        text(dc,1094,36,158,"RACK HOME",11,RGB(204,231,240));
         metalPanel(dc,10,80,1260,72,false);
         fill(dc,13,83,1254,66,RGB(7,18,28));
         auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
@@ -670,10 +1209,15 @@ class Editor final : public Steinberg::CPluginView {
         const float levels[]{needleIn,needleOut};const char* meterNames[]{"IN","OUT"};
         for(int row=0;row<2;++row){
             const int y=99+row*22;const float db=20.f*std::log10(std::max(levels[row],1.e-6f));
+#ifdef MULTIFX_JUCE_GUI
+            text(dc,1115,y,25,meterNames[row],8,RGB(224,238,242));
+            miniVu(1140,y-6,111,21,levels[row]);
+#else
             const int lit=std::clamp(int((db+36.f)/2.5f),0,12);
             text(dc,1117,y,27,meterNames[row],9,RGB(190,219,229));
             for(int i=0;i<12;++i)fill(dc,1145+i*5,y+2,4,8,i<lit?(i>9?RGB(245,174,78):RGB(55,222,155)):RGB(27,52,65));
             char dbText[20];snprintf(dbText,sizeof(dbText),"%.0f",db);text(dc,1208,y,42,dbText,9,RGB(190,219,229));
+#endif
         }
     }
     void referenceKnob(HDC dc, const Control &c, const char *label, int radius, COLORREF color) {
@@ -684,6 +1228,7 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,c.x,c.y,c.w,label,radius>=34?14:12,RGB(224,242,246));
 #ifdef MULTIFX_JUCE_GUI
         const int diameter=int(std::round(r*2.65f));
+        drawingSlider.setColour(juce::Slider::rotarySliderFillColourId,juceColor(color));
         juceLook.drawRotarySlider(*juceGraphics,int(cx)-diameter/2,int(cy)-diameter/2,
             diameter,diameter,float(value(c.id)),juce::MathConstants<float>::pi*1.25f,
             juce::MathConstants<float>::pi*2.75f,drawingSlider);
@@ -743,7 +1288,8 @@ class Editor final : public Steinberg::CPluginView {
         const auto &definition=layout().parameters[c.id];
         if(radius==40){
             char display[32];
-            if(std::string_view(label)=="CZAS DELAYA")
+            if(std::string_view(label)=="CZAS DELAYA"||
+               std::string_view(label)=="DELAY TIME")
                 snprintf(display,sizeof(display),"%.0f ms",plain(c.id,float(value(c.id))));
             else
                 snprintf(display,sizeof(display),"%.0f %%",100*plain(c.id,float(value(c.id))));
@@ -757,10 +1303,16 @@ class Editor final : public Steinberg::CPluginView {
              RGB(112,231,240));
     }
     void referenceDelayPanel(HDC dc) {
-        metalPanel(dc,11,160,1258,548); fill(dc,14,163,1252,542,RGB(11,25,36));
-        screw(dc,21,170); screw(dc,1259,170); screw(dc,21,699); screw(dc,1259,699);
-        text(dc,29,170,285,"DELAY A + B",26,RGB(230,250,252));
-        text(dc,321,178,390,"DWA NIEZALEŻNE SILNIKI OPÓŹNIENIA",11,RGB(132,178,195));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({14,161,1251,463},juce::Colour(0xff1e2126),9);
+        juceGraphics->setColour(rackDetailAccent());
+        juceGraphics->fillRoundedRectangle(juce::Rectangle<float>(28,162,1215,3),1.5f);
+#else
+        metalPanel(dc,11,160,1258,548); fill(dc,14,163,1252,542,RGB(28,32,37));
+#endif
+        screw(dc,21,170); screw(dc,1259,170); screw(dc,21,614); screw(dc,1259,614);
+        text(dc,29,170,285,"MD MULTIDELAY",25,RGB(240,242,244));
+        text(dc,321,178,390,"BANK A / BANK B  -  SERIAL / PARALLEL",11,RGB(175,184,191));
         const int bank=std::clamp(view.section,0,1),mix=layout().digital[bank]+2;
         text(dc,823,177,48,"MIX",13,RGB(225,245,249)); metalPanel(dc,866,180,298,14,false);
         fill(dc,868,184,294,6,RGB(2,9,15)); fill(dc,868,184,int(294*value(mix)),6,RGB(43,210,235));
@@ -769,47 +1321,126 @@ class Editor final : public Steinberg::CPluginView {
         char mixText[24]; snprintf(mixText,sizeof(mixText),"%d%%",int(std::round(value(mix)*100))); text(dc,1170,174,70,mixText,14,RGB(232,248,250));
         const int type=int(plain(layout().delayType[bank],float(value(layout().delayType[bank]))));
         const int model=int(std::round(value(layout().mxAlgorithms[bank][0])*8));
-        const char* names[]{"OIL DRUM","MX ANALOG","REEL / TAPE","DIGITAL","MEMORY","VOLANTE","OLIVERA","BRIG / BBD"};
-        const int families[]{4,1,3,0,2,1,1,1},models[]{-1,-1,-1,-1,-1,0,2,4};
-        const char* engine=names[0];
-        for(int i=0;i<8;++i) if(type==families[i]&&(models[i]<0||model==models[i])&&(type!=1||i!=1||(model!=0&&model!=2&&model!=4))) engine=names[i];
-        bevel(dc,35,207,206,34,RGB(14,39,53)); text(dc,43,214,182,engine,12,RGB(88,229,244)); text(dc,219,213,18,"v",13,RGB(183,212,225));
-        text(dc,264,214,145,"AKTYWNY BANK",10,RGB(134,187,205));
-        for(int b=0;b<2;++b){const int bx=412+b*132;fill(dc,bx,207,126,34,bank==b?RGB(14,112,137):RGB(18,39,53));text(dc,bx,215,126,b==0?"A — AKTYWNY":"B — AKTYWNY",11,bank==b?RGB(230,251,255):RGB(154,186,202));}
+        const auto engines=delayEngineChoices();
+        const char* engine="DIGITAL";
+        for(const auto& choice:engines)
+            if(type==choice.family && (choice.algorithm<0 || choice.algorithm==model)){
+                engine=choice.label;break;
+            }
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({35,207,206,34},juce::Colour(0xff343439),6);
+#else
+        bevel(dc,35,207,206,34,RGB(49,51,57));
+#endif
+        text(dc,43,214,182,engine,12,RGB(245,188,102));
+        text(dc,219,213,18,"v",13,RGB(222,225,227));
+        text(dc,264,214,145,"ACTIVE BANK",10,RGB(193,200,207));
+        for(int b=0;b<2;++b){
+            const int bx=412+b*132;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(bx),207,126,34},
+                bank==b?juce::Colour(0xff645040):juce::Colour(0xff2c3035),5);
+#else
+            bevel(dc,bx,207,126,34,bank==b?RGB(95,73,51):RGB(43,47,53));
+#endif
+            text(dc,bx,215,126,b==0?"A / ACTIVE":"B / ACTIVE",11,
+                bank==b?RGB(249,207,139):RGB(179,187,194));
+        }
         const bool bypass=value(layout().slotBypass[bank])>=.5;
-        fill(dc,1007,207,207,34,bypass?RGB(76,31,43):RGB(17,76,57)); text(dc,1007,215,207,bypass?"BYPASS / WYŁĄCZONY":"ON / AKTYWNY",11,RGB(226,247,244));
-        line(dc,28,250,1251,250,RGB(31,68,88));
-        const char* primaryLabels[]{"CZAS DELAYA","FEEDBACK","CZAS DELAYA","FEEDBACK"};
-        for(size_t i=0;i<controls.size();++i){const auto &c=controls[i];if(c.y==260)referenceKnob(dc,c,primaryLabels[i%4],40,i<2?RGB(53,215,236):RGB(174,128,247));}
-        text(dc,1010,263,211,"TRYB PRACY",13,RGB(217,236,243));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1007,207,207,34},
+            bypass?juce::Colour(0xff673d40):juce::Colour(0xff304d40),5);
+#else
+        bevel(dc,1007,207,207,34,bypass?RGB(90,50,53):RGB(46,77,60));
+#endif
+        text(dc,1007,215,207,bypass?"BYPASS / OFF":"ON / ACTIVE",11,RGB(234,239,237));
+        line(dc,28,250,1251,250,RGB(96,99,103));
+        const char* primaryLabels[]{"DELAY TIME","FEEDBACK","DELAY TIME","FEEDBACK"};
+        for(size_t i=0;i<controls.size();++i){
+            const auto &c=controls[i];
+            if(c.y!=260)continue;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(c.x+3),float(c.y-6),float(c.w-6),151},
+                juce::Colour(i<2?0xff30363a:0xff342e3b),7);
+#endif
+            referenceKnob(dc,c,primaryLabels[i%4],40,i<2?RGB(231,134,91):RGB(177,143,228));
+        }
+        text(dc,1010,263,211,"ROUTING",13,RGB(239,241,243));
         const char* routes[]{"SZEREGOWY A > B","RÓWNOLEGŁY","MIX A / B"};
         const int routing=int(plain(layout().delayMode,float(value(layout().delayMode))));
-        for(int i=0;i<3;++i){const int y=282+i*44;metalPanel(dc,1007,y,207,36,false);fill(dc,1010,y+3,201,30,routing==i?RGB(23,124,153):RGB(15,36,52));lamp(dc,1023,y+18,routing==i,RGB(75,231,246));text(dc,1035,y+9,168,routes[i],11,RGB(223,240,246));}
-        line(dc,28,415,1251,415,RGB(31,68,88));
+        for(int i=0;i<3;++i){
+            const int y=282+i*44;
+#ifdef MULTIFX_JUCE_GUI
+            const auto &button=Gui3DAssets::get().buttons[Gui3DAssets::amber][routing==i?1:0];
+            if(button.isValid())juceGraphics->drawImage(button,juce::Rectangle<float>(1007.0f,float(y),207.0f,36.0f));
+            else metalPanel(dc,1007,y,207,36,false);
+#else
+            metalPanel(dc,1007,y,207,36,false);fill(dc,1010,y+3,201,30,routing==i?RGB(23,124,153):RGB(15,36,52));
+#endif
+            lamp(dc,1023,y+18,routing==i,RGB(246,175,76));
+            text(dc,1035,y+9,168,routes[i],11,RGB(236,238,241));
+        }
+        line(dc,28,415,1251,415,RGB(96,99,105));
         int featureCount=0;for(int i=0;i<8&&delayFeature(i)>=0;++i)++featureCount;
         const int groupCount=(featureCount+1)/2,totalWidth=groupCount*298+std::max(0,groupCount-1)*8;
         const int groupStart=(W-totalWidth)/2;
         const char* groups[5][4]={{"DIGITAL TONE","","",""},{"INPUT / MACHINE","MODULATION","EFFECTS","STEREO / DUCK"},
           {"TONE / DEPTH","MODULATION","LEVEL / BLEND",""},{"WOW / FLUTTER","TAPE AGE","SATURATION","WIDTH / NOISE"},
           {"FILTRACJA","MODULACJA","SATURACJA","STEREO / MECHANIKA"}};
-        for(int group=0;group<groupCount;++group){const int gx=groupStart+group*306;metalPanel(dc,gx,422,298,159,false);fill(dc,gx+3,425,292,153,RGB(11,25,37));text(dc,gx+5,429,288,groups[std::clamp(type,0,4)][group],12,RGB(202,222,231));}
+        for(int group=0;group<groupCount;++group){
+            const int gx=groupStart+group*306;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(gx),422,298,159},juce::Colour(0xff292b30),8);
+            juceGraphics->setColour(juce::Colour(0xffb88963));
+            juceGraphics->fillRect(gx+9,446,280,2);
+#else
+            metalPanel(dc,gx,422,298,159,false);fill(dc,gx+3,425,292,153,RGB(34,37,41));
+#endif
+            text(dc,gx+5,429,288,groups[std::clamp(type,0,4)][group],12,RGB(226,230,233));
+        }
         const char* labels[5][8]={{"FILTER","LEVEL"},{"IN TRIM","OUT TRIM","MACHINE","PAN","FX AMOUNT","FX RATE","FX DEPTH","DUCK"},{"BOOST","SQUELCH","DEPTH","MOD RATE","LEVEL","BLEND"},{"WOW","FLUTTER","AGE","MOTOR","SATURATION","BIAS","WIDTH","HISS"},{"IN TONE","OUT TONE","DEPTH","SPEED","IN SAT","OUT SAT","WIDTH","DRIFT"}};
         for(const auto &stored:controls)if(stored.y==449)for(int i=0;i<featureCount;++i)if(delayFeature(i)==stored.id){
             const int group=i/2,local=i%2,gx=groupStart+group*306;
             Control c=stored;c.x=gx+27+local*135;c.w=130;
             referenceKnob(dc,c,labels[std::clamp(type,0,4)][i],featureCount<=2?34:26,i<2?RGB(64,212,231):RGB(173,126,236));break;
         }
-        line(dc,28,607,1251,607,RGB(31,68,88));
-        text(dc,35,621,676,"PRAWY KLIK: MIDI LEARN     •     PEŁNA LISTA PARAMETRÓW: USTAWIENIA",10,RGB(123,171,191));
+        line(dc,28,607,1251,607,RGB(96,99,105));
         char status[96];snprintf(status,sizeof(status),"GR %.1f dB   /   PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
-        text(dc,948,621,273,status,10,RGB(166,208,222));
+        text(dc,948,591,273,status,11,RGB(195,204,212));
+#ifndef MULTIFX_JUCE_GUI
         if(engineMenuOpen){
-            metalPanel(dc,35,241,206,210,false);fill(dc,38,244,200,204,RGB(8,21,32));
-            for(int i=0;i<8;++i){const int y=245+i*25;const bool selected=std::string_view(engine)==names[i];
-                if(selected)fill(dc,39,y,198,24,RGB(14,84,104));
-                text(dc,48,y+5,184,names[i],11,selected?RGB(104,236,247):RGB(202,222,231));
+            // Text operations for the underlying controls are deferred until
+            // frame end. Flush them BEFORE painting the opaque popup, otherwise
+            // knob labels show straight through the dropdown (observed in FL).
+            drawTextPass(dc);
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(delayMenuX),float(delayMenuY),
+                float(delayMenuWidth),float(delayMenuHeight)},juce::Colour(0xff181b20),7);
+            juceGraphics->setColour(juce::Colour(0xff0d1116));
+            juceGraphics->fillRoundedRectangle(juce::Rectangle<float>(
+                float(delayMenuX+5),float(delayMenuY+5),float(delayMenuWidth-10),
+                float(delayMenuHeight-10)),5.f);
+            juceGraphics->setColour(juce::Colour(0xffae7f3e));
+            juceGraphics->drawRoundedRectangle(juce::Rectangle<float>(
+                float(delayMenuX+1),float(delayMenuY+1),float(delayMenuWidth-2),
+                float(delayMenuHeight-2)),6.f,1.5f);
+#else
+            metalPanel(dc,delayMenuX,delayMenuY,delayMenuWidth,delayMenuHeight,false);
+            fill(dc,delayMenuX+5,delayMenuY+5,delayMenuWidth-10,delayMenuHeight-10,RGB(13,17,22));
+#endif
+            for(int i=0;i<int(engines.size());++i){
+                const int col=i/7,row=i%7;
+                const int x=delayMenuX+7+col*delayMenuColWidth;
+                const int y=delayMenuY+8+row*delayMenuRowHeight;
+                const bool selected=type==engines[i].family &&
+                    (engines[i].algorithm<0 || engines[i].algorithm==model);
+                if(selected)fill(dc,x+2,y+2,delayMenuColWidth-6,delayMenuRowHeight-3,
+                                  RGB(93,63,28));
+                text(dc,x+6,y+3,delayMenuColWidth-14,engines[i].label,12,
+                     selected?RGB(255,211,144):RGB(226,231,235));
             }
         }
+#endif
     }
 
     void rebuild() {
@@ -817,7 +1448,18 @@ class Editor final : public Steinberg::CPluginView {
             return;
         destroyCombos();
         controls.clear();
-        if (referenceDelay()) {
+        if (rackHome) {
+            controlPage=0;controlPages=1;
+            const auto chain=permutation(int(plain(layout().order,float(value(layout().order)))));
+            for(int slot=0;slot<4;++slot)
+                for(int k=0;k<3;++k) {
+                    const int id=rackParameter(chain[slot],k);
+                    if(id>=0)controls.push_back({id,210+slot*220+k*65,252,62,62,false});
+                }
+            const int input=parameterId("comp.input");
+            if(input>=0)controls.push_back({input,56,344,108,108,false});
+            controls.push_back({layout().masterGain,1115,344,108,108,false});
+        } else if (referenceDelay()) {
             controlPage=0;controlPages=1;
             for (int bank = 0; bank < 2; ++bank)
                 for (int kind = 0; kind < 2; ++kind) {
@@ -866,6 +1508,14 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 controls.push_back({id,x,y,388,isCompact?54:126,isCompact});
             }
+        }
+        if(rackHome) {
+#ifdef MULTIFX_JUCE_GUI
+            rebuildJuceParameterSliders();
+#endif
+            signature=selectionSignature();
+            requestRepaint();
+            return;
         }
         for (auto &c : controls) {
             const auto &p = controlUI()[c.id].definition;
@@ -984,6 +1634,13 @@ class Editor final : public Steinberg::CPluginView {
             if(!supplied)EndPaint(window,&ps);
         };
 #endif
+#ifdef MULTIFX_JUCE_GUI
+        if(rackHome) {
+            paintRackHome();
+            finish();
+            return;
+        }
+#endif
         if (referenceDelay()) {
             chrome(target);
             referenceDelayPanel(target);
@@ -992,23 +1649,42 @@ class Editor final : public Steinberg::CPluginView {
         }
         HDC dc=target;
         chrome(dc);
-        text(dc,24,157,1190,"WYBIERZ BLOK I SEKCJĘ, POTEM USTAW PARAMETRY    •    PRAWY KLIK: MIDI LEARN",11,RGB(169,211,225));
+        // The module header already identifies this section. The old helper
+        // subtitle overlapped the hardware title at y=155; keep help below.
         auto sections = sectionNames(view.block);
         for (size_t i = 0; i < sections.size(); ++i) {
-            int x = 28 + int(i) * 214;
-            fill(dc, x, 177, 205, 34, int(i) == view.section ? RGB(32,106,125) : RGB(20,42,59));
-            text(dc, x, 184, 205, sections[i].c_str(), 14,
-                 int(i) == view.section ? RGB(238, 252, 255) : RGB(157, 187, 202));
+            const int x=28+int(i)*214;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(x),177,205,34},
+                int(i)==view.section?juce::Colour(0xff394047):juce::Colour(0xff24292f),6);
+            if(int(i)==view.section) {
+                juceGraphics->setColour(rackDetailAccent());
+                juceGraphics->fillRect(x+8,208,189,3);
+            }
+#else
+            bevel(dc,x,177,205,34,int(i)==view.section?RGB(56,62,69):RGB(29,35,42));
+#endif
+            text(dc,x,184,205,sections[i].c_str(),13,
+                int(i)==view.section?RGB(244,246,248):RGB(173,182,192));
         }
-        if (view.block == 2 && view.advanced) {
-            fill(dc, 900, 177, 160, 34, RGB(28, 59, 77));
-            text(dc, 900, 184, 160, "MX A / B", 13, RGB(221,244,250));
+        if(view.block==2&&view.advanced){
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({900,177,160,34},juce::Colour(0xff2c3037),5);
+#else
+            bevel(dc,900,177,160,34,RGB(37,43,50));
+#endif
+            text(dc,900,184,160,"MX A / B",13,RGB(222,228,234));
         }
-        fill(dc, 1075, 177, 175, 34, RGB(28, 59, 77));
-        text(dc, 1075, 184, 175, view.advanced ? "BASIC" : "USTAWIENIA", 13, RGB(221,244,250));
-        fill(dc, 20, 218, 1240, 302, RGB(16,31,47));
-        line(dc,20,218,1260,218,RGB(37,85,105));
-        bevel(dc, 24, 528, 1232, 82, RGB(15,33,49));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1075,177,175,34},juce::Colour(0xff2f333a),5);
+        drawDetailHardwarePanel({20,218,1240,302},juce::Colour(0xff171a20),7);
+        drawDetailHardwarePanel({24,528,1232,82},juce::Colour(0xff24262b),8);
+#else
+        bevel(dc,1075,177,175,34,RGB(40,45,53));
+        fill(dc,20,218,1240,302,RGB(21,25,30));
+        bevel(dc,24,528,1232,82,RGB(37,40,45));
+#endif
+        text(dc,1075,184,175,view.advanced?"BASIC":"USTAWIENIA",13,RGB(224,230,234));
         if (view.block == 2 && !globalSettings) {
             const char *labels[]{"MIDI LEARN / TIME", "MIDI LEARN / FEEDBACK", "MIDI LEARN / MIX"};
             for (int i = 0; i < 3; ++i) {
@@ -1068,15 +1744,33 @@ class Editor final : public Steinberg::CPluginView {
             const auto &p = controlUI()[c.id].definition;
             const auto label = controlTitle(c.id);
             if (c.compact) {
-                fill(dc,c.x+2,y+1,c.w-4,19,RGB(31,64,78));
-                text(dc, c.x+3, y+2, c.w-6, label.c_str(), 13, RGB(227,243,248));
+#ifdef MULTIFX_JUCE_GUI
+                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),55},
+                    juce::Colour(0xff27292d),6);
+                juceGraphics->setColour(rackDetailAccent().withAlpha(.90f));
+                juceGraphics->fillRoundedRectangle(
+                    juce::Rectangle<float>(float(c.x+9),float(y+20),float(c.w-18),2.f),1.f);
+#else
+                fill(dc,c.x+2,y+1,c.w-4,19,RGB(45,50,55));
+#endif
+                text(dc,c.x+3,y+2,c.w-6,label.c_str(),13,RGB(230,234,239));
                 if (!p.choices.empty() || (p.steps > 1 && p.steps <= 64)) {
+#ifdef MULTIFX_JUCE_GUI
+                    drawDetailHardwarePanel({float(c.x+7),float(y+25),float(c.w-14),26.f},
+                        juce::Colour(0xff13191e),4);
+#else
                     bevel(dc,c.x,y+23,c.w,29,RGB(20,44,59));
+#endif
                     text(dc,c.x+10,y+28,c.w-40,formatted(c.id).c_str(),14,RGB(229,247,250));
                     text(dc,c.x+c.w-32,y+27,22,"▼",13,accent());
                     continue;
                 }
+#ifdef MULTIFX_JUCE_GUI
+                drawDetailHardwarePanel({float(c.x+7),float(y+25),float(c.w-14),26.f},
+                    juce::Colour(0xff13191e),4);
+#else
                 bevel(dc, c.x, y + 23, c.w, 29, RGB(26,51,68));
+#endif
                 if (view.block == 2 && p.steps == 0 && !isToggle(c.id)) {
                     fill(dc,c.x+9,y+39,c.w-18,4,RGB(8,23,36));
                     fill(dc,c.x+9,y+39,int((c.w-18)*value(c.id)),4,accent());
@@ -1097,7 +1791,15 @@ class Editor final : public Steinberg::CPluginView {
                     fill(dc, c.x, y + 51, int(c.w * value(c.id)), 3, accent());
                 }
             } else {
-                fill(dc,c.x+2,y+1,c.w-4,20,RGB(31,64,78));
+#ifdef MULTIFX_JUCE_GUI
+                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),float(c.h)},
+                    juce::Colour(0xff292b30),8);
+                juceGraphics->setColour(rackDetailAccent().withMultipliedAlpha(.8f));
+                juceGraphics->fillRoundedRectangle(
+                    juce::Rectangle<float>(float(c.x+17),float(y+3),float(c.w-34),2.f),1.f);
+#else
+                fill(dc,c.x+2,y+1,c.w-4,20,RGB(45,50,55));
+#endif
                 referenceKnob(dc,c,label.c_str(),34,accent());
             }
         }
@@ -1106,18 +1808,31 @@ class Editor final : public Steinberg::CPluginView {
 #else
         canvas->PopAxisAlignedClip();
 #endif
-        bevel(dc,1031,532,48,22,RGB(21,51,67));
-        text(dc,1031,533,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
-        bevel(dc,1083,532,100,22,RGB(15,36,50));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1031,532,48,22},juce::Colour(0xff34373b),4);
+        drawDetailHardwarePanel({1083,532,100,22},juce::Colour(0xff24292e),4);
+#else
+        bevel(dc,1031,532,48,22,RGB(46,50,56));
+        bevel(dc,1083,532,100,22,RGB(31,36,42));
+#endif
+        text(dc,1031,533,48,"<",14,controlPage>0?RGB(234,236,238):RGB(116,123,131));
         char pageLabel[32];snprintf(pageLabel,sizeof(pageLabel),"STRONA %d/%d",controlPage+1,controlPages);
         text(dc,1083,536,100,pageLabel,10,RGB(215,235,244));
-        bevel(dc,1187,532,48,22,RGB(21,51,67));
-        text(dc,1187,533,48,">",14,controlPage+1<controlPages?RGB(229,246,252):RGB(87,117,131));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1187,532,48,22},juce::Colour(0xff34373b),4);
+#else
+        bevel(dc,1187,532,48,22,RGB(46,50,56));
+#endif
+        text(dc,1187,533,48,">",14,controlPage+1<controlPages?RGB(234,236,238):RGB(116,123,131));
         const char *buttons[]{"WCZYTAJ IR WAV", "WCZYTAJ PRESET", "ZAPISZ PRESET", "MASTER BYPASS"};
         buttons[3]=value(layout().bypass)>=.5 ? "MASTER WYŁĄCZONY" : "MASTER AKTYWNY";
         for (int i = 0; i < 4; ++i) {
-            fill(dc, 28 + i * 250, 638, 238, 38, RGB(26,53,72));
-            text(dc, 28 + i * 250, 648, 238, buttons[i], 12, RGB(226,248,252));
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(28+i*250),638,238,38},juce::Colour(0xff30343a),5);
+#else
+            fill(dc,28+i*250,638,238,38,RGB(43,48,55));
+#endif
+            text(dc,28+i*250,648,238,buttons[i],12,RGB(231,233,236));
         }
         text(dc, 1028, 680, 225, "Prawy klik: MIDI Learn", 11, RGB(160, 191, 205));
         finish();
@@ -1242,6 +1957,22 @@ class Editor final : public Steinberg::CPluginView {
         case WM_APP + 1:
             rebuild();
             return 0;
+        case WM_APP + 30: {
+            const int next=std::clamp(controlPage+(w?1:-1),0,controlPages-1);
+            if(next!=controlPage){controlPage=next;rebuild();}
+            return 0;
+        }
+        case WM_APP + 31:
+            // Test-only, read-only window diagnostics.
+            return MAKELRESULT(controlPage,controlPages);
+        case WM_APP + 33:
+            // Rebuild only after JUCE releases the popup mouse capture.
+            rebuild();
+            return 0;
+        case WM_APP + 32:
+            // Test-only current section: low word block ID, high word
+            // reference-delay flag plus section index.
+            return MAKELRESULT(view.block,(referenceDelay()?1:0)|(view.section<<1));
 #ifdef MULTIFX_JUCE_GUI
         case WM_APP + 29:
             if(juceCanvas)
@@ -1303,6 +2034,58 @@ class Editor final : public Steinberg::CPluginView {
             }
             return 0;
         case WM_LBUTTONDOWN: {
+            if(rackHome){
+                const auto chain=permutation(int(plain(layout().order,float(value(layout().order)))));
+                if(y>=28&&y<78&&x>=1059){rackHome=false;rebuild();return 0;}
+                if(y>=120&&y<544&&x>=199&&x<1078){
+                    const int slot=std::clamp((x-199)/220,0,3),block=chain[slot];
+                    const int local=x-(199+slot*220);
+                    if(y>=169&&y<=198&&local<110){
+                        const int id=layout().blockBypass[block];
+                        change(id,value(id)>=.5?0:1);return 0;
+                    }
+                    if(y>=423&&y<=524){
+                        const int id=block==0?parameterId("drive.type"):
+                            block==1?parameterId("clone.model"):
+                            block==2?layout().delayType[0]:
+                            block==3?parameterId("reverb.engine"):-1;
+                        if(id>=0) {
+                            const auto &d=controlUI()[id].definition;
+                            const int steps=std::max(1,!d.choices.empty()?
+                                int(std::count(d.choices.begin(),d.choices.end(),'|')):d.steps);
+                            const int index=std::clamp(int(std::lround(value(id)*steps)),0,steps);
+                            change(id,double((index+1)%(steps+1))/steps);
+                        }else{view.block=block;rackHome=false;rebuild();}
+                        return 0;
+                    }
+                    if(y<285){view.block=block;view.section=0;view.advanced=false;
+                        rackHome=false;globalSettings=false;rebuild();return 0;}
+                }
+                if(y>=600&&y<=655&&x>=202&&x<523){
+                    if(x<357)change(layout().delayMode,0);
+                    else if(x>=368)change(layout().delayMode,.5);
+                    return 0;
+                }
+                if(y>=600&&y<=655&&x>=672&&x<1215){
+                    const int slot=std::clamp((x-672)/138,0,3);
+                    // Arrows physically swap neighbouring blocks in the actual
+                    // five-block DSP permutation, not merely their labels.
+                    if(slot<3 && x>=672+slot*138+108){
+                        auto swapped=chain;
+                        std::swap(swapped[slot],swapped[slot+1]);
+                        auto current=std::array<int,5>{0,1,2,3,4};
+                        int rank=0;
+                        while(current!=swapped&&rank<119){
+                            std::next_permutation(current.begin(),current.end());++rank;
+                        }
+                        change(layout().order,double(rank)/119);
+                        rebuild();return 0;
+                    }
+                    view.block=chain[slot];view.section=0;rackHome=false;
+                    globalSettings=false;rebuild();return 0;
+                }
+                return 0;
+            }
 #ifdef MULTIFX_JUCE_GUI
             if(!jucePointerDispatch)
 #endif
@@ -1325,18 +2108,36 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 if(y>=180&&y<197&&x>=866&&x<1163){const int id=layout().digital[bank]+2;change(id,double(x-868)/294);drag=id;startX=x;startY=y;startValue=value(id);capturePointer();return 0;}
                 if(engineMenuOpen){
-                    if(x>=35&&x<241&&y>=245&&y<445){
-                        const int choice=std::clamp((y-245)/25,0,7);
-                        const int fam[]{4,1,3,0,2,1,1,1},mod[]{-1,-1,-1,-1,-1,0,2,4};
-                        change(layout().delayType[bank],double(fam[choice])/4);
-                        if(mod[choice]>=0)change(layout().mxAlgorithms[bank][0],double(mod[choice])/8);
-                        if(value(layout().digital[bank]+2)<.01)change(layout().digital[bank]+2,.5);
-                        engineMenuOpen=false;rebuild();return 0;
-                    }
-                    engineMenuOpen=false;requestRepaint();
+                    const int index=delayMenuChoiceAt(x,y);
+                    engineMenuOpen=false;
+#ifdef MULTIFX_JUCE_GUI
+                    if(juceEnginePopup)juceEnginePopup->setVisible(false);
+                    for(auto &slider:juceParameterSliders)slider->setVisible(true);
+#endif
+                    if(index>=0){
+                        const auto choice=delayEngineChoices()[index];
+                        change(layout().delayType[bank],double(choice.family)/4);
+                        if(choice.algorithm>=0)
+                            change(layout().mxAlgorithms[bank][0],double(choice.algorithm)/8);
+                        if(value(layout().digital[bank]+2)<.01)
+                            change(layout().digital[bank]+2,.5);
+                        rebuild();
+                    }else requestRepaint();
+                    return 0; // Clicking outside dismisses, never edits a hidden knob.
                 }
                 if(y>=207&&y<242){
-                    if(x>=35&&x<241){engineMenuOpen=true;requestRepaint();return 0;}
+                    if(x>=35&&x<241){
+                        engineMenuOpen=true;
+#ifdef MULTIFX_JUCE_GUI
+                        for(auto &slider:juceParameterSliders)slider->setVisible(false);
+                        if(juceEnginePopup){
+                            juceEnginePopup->setVisible(true);
+                            juceEnginePopup->toFront(false);
+                            juceEnginePopup->repaint();
+                        }
+#endif
+                        requestRepaint();return 0;
+                    }
                     if(x>=412&&x<670){view.section=x<538?0:1;rebuild();return 0;}
                     if(x>=1007&&x<1214){const int id=layout().slotBypass[bank];change(id,value(id)>=.5?0:1);return 0;}
                 }
@@ -1367,6 +2168,7 @@ class Editor final : public Steinberg::CPluginView {
             if (y >= 28 && y < 65 && x >= 650 && x < 687) {
                 change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;
             }
+            if(y>=28&&y<65&&x>=1091&&x<1255){rackHome=true;rebuild();return 0;}
             if (y >= 28 && y < 65 && x >= 696 && x < 752) {file("savePreset",true);return 0;}
             if(y>=28&&y<65&&x>=405&&x<650){showChoice(layout().factoryProgram,405,65);return 0;}
             if (y >= 28 && y < 65 && x >= 920 && x < 1082) {
@@ -1599,6 +2401,7 @@ class Editor final : public Steinberg::CPluginView {
 #ifdef MULTIFX_JUCE_GUI
             juceParameterSliders.clear();
             juceRoutingButtons.clear();
+            juceEnginePopup.reset(); // Remove child before its JUCE parent HWND.
             if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
 #endif
             if (value(layout().attackTrigger) >= .5)

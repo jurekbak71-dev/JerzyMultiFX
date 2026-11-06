@@ -44,40 +44,160 @@ static void pump() {
     }
 }
 static void movePointer(HWND h, int x, int y) {
-    // Native JUCE mouse dispatch can inspect the operating-system cursor
-    // position as well as the coordinates of WM_MOUSEMOVE. Match both.
-    POINT screen{x, y};
+    // Real SendInput events require the target to be on the virtual monitor.
+    // CI can have a desktop narrower than the 1280px design test surface:
+    // SetCursorPos silently clamps coordinates beyond the screen, making the
+    // far-right page arrow (x=1210) unclickable while routing (x=1100) works.
+    RECT viewport{};
+    check(GetClientRect(h,&viewport)!=0,"measure actual JUCE viewport");
+    POINT screen{MulDiv(x,viewport.right,1280),MulDiv(y,viewport.bottom,720)};
     check(ClientToScreen(h, &screen) != 0, "convert editor pointer to screen");
-    check(SetCursorPos(screen.x, screen.y) != 0, "position OS pointer over the editor");
-    SendMessage(h, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+    const int left=GetSystemMetrics(SM_XVIRTUALSCREEN);
+    const int top=GetSystemMetrics(SM_YVIRTUALSCREEN);
+    const int right=left+GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    const int bottom=top+GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    // JUCE unbounded mouse movement can be clipped at monitor edges.
+    // Always move off-safe-area click targets toward the visible desktop center.
+    const int safeX=12;
+    const int safeY=12;
+    const int shiftX=(screen.x<left+safeX || screen.x>=right-safeX)
+                     ?(left+(right-left)/2-screen.x):0;
+    const int shiftY=(screen.y<top+safeY || screen.y>=bottom-safeY)
+                     ?(top+(bottom-top)/2-screen.y):0;
+    if(shiftX||shiftY){
+        const HWND topLevel=GetAncestor(h,GA_ROOT);
+        check(topLevel!=nullptr,"resolve top-level VST3 test host");
+        RECT bounds{};
+        check(GetWindowRect(topLevel,&bounds)!=0,"read test host window position");
+        // Keep the native JUCE editor frontmost. Merely moving an oversized
+        // host can uncover other Windows runner windows that intercept SendInput.
+        check(SetWindowPos(topLevel,HWND_TOPMOST,bounds.left+shiftX,bounds.top+shiftY,0,0,
+                           SWP_NOSIZE|SWP_SHOWWINDOW)!=0,
+              "bring native VST3 host to front while moving click target");
+        BringWindowToTop(topLevel);
+        SetForegroundWindow(topLevel);
+        screen={MulDiv(x,viewport.right,1280),MulDiv(y,viewport.bottom,720)};
+        check(ClientToScreen(h,&screen)!=0,"recalculate moved editor point");
+        std::cerr<<"Reposition host for physical click: "<<x<<","<<y
+                 <<" screen="<<screen.x<<","<<screen.y
+                 <<" desktop="<<left<<","<<top<<".."<<right<<","<<bottom<<"\n";
+    }
+    // JUCE unbounded-mouse mode may perform a deferred cursor warp after a
+    // slider is released. During repeated attach/detach cycles this can race
+    // the first SetCursorPos even though the target remains on the desktop.
+    // Re-apply the actual hardware cursor location after pumping those moves;
+    // still fail if Windows cannot reach the requested target.
+    POINT actual{};
+    bool positioned=false;
+    for(int attempt=0;attempt<4;++attempt){
+        check(SetCursorPos(screen.x,screen.y)!=0,"position OS pointer over the editor");
+        Sleep(8);
+        pump();
+        check(GetCursorPos(&actual)!=0,"read actual OS pointer location");
+        if(actual.x==screen.x&&actual.y==screen.y){positioned=true;break;}
+        Sleep(18);
+    }
+    if(!positioned){
+        std::cerr<<"Unreachable physical mouse target after retries: requested="
+                 <<screen.x<<","<<screen.y<<" actual="<<actual.x<<","<<actual.y<<"\n";
+        throw std::runtime_error("Windows clamped native pointer before JUCE mouse dispatch");
+    }
+    HWND target=WindowFromPoint(screen);
+    if(target && target!=h && !IsChild(h,target) && std::getenv("GITHUB_ACTIONS")){
+        char cls[256]{},title[512]{};
+        GetClassNameA(target,cls,sizeof(cls));
+        GetWindowTextA(target,title,sizeof(title));
+        // On GitHub hosted Windows runners the background compute-agent
+        // Cascadia console can remain above the VST3 editor, stealing real
+        // SendInput clicks. Hide only that exact CI-owned console; never
+        // suppress unrelated application/host windows or alter local setups.
+        if(std::string(cls)=="CASCADIA_HOSTING_WINDOW_CLASS" &&
+           std::string(title).find("HostedComputeAgent")!=std::string::npos){
+            std::cerr<<"Hide CI compute-agent console blocking native JUCE input\n";
+            ShowWindow(target,SW_HIDE);
+            BringWindowToTop(GetAncestor(h,GA_ROOT));
+            SetForegroundWindow(GetAncestor(h,GA_ROOT));
+            Sleep(20);
+            pump();
+            target=WindowFromPoint(screen);
+        }
+    }
+    if(!target || (target!=h && !IsChild(h,target))){
+        char targetClass[256]{},targetTitle[512]{},juceClass[256]{};
+        if(target){
+            GetClassNameA(target,targetClass,sizeof(targetClass));
+            GetWindowTextA(target,targetTitle,sizeof(targetTitle));
+        }
+        GetClassNameA(h,juceClass,sizeof(juceClass));
+        DWORD processId=0;
+        if(target)GetWindowThreadProcessId(target,&processId);
+        std::cerr<<"Physical hit-test intercepted: JUCE="<<h<<" class="<<juceClass
+                 <<" actual="<<target<<" class="<<targetClass<<" title="<<targetTitle
+                 <<" pid="<<processId<<" at "<<screen.x<<","<<screen.y<<"\n";
+        throw std::runtime_error("Native mouse target is not the JUCE surface");
+    }
+}
+static void mouseInput(DWORD flags) {
+    INPUT input{};
+    input.type=INPUT_MOUSE;
+    input.mi.dwFlags=flags;
+    check(SendInput(1,&input,sizeof(input))==1,"inject physical Windows mouse input");
+    pump();
+}
+static void relativeMouseMove(int dx,int dy) {
+    INPUT input{};
+    input.type=INPUT_MOUSE;
+    input.mi.dx=dx;
+    input.mi.dy=dy;
+    input.mi.dwFlags=MOUSEEVENTF_MOVE;
+    check(SendInput(1,&input,sizeof(input))==1,"inject physical Windows mouse movement");
+    Sleep(8);
     pump();
 }
 static void click(HWND h, int x, int y) {
     movePointer(h, x, y);
-    SendMessage(h, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-    SendMessage(h, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+    mouseInput(MOUSEEVENTF_LEFTDOWN);
+    Sleep(8);
+    mouseInput(MOUSEEVENTF_LEFTUP);
+    // JUCE action components may defer rebuilding the component tree until
+    // their mouse callback has returned. Run the next message-loop turn too.
+    Sleep(10);
     pump();
 }
 static void drag(HWND h, int x, int y, int endX, int endY) {
     movePointer(h, x, y);
-    SendMessage(h,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(x,y));
-    pump();
+    mouseInput(MOUSEEVENTF_LEFTDOWN);
     Sleep(10);
-    // Keep the actual OS pointer and simulated JUCE drag destination in sync.
-    // JUCE's rotary drag uses the desktop pointer delta on Windows.
-    POINT endScreen{endX,endY};
-    check(ClientToScreen(h,&endScreen)!=0, "convert drag endpoint to screen");
-    check(SetCursorPos(endScreen.x,endScreen.y)!=0, "position cursor at drag endpoint");
-    SendMessage(h,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(endX,endY));
-    pump();
-    Sleep(10);
-    SendMessage(h,WM_LBUTTONUP,0,MAKELPARAM(endX,endY));
-    pump();
+    // Rotary sliders enable JUCE's unbounded mouse mode, which may warp the
+    // cursor back to its origin. Real relative SendInput motion supplies the
+    // same deltas as a physical mouse even while that mode is active.
+    RECT viewport{};
+    check(GetClientRect(h,&viewport)!=0,"scale actual JUCE drag distance");
+    const int totalDx=MulDiv(endX-x,viewport.right,1280);
+    const int totalDy=MulDiv(endY-y,viewport.bottom,720);
+    const int steps=4;
+    int movedX=0,movedY=0;
+    for(int step=1;step<=steps;++step){
+        const int targetX=totalDx*step/steps,targetY=totalDy*step/steps;
+        relativeMouseMove(targetX-movedX,targetY-movedY);
+        movedX=targetX;movedY=targetY;
+    }
+    mouseInput(MOUSEEVENTF_LEFTUP);
 }
 static void rightClick(HWND h,int x,int y) {
     movePointer(h, x, y);
-    SendMessage(h,WM_RBUTTONDOWN,MK_RBUTTON,MAKELPARAM(x,y));
-    SendMessage(h,WM_RBUTTONUP,0,MAKELPARAM(x,y));
+    mouseInput(MOUSEEVENTF_RIGHTDOWN);
+    Sleep(8);
+    mouseInput(MOUSEEVENTF_RIGHTUP);
+    Sleep(10);
+    pump();
+}
+static void shiftRightClick(HWND h,int x,int y) {
+    INPUT key{};key.type=INPUT_KEYBOARD;key.ki.wVk=VK_SHIFT;
+    check(SendInput(1,&key,sizeof(key))==1,"press Shift for MIDI Learn");
+    rightClick(h,x,y);
+    key.ki.dwFlags=KEYEVENTF_KEYUP;
+    check(SendInput(1,&key,sizeof(key))==1,"release Shift after MIDI Learn");
     pump();
 }
 static void checkSurfaceBounds(HWND editor, HWND surface, const char *message) {
@@ -121,11 +241,19 @@ static void screenshot(HWND h, const char *path) {
 }
 static unsigned long long meterPixels(HWND h, int x, int top) {
     RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW);
+    RECT viewport{};
+    check(GetClientRect(h,&viewport)!=0,"read physical meter viewport");
+    const int width=viewport.right,height=viewport.bottom;
     HDC screen=GetDC(h),dc=CreateCompatibleDC(screen);
-    auto bitmap=CreateCompatibleBitmap(screen,1280,720);auto old=SelectObject(dc,bitmap);
+    auto bitmap=CreateCompatibleBitmap(screen,width,height);auto old=SelectObject(dc,bitmap);
     SendMessage(h,WM_PRINTCLIENT,reinterpret_cast<WPARAM>(dc),PRF_CLIENT);
     unsigned long long hash=1469598103934665603ULL;
-    for(int y=top;y<top+14;++y)for(int xx=x;xx<x+60;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
+    const int startX=MulDiv(x,width,1280),startY=MulDiv(top,height,720);
+    const int sampleW=std::max(1,MulDiv(60,width,1280));
+    const int sampleH=std::max(1,MulDiv(14,height,720));
+    for(int y=startY;y<startY+sampleH;++y)
+        for(int xx=startX;xx<startX+sampleW;++xx)
+            hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
     SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);ReleaseDC(h,screen);return hash;
 }
 int main(int argc, char **argv) try {
@@ -160,11 +288,19 @@ int main(int argc, char **argv) try {
                                       0, 0, 1320, 920, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
         check(parent, "create test host window");
         check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "attach custom GUI");
-        ViewRect testSize(0, 0, 1280, 720);
+        // CI's real 1024x768 desktop cannot accept physical SendInput at
+        // x=1210 of a 1280x720 editor. Keep the entire interactive surface
+        // visible; retain logical 1280x720 hit-test coordinates above.
+        const bool onCi=std::getenv("GITHUB_ACTIONS")!=nullptr;
+        const int testW=onCi?960:1280,testH=onCi?540:720;
+        ViewRect testSize(0, 0, testW, testH);
         check(view->onSize(&testSize) == kResultOk, "set deterministic GUI test size");
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
         check(child, "editor child window");
+        ShowWindow(parent,SW_SHOW);
+        SetForegroundWindow(parent);
+        SetActiveWindow(parent);
 #ifdef MULTIFX_JUCE_GUI
         HWND vectorSurface=nullptr;
         for(HWND candidate=GetWindow(child,GW_CHILD);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT))
@@ -178,12 +314,42 @@ int main(int argc, char **argv) try {
 #ifdef MULTIFX_JUCE_GUI
         pointerTarget=vectorSurface;
 #endif
-        if(argc>=3)screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
+        SetFocus(pointerTarget);
+        pump();
+        if(argc>=3){
+            screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
+            // Capture the true 1280x720 Rack Hybrid without physical mouse
+            // input, then restore the fully visible 960x540 CI test viewport.
+            ViewRect rackFull(0,0,1280,720);
+            check(view->onSize(&rackFull)==kResultOk,"render full-res Rack Hybrid");
+            pump();
+            screenshot(child,(std::string(argv[2])+"-rack1280.bmp").c_str());
+            check(view->onSize(&testSize)==kResultOk,"restore physical mouse test viewport");
+            pump();
+        }
         if(std::getenv("MULTIFX_VISUAL_ONLY")) {
             check(argc>=3,"visual capture needs output path");
             screenshot(child,argv[2]);
             return 0;
         }
+        // Test the approved Rack Hybrid first, including a real power switch
+        // click, before opening the preserved detailed editor for regression.
+        const auto rackOff=c->getParamNormalized(layout().blockBypass[0]);
+        click(pointerTarget,216,179);
+        check(c->getParamNormalized(layout().blockBypass[0])!=rackOff,
+              "Rack Hybrid power LED toggles the real DRIVE block");
+        click(pointerTarget,216,179);
+        check(c->getParamNormalized(layout().blockBypass[0])==rackOff,
+              "Rack Hybrid power LED toggles back without changing defaults");
+        const double rackOrder=c->getParamNormalized(layout().order);
+        click(pointerTarget,785,627); // First physical CHAIN arrow.
+        check(c->getParamNormalized(layout().order)!=rackOrder,
+              "Rack Hybrid chain arrow changes the real DSP block order");
+        click(pointerTarget,785,627);
+        check(std::abs(c->getParamNormalized(layout().order)-rackOrder)<1e-6,
+              "Rack Hybrid chain arrow restores its original permutation");
+        click(pointerTarget,1150,52);
+        pump();
         // Exercise the real DLL's meter notification and independent needle rendering.
         IConnectionPoint *meters=nullptr;
         check(c->queryInterface(IConnectionPoint::iid,reinterpret_cast<void **>(&meters))==kResultOk,"meter connection");
@@ -201,9 +367,9 @@ int main(int argc, char **argv) try {
         message->release();meters->release();
         rightClick(pointerTarget,187,132);
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().blockBypass[0]+1)/layout().controlCount)<1e-6,"block bypass MIDI Learn");
-        click(pointerTarget,100,220); click(pointerTarget,100,250); // Select Oil Drum for DELAY A from the engine selector.
+        click(pointerTarget,100,220); click(pointerTarget,349,412); // Oil Drum: column 2, row 6 of full 13-engine list, bank A.
         click(pointerTarget,600,220); // Select bank B.
-        click(pointerTarget,100,220); click(pointerTarget,100,250); // Select Oil Drum for DELAY B.
+        click(pointerTarget,100,220); click(pointerTarget,349,412); // Oil Drum in bank B.
         click(pointerTarget,470,220); // Return to bank A.
         check(c->getParamNormalized(layout().delayType[0]) == 1 &&
               c->getParamNormalized(layout().delayType[1]) == 1,
@@ -219,6 +385,12 @@ int main(int argc, char **argv) try {
               "reference TIME knob controls the Oil Drum engine");
         check(edits.begins==1&&edits.performs>0&&edits.ends==1&&edits.lastId==ParamID(oilTime),
               "visible JUCE knob sends one complete VST3 automation gesture to the host");
+        edits.reset();
+        rightClick(pointerTarget,120,330);
+        check(std::abs(c->getParamNormalized(oilTime)-controlUI()[oilTime].definition.initial)<1e-6,
+              "right click restores the knob default value");
+        check(edits.begins==1&&edits.performs==1&&edits.ends==1&&edits.lastId==ParamID(oilTime),
+              "right click reset sends one complete VST3 automation gesture");
         // Record the actual route value before and after a real editor click.
         // This distinguishes lost JUCE pointer dispatch from incorrect VST3
         // parameter normalization, without hiding the regression.
@@ -241,6 +413,20 @@ int main(int argc, char **argv) try {
         click(pointerTarget,1100,220);
         check(c->getParamNormalized(layout().slotBypass[0])==0,"reference bank bypass switches on");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-delay.bmp").c_str());
+        // Regression: a 13-engine popup is an opaque topmost layer; labels
+        // from knobs below must not bleed through it. Pick the real DIG
+        // algorithm (MX slot 0, algorithm 6) using physical mouse input.
+        const double originalFamily=c->getParamNormalized(layout().delayType[0]);
+        const double originalAlgo=c->getParamNormalized(layout().mxAlgorithms[0][0]);
+        click(pointerTarget,120,222); // OPEN ENGINE
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-delay-engine-menu.bmp").c_str());
+        click(pointerTarget,349,267); // column 2, row 1: DIG / DUAL DIGITAL
+        check(std::abs(c->getParamNormalized(layout().delayType[0])-.25)<1e-6,
+              "13-engine Delay selector selects MX DSP family");
+        check(std::abs(c->getParamNormalized(layout().mxAlgorithms[0][0])-.75)<1e-6,
+              "DIG / DUAL DIGITAL maps to its actual MX algorithm 6");
+        c->setParamNormalized(layout().delayType[0],originalFamily);
+        c->setParamNormalized(layout().mxAlgorithms[0][0],originalAlgo);
         click(pointerTarget,100,110); // PREAMP / DRIVE in the horizontal chain.
         rightClick(pointerTarget,900,650);
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
@@ -251,7 +437,7 @@ int main(int argc, char **argv) try {
         check(c->getParamNormalized(layout().bypass) == 1, "master bypass");
         click(pointerTarget, 900, 650);
         check(c->getParamNormalized(layout().bypass) == 0, "master enable");
-        rightClick(pointerTarget,427,443);
+        shiftRightClick(pointerTarget,427,443);
         check(c->getParamNormalized(layout().midiLearn) > 0, "MIDI learn control");
         drag(pointerTarget,100,110,545,110);
         check(c->getParamNormalized(layout().order) > 0, "drag and drop block order");
@@ -275,7 +461,7 @@ int main(int argc, char **argv) try {
         checkSurfaceBounds(child,vectorSurface,"JUCE surface follows 150 percent host bounds");
 #endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-large.bmp").c_str());
-        ViewRect normal(0, 0, 1280, 720);
+        ViewRect normal(0, 0, testW, testH);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
         click(pointerTarget, 330, 110); // Three separate effect panels in block two.
         pump();
@@ -291,8 +477,14 @@ int main(int argc, char **argv) try {
         SendMessage(child,WM_COMMAND,MAKEWPARAM(10000+model,CBN_SELCHANGE),reinterpret_cast<LPARAM>(modelList));
         check(c->getParamNormalized(model)!=previousModel,"Chorus choice updates host parameter");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone.bmp").c_str());
+        const auto pageBefore=SendMessage(child,WM_APP+31,0,0);
         click(pointerTarget,1210,543);
-        check(GetDlgItem(child,10000+model)==nullptr,"next page replaces visible controls");
+        const auto pageAfter=SendMessage(child,WM_APP+31,0,0);
+        const auto stillModel=GetDlgItem(child,10000+model);
+        std::cerr << "Page navigation: before=" << LOWORD(pageBefore) << "/" << HIWORD(pageBefore)
+                  << " after=" << LOWORD(pageAfter) << "/" << HIWORD(pageAfter)
+                  << " modelCombo=" << (stillModel?1:0) << "\n";
+        check(stillModel==nullptr,"next page replaces visible controls");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-clone-page2.bmp").c_str());
         click(pointerTarget,1055,543);
         check(GetDlgItem(child,10000+model)!=nullptr,"previous page restores its controls");
@@ -308,11 +500,31 @@ int main(int argc, char **argv) try {
         click(pointerTarget, 555, 195);
         pump(); // Atomic page.
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
-        click(pointerTarget, 100, 110);
-        pump(); // Reordered MD block is now first.
-        rightClick(pointerTarget,120,330);
-        check(std::abs(c->getParamNormalized(layout().midiLearn) -
-                       double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
+        // The drag-and-drop test above intentionally changes effect order.
+        // Never assume the delay block is now at slot zero: discover its real
+        // current slot via the editor's selected block readback, using physical
+        // Windows clicks instead of bypassing the GUI.
+        bool selectedDelay=false;
+        for(int slot=0;slot<5;++slot){
+            click(pointerTarget,100+216*slot,110);
+            pump();
+            const auto selected=SendMessage(child,WM_APP+32,0,0);
+            if(LOWORD(selected)==2 && (HIWORD(selected)&1)){
+                selectedDelay=true;
+                std::cerr<<"Reference DELAY selected at actual chain slot "<<slot<<"\n";
+                break;
+            }
+        }
+        check(selectedDelay,"select the reference DELAY block in reordered effects chain");
+        const double midiBefore=c->getParamNormalized(layout().midiLearn);
+        shiftRightClick(pointerTarget,120,330);
+        const double midiExpected=double(parameterId("delayA.time")+1)/layout().controlCount;
+        const double midiActual=c->getParamNormalized(layout().midiLearn);
+        const LRESULT sectionInfo=SendMessage(child,WM_APP+32,0,0);
+        std::cerr<<"Delay MIDI learn: before="<<midiBefore
+                 <<" actual="<<midiActual<<" expected="<<midiExpected
+                 <<" block="<<LOWORD(sectionInfo)<<" sectionFlags="<<HIWORD(sectionInfo)<<"\n";
+        check(std::abs(midiActual-midiExpected)<1e-6,
               "reference DELAY TIME knob learns the common MIDI macro");
         click(pointerTarget,1000,45); // Full parameter list.
         HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
@@ -348,13 +560,67 @@ int main(int argc, char **argv) try {
               "Oil original quarter-note enum displayed");
         RECT divisionRect{};GetWindowRect(divisions,&divisionRect);
         POINT divisionTop{divisionRect.left,divisionRect.top};ScreenToClient(child,&divisionTop);
-        check(divisionTop.x>=20 && divisionTop.y>=218 && divisionTop.y<520,
+        RECT editorClient{};check(GetClientRect(child,&editorClient)!=0,"read editor geometry for Oil enum row");
+        // Window child coordinates are physical, while all GUI layout bounds
+        // (20/218/520) are expressed in the 1280x720 design space. The CI
+        // run deliberately uses a 960x540 viewport to keep real mouse input
+        // inside the runner's 1024x768 desktop.
+        const int logicalX=MulDiv(divisionTop.x,1280,editorClient.right);
+        const int logicalY=MulDiv(divisionTop.y,720,editorClient.bottom);
+        std::cerr<<"Oil enum layout: physical="<<divisionTop.x<<","<<divisionTop.y
+                 <<" logical="<<logicalX<<","<<logicalY
+                 <<" viewport="<<editorClient.right<<"x"<<editorClient.bottom<<"\n";
+        check(logicalX>=20 && logicalY>=218 && logicalY<520,
               "continuous-tagged Oil enums occupy the compact selector row, never a knob");
         SendMessage(divisions, CB_SETCURSEL, 2, 0);
         SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + division, CBN_SELCHANGE),
                     reinterpret_cast<LPARAM>(divisions));
         check(std::abs(c->getParamNormalized(division) - 2. / 7) < 1e-6,
               "Oil enum normalized by real choice count");
+        // Full-screen proof: visit every DSP block and its detail sections
+        // through native Windows clicks, using the current (reordered) chain.
+        // Save real plugin DLL captures, not generated mockups.
+        int coveredBlocks=0,coveredSections=0;
+        for(int slot=0;slot<5;++slot) {
+            click(pointerTarget,100+slot*216,110);
+            const auto selected=SendMessage(child,WM_APP+32,0,0);
+            const int block=LOWORD(selected);
+            check(block>=0 && block<5,"Rack Hybrid detail selected a valid FX block");
+            coveredBlocks|=(1<<block);
+            const std::string tag=(argc>=3?std::string(argv[2]):std::string("rack"))+
+                "-detail-block"+std::to_string(block);
+            if(argc>=3 && cycle==0) screenshot(child,(tag+".bmp").c_str());
+            const int sectionCount=block==0?4:block==1?3:0;
+            for(int section=0;section<sectionCount;++section){
+                click(pointerTarget,78+section*214,195);
+                check((HIWORD(SendMessage(child,WM_APP+32,0,0))>>1)==section,
+                      "Rack Hybrid detail section tab navigates to requested page");
+                ++coveredSections;
+                if(argc>=3 && cycle==0)
+                    screenshot(child,(tag+"-section"+std::to_string(section)+".bmp").c_str());
+            }
+            if(block==2) {
+                // Both the two-bank hardware page and paginated parameter
+                // editor must render and navigate after the new Rack skin.
+                if((HIWORD(SendMessage(child,WM_APP+32,0,0))&1)==0)
+                    click(pointerTarget,1000,45);
+                check((HIWORD(SendMessage(child,WM_APP+32,0,0))&1)!=0,
+                      "Delay BASIC opens hardware controls for the two banks");
+                if(argc>=3&&cycle==0)screenshot(child,(tag+"-basic.bmp").c_str());
+                click(pointerTarget,1000,45);
+                check((HIWORD(SendMessage(child,WM_APP+32,0,0))&1)==0,
+                      "Delay settings opens complete advanced parameter editor");
+                if(argc>=3&&cycle==0)screenshot(child,(tag+"-advanced.bmp").c_str());
+            }
+        }
+        check(coveredBlocks==31 && coveredSections==7,
+              "all five Rack Hybrid detail blocks and seven subgroup pages covered");
+        click(pointerTarget,100,110); // Enter a non-delay block for settings.
+        if(LOWORD(SendMessage(child,WM_APP+32,0,0))==2)
+            click(pointerTarget,320,110);
+        click(pointerTarget,1000,45); // Global parameters for selected non-delay block.
+        if(argc>=3 && cycle==0)
+            screenshot(child,(std::string(argv[2])+"-global-settings.bmp").c_str());
         if (argc >= 3)
             screenshot(child, argv[2]);
         check(view->removed() == kResultOk, "detach GUI");

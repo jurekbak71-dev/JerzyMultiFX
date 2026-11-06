@@ -27,6 +27,12 @@
 
 # Jerzy MultiFX — status
 
+## Preview 32 — GUI3D na prawdziwych kontrolkach JUCE
+
+- Zachowano zatwierdzony układ 1280×720 i domyślny viewport 1024×576. Gałki korzystają teraz z osobnych pasków 101 klatek, a przyciski, lampki, panele i VU z własnych przezroczystych warstw. Napisy nie są zapisane w bitmapach.
+- Wszystkie regulatory ciągłe pozostają natywnymi komponentami JUCE. Drag, host automation, reset prawym przyciskiem i MIDI Learn z `Shift + prawy przycisk` działają przez istniejące parametry. Test routingu wysyła prawdziwy stan przycisku myszy przez Windows `SendInput`.
+- Baseline sprawdza 957 parametrów i digest `7ef0e24299ef3c0b`; DSP, kolejność parametrów, klasy VST3 i stan presetów pozostają bez zmian. Lokalne testy DSP/RPi 3/3 PASS. MSVC/JUCE, rzeczywisty DLL VST3, Steinberg validator oraz paczka Windows są weryfikowane w CI. Fizyczne FL Studio i Raspberry Pi nadal wymagają odbioru sprzętowego.
+
 ## Preview 26 — czyste linie wektorowe GUI
 
 - Gałki i podziałki są rysowane jako okręgi, łuki i linie Direct2D bez promienistej faktury, kropek mniejszych od dwóch pikseli i pośredniego obrazu. Kontury panelu mają minimalną grubość w docelowym oknie. Miniaturowe kontrolki łańcucha oraz lampki uproszczono.

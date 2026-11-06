@@ -56,6 +56,8 @@ jobs:
           path: |
             dist/JerzyMultiFX-VST3-Windows-x64-v*.zip
             dist/MULTI_FX_FIXED_Windows_x64.zip
+            dist/JerzyMultiFX-GUI3D-Windows-x64.zip
+            dist/GUI3D_Library.zip
           if-no-files-found: error
           retention-days: 14
       - name: Upload GUI diagnostics

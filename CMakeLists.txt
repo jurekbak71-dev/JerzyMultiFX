@@ -67,7 +67,12 @@ if(MULTIFX_VST3)
    GIT_TAG 9.0.3
    GIT_SHALLOW TRUE)
   FetchContent_MakeAvailable(juce_gui)
-  target_link_libraries(JerzyMultiFX PRIVATE juce::juce_gui_basics)
+  file(GLOB_RECURSE MULTIFX_GUI3D_ASSETS CONFIGURE_DEPENDS
+   "${CMAKE_CURRENT_SOURCE_DIR}/plugin-vst3/resources/gui3d/*.png")
+  juce_add_binary_data(JerzyMultiFXGui3DAssets
+   NAMESPACE BinaryData
+   SOURCES ${MULTIFX_GUI3D_ASSETS})
+  target_link_libraries(JerzyMultiFX PRIVATE juce::juce_gui_basics JerzyMultiFXGui3DAssets)
   target_compile_definitions(JerzyMultiFX PRIVATE MULTIFX_JUCE_GUI=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
  endif()
  if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)

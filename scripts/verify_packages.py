@@ -57,6 +57,26 @@ if fixed.exists():
         dll=archive.read(prefix+'Jerzy MultiFX.vst3/Contents/x86_64-win/Jerzy MultiFX.vst3')
         assert dll[:2]==b'MZ' and struct.unpack_from('<H',dll,struct.unpack_from('<I',dll,0x3c)[0]+4)[0]==0x8664
     print('PASS',fixed.name,'requested installable x64 bundle and text reports verified')
+gui3d=root/'dist'/'JerzyMultiFX-GUI3D-Windows-x64.zip'
+library=root/'dist'/'GUI3D_Library.zip'
+if gui3d.exists():
+    with zipfile.ZipFile(gui3d) as archive:
+        assert archive.testzip() is None
+        prefix='JerzyMultiFX-GUI3D-Windows-x64/'
+        names=set(archive.namelist())
+        assert prefix+'Jerzy MultiFX.vst3/Contents/x86_64-win/Jerzy MultiFX.vst3' in names
+        assert prefix+'VALIDATION_REPORT.md' in names
+        assert prefix+'GUI_BEFORE_AFTER/README.md' in names
+    print('PASS',gui3d.name,'GUI3D VST3, validation report and render comparison verified')
+if library.exists():
+    with zipfile.ZipFile(library) as archive:
+        assert archive.testzip() is None
+        names=set(archive.namelist())
+        assert 'GUI3D_Library/assets/asset_manifest.json' in names
+        assert 'GUI3D_Library/generate_gui3d_assets.py' in names
+        strips=[n for n in names if n.startswith('GUI3D_Library/assets/knobs/') and n.endswith('_101.png')]
+        assert len(strips)==15
+    print('PASS',library.name,'separate manifest-driven GUI3D asset library verified')
 deb=root/'dist'/f'JerzyMultiFX-RPi-aarch64-v{VERSION}.deb'
 arm=packages[1]
 if deb.exists():
