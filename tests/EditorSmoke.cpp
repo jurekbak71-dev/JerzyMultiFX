@@ -367,9 +367,9 @@ int main(int argc, char **argv) try {
         message->release();meters->release();
         rightClick(pointerTarget,187,132);
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().blockBypass[0]+1)/layout().controlCount)<1e-6,"block bypass MIDI Learn");
-        click(pointerTarget,100,220); click(pointerTarget,100,250); // Select Oil Drum for DELAY A from the engine selector.
+        click(pointerTarget,100,220); click(pointerTarget,349,412); // Oil Drum: column 2, row 6 of full 13-engine list, bank A.
         click(pointerTarget,600,220); // Select bank B.
-        click(pointerTarget,100,220); click(pointerTarget,100,250); // Select Oil Drum for DELAY B.
+        click(pointerTarget,100,220); click(pointerTarget,349,412); // Oil Drum in bank B.
         click(pointerTarget,470,220); // Return to bank A.
         check(c->getParamNormalized(layout().delayType[0]) == 1 &&
               c->getParamNormalized(layout().delayType[1]) == 1,
