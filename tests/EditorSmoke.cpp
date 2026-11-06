@@ -67,9 +67,13 @@ static void movePointer(HWND h, int x, int y) {
         check(topLevel!=nullptr,"resolve top-level VST3 test host");
         RECT bounds{};
         check(GetWindowRect(topLevel,&bounds)!=0,"read test host window position");
-        check(SetWindowPos(topLevel,nullptr,bounds.left+shiftX,bounds.top+shiftY,0,0,
-                           SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOZORDER)!=0,
-              "shift test host so clicked control remains on virtual desktop");
+        // Keep the native JUCE editor frontmost. Merely moving an oversized
+        // host can uncover other Windows runner windows that intercept SendInput.
+        check(SetWindowPos(topLevel,HWND_TOPMOST,bounds.left+shiftX,bounds.top+shiftY,0,0,
+                           SWP_NOSIZE|SWP_SHOWWINDOW)!=0,
+              "bring native VST3 host to front while moving click target");
+        BringWindowToTop(topLevel);
+        SetForegroundWindow(topLevel);
         screen={x,y};
         check(ClientToScreen(h,&screen)!=0,"recalculate moved editor point");
         std::cerr<<"Reposition host for physical click: "<<x<<","<<y
@@ -88,8 +92,17 @@ static void movePointer(HWND h, int x, int y) {
     }
     const HWND target=WindowFromPoint(screen);
     if(!target || (target!=h && !IsChild(h,target))){
-        std::cerr<<"Physical hit-test intercepted: JUCE="<<h
-                 <<" actual window="<<target<<" at "<<screen.x<<","<<screen.y<<"\n";
+        char targetClass[256]{},targetTitle[256]{},juceClass[256]{};
+        if(target){
+            GetClassNameA(target,targetClass,sizeof(targetClass));
+            GetWindowTextA(target,targetTitle,sizeof(targetTitle));
+        }
+        GetClassNameA(h,juceClass,sizeof(juceClass));
+        DWORD processId=0;
+        if(target)GetWindowThreadProcessId(target,&processId);
+        std::cerr<<"Physical hit-test intercepted: JUCE="<<h<<" class="<<juceClass
+                 <<" actual="<<target<<" class="<<targetClass<<" title="<<targetTitle
+                 <<" pid="<<processId<<" at "<<screen.x<<","<<screen.y<<"\n";
         throw std::runtime_error("Native mouse target is not the JUCE surface");
     }
 }
