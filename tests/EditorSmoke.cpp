@@ -82,14 +82,24 @@ static void movePointer(HWND h, int x, int y) {
                  <<" screen="<<screen.x<<","<<screen.y
                  <<" desktop="<<left<<","<<top<<".."<<right<<","<<bottom<<"\n";
     }
-    check(SetCursorPos(screen.x, screen.y) != 0, "position OS pointer over the editor");
-    Sleep(8);
-    pump();
+    // JUCE unbounded-mouse mode may perform a deferred cursor warp after a
+    // slider is released. During repeated attach/detach cycles this can race
+    // the first SetCursorPos even though the target remains on the desktop.
+    // Re-apply the actual hardware cursor location after pumping those moves;
+    // still fail if Windows cannot reach the requested target.
     POINT actual{};
-    check(GetCursorPos(&actual)!=0,"read actual OS pointer location");
-    if(actual.x!=screen.x||actual.y!=screen.y){
-        std::cerr<<"Unreachable physical mouse target: requested="<<screen.x<<","<<screen.y
-                 <<" actual="<<actual.x<<","<<actual.y<<"\n";
+    bool positioned=false;
+    for(int attempt=0;attempt<4;++attempt){
+        check(SetCursorPos(screen.x,screen.y)!=0,"position OS pointer over the editor");
+        Sleep(8);
+        pump();
+        check(GetCursorPos(&actual)!=0,"read actual OS pointer location");
+        if(actual.x==screen.x&&actual.y==screen.y){positioned=true;break;}
+        Sleep(18);
+    }
+    if(!positioned){
+        std::cerr<<"Unreachable physical mouse target after retries: requested="
+                 <<screen.x<<","<<screen.y<<" actual="<<actual.x<<","<<actual.y<<"\n";
         throw std::runtime_error("Windows clamped native pointer before JUCE mouse dispatch");
     }
     HWND target=WindowFromPoint(screen);
