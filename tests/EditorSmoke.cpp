@@ -312,6 +312,17 @@ int main(int argc, char **argv) try {
             screenshot(child,argv[2]);
             return 0;
         }
+        // Test the approved Rack Hybrid first, including a real power switch
+        // click, before opening the preserved detailed editor for regression.
+        const auto rackOff=c->getParamNormalized(layout().blockBypass[0]);
+        click(pointerTarget,216,179);
+        check(c->getParamNormalized(layout().blockBypass[0])!=rackOff,
+              "Rack Hybrid power LED toggles the real DRIVE block");
+        click(pointerTarget,216,179);
+        check(c->getParamNormalized(layout().blockBypass[0])==rackOff,
+              "Rack Hybrid power LED toggles back without changing defaults");
+        click(pointerTarget,1150,52);
+        pump();
         // Exercise the real DLL's meter notification and independent needle rendering.
         IConnectionPoint *meters=nullptr;
         check(c->queryInterface(IConnectionPoint::iid,reinterpret_cast<void **>(&meters))==kResultOk,"meter connection");
