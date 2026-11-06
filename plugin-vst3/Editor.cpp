@@ -120,6 +120,7 @@ class Editor final : public Steinberg::CPluginView {
     std::vector<HWND> combos;
     std::string signature;
     bool globalSettings = false;
+    bool rackHome = true; // approved Rack Hybrid: detail editor stays available.
     bool engineMenuOpen = false;
     bool referenceDelay() const { return view.block == 2 && !view.advanced && !globalSettings; }
     int delayControl(int bank, int kind) const {
@@ -702,6 +703,153 @@ class Editor final : public Steinberg::CPluginView {
         if(assets.vuGlass.isValid())juceGraphics->drawImage(assets.vuGlass,target);
     }
 #endif
+
+#ifdef MULTIFX_JUCE_GUI
+    int rackParameter(int block,int column) const {
+        static constexpr const char *keys[5][3]={
+            {"drive.gain","drive.tone","drive.level"},
+            {"clone.rate","clone.depth","clone.mix"},
+            {"delayA.time","delayA.feedback","delayA.mix"},
+            {"reverb.size","reverb.damping","reverb.mix"},
+            {"ir.mix","ir.output","ir.mix"}
+        };
+        if(block==2 && column<2) return delayControl(0,column);
+        return parameterId(keys[std::clamp(block,0,4)][column]);
+    }
+    void paintRackHome() {
+        auto &g=*juceGraphics;
+        auto &a=Gui3DAssets::get();
+        const juce::Colour ink(0xffe4e5e7),muted(0xffa0a9b0),gold(0xfff9ac33);
+        const juce::Colour accents[5]={juce::Colour(0xfff4a02c),juce::Colour(0xff26d3ee),
+            juce::Colour(0xfff05b57),juce::Colour(0xffb778ed),juce::Colour(0xffa4c6cb)};
+        const char *names[5]={"DRIVE","CHORUS","DELAY","REVERB","CAB / IR"};
+        const char *labels[5][3]={{"GAIN","TONE","LEVEL"},{"RATE","DEPTH","MIX"},
+            {"TIME","FEEDBACK","MIX"},{"SIZE","DAMP","MIX"},{"MIX","OUTPUT","MIX"}};
+        const auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
+        auto title=[&](juce::String text,int x,int y,int w,int h,float size,juce::Colour color) {
+            g.setColour(color);g.setFont(size);
+            g.drawFittedText(text,juce::Rectangle<int>(x,y,w,h),juce::Justification::centred,1);
+        };
+        auto panel=[&](juce::Rectangle<float> r,juce::Colour base,float rad) {
+            g.setColour(juce::Colours::black.withAlpha(.85f));
+            g.fillRoundedRectangle(r.translated(1,5),rad);
+            g.setGradientFill(juce::ColourGradient(base.brighter(.22f),r.getTopLeft(),
+                base.darker(.64f),r.getBottomRight(),false));
+            g.fillRoundedRectangle(r,rad);
+            g.setColour(juce::Colour(0xff767b82));g.drawRoundedRectangle(r,rad,1.15f);
+        };
+        auto bolt=[&](float x,float y) {
+            g.setColour(juce::Colour(0xff08090b));g.fillEllipse(x-6,y-6,12,12);
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xffd4d5d6),x-4,y-4,
+                juce::Colour(0xff3a4045),x+4,y+4,false));g.fillEllipse(x-4,y-4,8,8);
+            g.setColour(juce::Colour(0xff17191b));g.drawLine(x-2,y+2,x+2,y-2,1.5f);
+        };
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff2b3038),0,0,
+            juce::Colour(0xff050608),1280,720,false));g.fillAll();
+        panel({10,12,1260,692},juce::Colour(0xff292c30),20);
+        g.setColour(juce::Colour(0xff08090c));
+        g.fillRoundedRectangle(juce::Rectangle<float>(23,91,1234,473),12);
+        g.setColour(juce::Colour(0xff777a7e));
+        g.drawRoundedRectangle(juce::Rectangle<float>(23,91,1234,473),12,1.7f);
+        for(int xx:{29,1251})for(int yy:{28,687})bolt(float(xx),float(yy));
+        title("Jerzy",41,25,112,46,35,ink);
+        title("MultiFX",150,25,185,46,37,gold);
+        title("MULTI EFFECTS PROCESSOR",340,34,209,30,13,muted);
+        panel({559,28,330,47},juce::Colour(0xff17181b),7);
+        title("Factory / Analog Space",569,34,309,34,19,ink);
+        panel({902,28,146,47},juce::Colour(0xff1b1e21),7);
+        title("PRESET",906,35,137,32,16,ink);
+        panel({1059,28,194,47},juce::Colour(0xff30353d),7);
+        title("SZCZEGOLY  >",1062,35,187,32,17,gold);
+        // Two independent hardware-inspired meter and trim columns.
+        for(int side=0;side<2;++side) {
+            const int x=side?1090:31;
+            const float v=side?needleOut:needleIn;
+            const int id=side?layout().masterGain:parameterId("comp.input");
+            panel({float(x),112,158,439},juce::Colour(0xff242426),12);
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xffffd99b),float(x+12),130,
+                juce::Colour(0xffb87829),float(x+147),273,false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+12,130,134,149),8);
+            g.setColour(juce::Colour(0xff533413));
+            g.drawRoundedRectangle(juce::Rectangle<float>(x+12,130,134,149),8,2);
+            const float cx=x+79,cy=256;
+            for(int t=0;t<=10;++t) {
+                const float angle=juce::degreesToRadians(-68.0f+13.6f*t);
+                g.setColour(juce::Colour(0xff4e2e18));
+                g.drawLine(cx+std::sin(angle)*90,cy-std::cos(angle)*90,
+                           cx+std::sin(angle)*79,cy-std::cos(angle)*79,1.25f);
+            }
+            title("VU",x+45,197,70,27,19,juce::Colour(0xff4e2912));
+            const float db=20*std::log10(std::max(v,1.e-6f));
+            const float needle=juce::degreesToRadians(-68.0f+136.0f*std::clamp((db+48)/48,0.0f,1.0f));
+            g.setColour(juce::Colour(0xff562118));
+            g.drawLine(cx,cy,cx+std::sin(needle)*82,cy-std::cos(needle)*82,2.5f);
+            g.setColour(juce::Colour(0xff271411));g.fillEllipse(cx-5,cy-5,10,10);
+            title(side?"OUTPUT":"INPUT",x+11,302,136,30,20,ink);
+            const auto &strip=a.knobs[Gui3DAssets::master][Gui3DAssets::amber];
+            if(strip.isValid()&&id>=0){
+                const int fw=strip.getHeight(),frame=std::clamp(int(std::round(value(id)*100)),0,100);
+                g.drawImage(strip,x+25,344,108,108,frame*fw,0,fw,strip.getHeight());
+            }
+            title(side?"MASTER OUTPUT":"COMP INPUT",x+10,457,138,26,12,muted);
+            if(id>=0)title(juce::String(formatted(id)),x+9,483,139,25,14,gold);
+            bolt(x+13,125);bolt(x+145,535);
+        }
+        for(int slot=0;slot<4;++slot){
+            const int block=order[slot],x=199+slot*220;
+            const juce::Colour accent=accents[block];
+            panel({float(x),112,213,439},juce::Colour(0xff242629),11);
+            g.setColour(juce::Colour(0xff090b0e));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+5,118,203,426),8);
+            g.setGradientFill(juce::ColourGradient(accent.darker(.46f),float(x+8),123,
+                              juce::Colour(0xff181b20),float(x+203),202,false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+8,121,197,77),7);
+            g.setColour(accent);
+            g.drawRoundedRectangle(juce::Rectangle<float>(x+6,120,201,424),8,1.8f);
+            title("FX "+juce::String(slot+1),x+9,132,49,29,17,accent);
+            title(names[block],x+55,130,142,32,19,ink);
+            g.setColour(value(layout().blockBypass[block])>=.5?juce::Colour(0xff743c40):accent);
+            g.fillEllipse(x+17.0f,173,15,15);
+            title("POWER",x+34,170,75,23,11,muted);
+            title("EDIT >",x+132,170,66,23,12,accent);
+            for(int k=0;k<3;++k){
+                const int id=rackParameter(block,k);
+                if(id<0)continue;
+                const int xx=x+11+k*65;
+                const auto &strip=a.knobs[Gui3DAssets::fx][Gui3DAssets::closestAccent(accent)];
+                if(strip.isValid()){
+                    const int fw=strip.getHeight(),frame=std::clamp(int(std::round(value(id)*100)),0,100);
+                    g.drawImage(strip,xx,287,62,62,frame*fw,0,fw,strip.getHeight());
+                }
+                title(labels[block][k],xx-3,351,69,25,12,ink);
+                title(juce::String(formatted(id)),xx-4,380,70,23,11,muted);
+            }
+            g.setColour(juce::Colour(0xff464c51));g.drawLine(x+17.0f,412,x+196.0f,412,1);
+            panel({float(x+14),428,185,47},juce::Colour(0xff1e2124),6);
+            const int selector=block==0?parameterId("drive.type"):block==1?parameterId("clone.model"):
+                block==2?layout().delayType[0]:block==3?parameterId("reverb.engine"):-1;
+            title(selector>=0?juce::String(formatted(selector)):"CAB / IR",x+18,435,178,31,14,ink);
+            title("TYPE / MODEL     v",x+23,491,166,26,12,accent);
+            bolt(x+15,127);bolt(x+199,127);bolt(x+15,536);bolt(x+199,536);
+        }
+        panel({37,582,1207,101},juce::Colour(0xff26282b),12);
+        title("DELAY A/B",48,601,144,26,15,muted);
+        const int route=std::clamp(int(std::round(value(layout().delayMode)*2)),0,2);
+        for(int i=0;i<2;++i) {
+            const int bx=202+i*166;
+            panel({float(bx),603,155,51},route==i?juce::Colour(0xff71471b):juce::Colour(0xff1e2023),7);
+            title(i==0?"SERIAL":"PARALLEL",bx+7,609,142,37,15,route==i?gold:ink);
+        }
+        title("CHAIN",556,608,111,29,16,muted);
+        for(int i=0;i<4;++i){
+            const int block=order[i],xx=672+i*138;
+            panel({float(xx),599,112,57},juce::Colour(0xff21242a),7);
+            title(juce::String(i+1)+"  "+names[block],xx+2,608,108,34,13,accents[block]);
+            if(i<3)title(">",xx+108,608,28,34,15,ink);
+        }
+        title("CAB / IR + WSZYSTKIE PARAMETRY W SZCZEGOLACH",674,656,554,23,12,muted);
+    }
+#endif
     void chrome(HDC dc) {
 #ifdef MULTIFX_JUCE_GUI
         JerzyAudioUI::paintChassis(*juceGraphics,juce::Rectangle<float>(0,0,float(W),float(H)),juceLook.getTheme());
@@ -735,7 +883,7 @@ class Editor final : public Steinberg::CPluginView {
         bevel(dc,920,28,162,36,RGB(14,32,47));
         text(dc,923,36,156,globalSettings||view.advanced?"WRÓĆ":"USTAWIENIA",11,RGB(204,231,240));
         bevel(dc,1091,28,164,36,RGB(14,32,47));
-        text(dc,1094,36,158,"POMOC",11,RGB(204,231,240));
+        text(dc,1094,36,158,"RACK HOME",11,RGB(204,231,240));
         metalPanel(dc,10,80,1260,72,false);
         fill(dc,13,83,1254,66,RGB(7,18,28));
         auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
@@ -928,7 +1076,18 @@ class Editor final : public Steinberg::CPluginView {
             return;
         destroyCombos();
         controls.clear();
-        if (referenceDelay()) {
+        if (rackHome) {
+            controlPage=0;controlPages=1;
+            const auto chain=permutation(int(plain(layout().order,float(value(layout().order)))));
+            for(int slot=0;slot<4;++slot)
+                for(int k=0;k<3;++k) {
+                    const int id=rackParameter(chain[slot],k);
+                    if(id>=0)controls.push_back({id,210+slot*220+k*65,287,62,62,false});
+                }
+            const int input=parameterId("comp.input");
+            if(input>=0)controls.push_back({input,56,344,108,108,false});
+            controls.push_back({layout().masterGain,1115,344,108,108,false});
+        } else if (referenceDelay()) {
             controlPage=0;controlPages=1;
             for (int bank = 0; bank < 2; ++bank)
                 for (int kind = 0; kind < 2; ++kind) {
@@ -977,6 +1136,14 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 controls.push_back({id,x,y,388,isCompact?54:126,isCompact});
             }
+        }
+        if(rackHome) {
+#ifdef MULTIFX_JUCE_GUI
+            rebuildJuceParameterSliders();
+#endif
+            signature=selectionSignature();
+            requestRepaint();
+            return;
         }
         for (auto &c : controls) {
             const auto &p = controlUI()[c.id].definition;
@@ -1094,6 +1261,13 @@ class Editor final : public Steinberg::CPluginView {
             drawTextPass(target);
             if(!supplied)EndPaint(window,&ps);
         };
+#endif
+#ifdef MULTIFX_JUCE_GUI
+        if(rackHome) {
+            paintRackHome();
+            finish();
+            return;
+        }
 #endif
         if (referenceDelay()) {
             chrome(target);
@@ -1426,6 +1600,44 @@ class Editor final : public Steinberg::CPluginView {
             }
             return 0;
         case WM_LBUTTONDOWN: {
+            if(rackHome){
+                const auto chain=permutation(int(plain(layout().order,float(value(layout().order)))));
+                if(y>=28&&y<78&&x>=1059){rackHome=false;rebuild();return 0;}
+                if(y>=120&&y<544&&x>=199&&x<1078){
+                    const int slot=std::clamp((x-199)/220,0,3),block=chain[slot];
+                    const int local=x-(199+slot*220);
+                    if(y>=169&&y<=198&&local<110){
+                        const int id=layout().blockBypass[block];
+                        change(id,value(id)>=.5?0:1);return 0;
+                    }
+                    if(y>=423&&y<=524){
+                        const int id=block==0?parameterId("drive.type"):
+                            block==1?parameterId("clone.model"):
+                            block==2?layout().delayType[0]:
+                            block==3?parameterId("reverb.engine"):-1;
+                        if(id>=0) {
+                            const auto &d=controlUI()[id].definition;
+                            const int steps=std::max(1,!d.choices.empty()?
+                                int(std::count(d.choices.begin(),d.choices.end(),'|')):d.steps);
+                            change(id,std::fmod(value(id)+1.0/steps+1.e-5,1.0+1.0/steps));
+                        }else{view.block=block;rackHome=false;rebuild();}
+                        return 0;
+                    }
+                    if(y<285){view.block=block;view.section=0;view.advanced=false;
+                        rackHome=false;globalSettings=false;rebuild();return 0;}
+                }
+                if(y>=600&&y<=655&&x>=202&&x<523){
+                    if(x<357)change(layout().delayMode,0);
+                    else if(x>=368)change(layout().delayMode,.5);
+                    return 0;
+                }
+                if(y>=600&&y<=655&&x>=672&&x<1215){
+                    const int slot=std::clamp((x-672)/138,0,3);
+                    view.block=chain[slot];view.section=0;rackHome=false;
+                    globalSettings=false;rebuild();return 0;
+                }
+                return 0;
+            }
 #ifdef MULTIFX_JUCE_GUI
             if(!jucePointerDispatch)
 #endif
@@ -1490,6 +1702,7 @@ class Editor final : public Steinberg::CPluginView {
             if (y >= 28 && y < 65 && x >= 650 && x < 687) {
                 change(layout().factoryProgram,std::min(1.0,value(layout().factoryProgram)+1./7));return 0;
             }
+            if(y>=28&&y<65&&x>=1091&&x<1255){rackHome=true;rebuild();return 0;}
             if (y >= 28 && y < 65 && x >= 696 && x < 752) {file("savePreset",true);return 0;}
             if(y>=28&&y<65&&x>=405&&x<650){showChoice(layout().factoryProgram,405,65);return 0;}
             if (y >= 28 && y < 65 && x >= 920 && x < 1082) {
