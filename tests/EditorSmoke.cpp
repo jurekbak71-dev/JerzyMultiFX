@@ -90,9 +90,28 @@ static void movePointer(HWND h, int x, int y) {
                  <<" actual="<<actual.x<<","<<actual.y<<"\n";
         throw std::runtime_error("Windows clamped native pointer before JUCE mouse dispatch");
     }
-    const HWND target=WindowFromPoint(screen);
+    HWND target=WindowFromPoint(screen);
+    if(target && target!=h && !IsChild(h,target) && std::getenv("GITHUB_ACTIONS")){
+        char cls[256]{},title[512]{};
+        GetClassNameA(target,cls,sizeof(cls));
+        GetWindowTextA(target,title,sizeof(title));
+        // On GitHub hosted Windows runners the background compute-agent
+        // Cascadia console can remain above the VST3 editor, stealing real
+        // SendInput clicks. Hide only that exact CI-owned console; never
+        // suppress unrelated application/host windows or alter local setups.
+        if(std::string(cls)=="CASCADIA_HOSTING_WINDOW_CLASS" &&
+           std::string(title).find("HostedComputeAgent")!=std::string::npos){
+            std::cerr<<"Hide CI compute-agent console blocking native JUCE input\n";
+            ShowWindow(target,SW_HIDE);
+            BringWindowToTop(GetAncestor(h,GA_ROOT));
+            SetForegroundWindow(GetAncestor(h,GA_ROOT));
+            Sleep(20);
+            pump();
+            target=WindowFromPoint(screen);
+        }
+    }
     if(!target || (target!=h && !IsChild(h,target))){
-        char targetClass[256]{},targetTitle[256]{},juceClass[256]{};
+        char targetClass[256]{},targetTitle[512]{},juceClass[256]{};
         if(target){
             GetClassNameA(target,targetClass,sizeof(targetClass));
             GetWindowTextA(target,targetTitle,sizeof(targetTitle));
