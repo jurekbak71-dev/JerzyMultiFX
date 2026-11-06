@@ -1182,7 +1182,7 @@ class Editor final : public Steinberg::CPluginView {
     void referenceDelayPanel(HDC dc) {
 #ifdef MULTIFX_JUCE_GUI
         drawDetailHardwarePanel({14,161,1251,463},juce::Colour(0xff1e2126),9);
-        juceGraphics->setColour(juce::Colour(0xffed675a));
+        juceGraphics->setColour(rackDetailAccent());
         juceGraphics->fillRoundedRectangle(juce::Rectangle<float>(28,162,1215,3),1.5f);
 #else
         metalPanel(dc,11,160,1258,548); fill(dc,14,163,1252,542,RGB(28,32,37));
@@ -1246,13 +1246,14 @@ class Editor final : public Steinberg::CPluginView {
         for(int i=0;i<3;++i){
             const int y=282+i*44;
 #ifdef MULTIFX_JUCE_GUI
-            const auto &button=Gui3DAssets::get().buttons[Gui3DAssets::cyan][routing==i?1:0];
+            const auto &button=Gui3DAssets::get().buttons[Gui3DAssets::amber][routing==i?1:0];
             if(button.isValid())juceGraphics->drawImage(button,juce::Rectangle<float>(1007.0f,float(y),207.0f,36.0f));
             else metalPanel(dc,1007,y,207,36,false);
 #else
             metalPanel(dc,1007,y,207,36,false);fill(dc,1010,y+3,201,30,routing==i?RGB(23,124,153):RGB(15,36,52));
 #endif
-            lamp(dc,1023,y+18,routing==i,RGB(75,231,246));text(dc,1035,y+9,168,routes[i],11,RGB(223,240,246));
+            lamp(dc,1023,y+18,routing==i,RGB(246,175,76));
+            text(dc,1035,y+9,168,routes[i],11,RGB(236,238,241));
         }
         line(dc,28,415,1251,415,RGB(96,99,105));
         int featureCount=0;for(int i=0;i<8&&delayFeature(i)>=0;++i)++featureCount;
