@@ -321,6 +321,13 @@ int main(int argc, char **argv) try {
         click(pointerTarget,216,179);
         check(c->getParamNormalized(layout().blockBypass[0])==rackOff,
               "Rack Hybrid power LED toggles back without changing defaults");
+        const double rackOrder=c->getParamNormalized(layout().order);
+        click(pointerTarget,785,627); // First physical CHAIN arrow.
+        check(c->getParamNormalized(layout().order)!=rackOrder,
+              "Rack Hybrid chain arrow changes the real DSP block order");
+        click(pointerTarget,785,627);
+        check(std::abs(c->getParamNormalized(layout().order)-rackOrder)<1e-6,
+              "Rack Hybrid chain arrow restores its original permutation");
         click(pointerTarget,1150,52);
         pump();
         // Exercise the real DLL's meter notification and independent needle rendering.
