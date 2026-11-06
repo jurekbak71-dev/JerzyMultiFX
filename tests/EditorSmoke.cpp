@@ -586,8 +586,10 @@ int main(int argc, char **argv) try {
                     screenshot(child,(tag+"-section"+std::to_string(section)+".bmp").c_str());
             }
             if(block==2) {
-                // Basic Delay uses the separate dual-bank hardware layout.
-                click(pointerTarget,1000,45); // Full / advanced parameter editor.
+                // Basic Delay is a dedicated two-bank editor. Another block
+                // may have left advanced enabled: only toggle if basic is open.
+                if((HIWORD(SendMessage(child,WM_APP+32,0,0))&1)!=0)
+                    click(pointerTarget,1000,45);
                 check((HIWORD(SendMessage(child,WM_APP+32,0,0))&1)==0,
                       "Delay settings opens complete advanced parameter editor");
                 if(argc>=3 && cycle==0)
