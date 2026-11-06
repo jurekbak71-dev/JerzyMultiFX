@@ -870,8 +870,109 @@ class Editor final : public Steinberg::CPluginView {
         title("CAB / IR + WSZYSTKIE PARAMETRY W SZCZEGOLACH",674,656,554,23,12,muted);
     }
 #endif
+
+#ifdef MULTIFX_JUCE_GUI
+    juce::Colour rackDetailAccent() const {
+        static const juce::Colour colors[5]={
+            juce::Colour(0xffffaa35),juce::Colour(0xff28d6e8),
+            juce::Colour(0xfff56a59),juce::Colour(0xffb48afa),
+            juce::Colour(0xffa2c8cf)};
+        return colors[std::clamp(view.block,0,4)];
+    }
+    void drawDetailHardwarePanel(juce::Rectangle<float> r,juce::Colour color,int radius=8) {
+        auto &g=*juceGraphics;
+        g.setColour(juce::Colours::black.withAlpha(.72f));
+        g.fillRoundedRectangle(r.translated(1.5f,3.5f),float(radius));
+        g.setGradientFill(juce::ColourGradient(color.brighter(.14f),r.getTopLeft(),
+            color.darker(.55f),r.getBottomRight(),false));
+        g.fillRoundedRectangle(r,float(radius));
+        g.setColour(juce::Colour(0xff6c7177));
+        g.drawRoundedRectangle(r,float(radius),1.0f);
+        g.setColour(juce::Colours::white.withAlpha(.075f));
+        g.drawHorizontalLine(int(r.getY()+2),r.getX()+8,r.getRight()-8);
+    }
+    // The same hardware language as Rack Home is applied to every editor page.
+    // Hit boxes and parameter IDs are deliberately unchanged.
+    void paintDetailChrome(HDC dc) {
+        auto &g=*juceGraphics;
+        const auto accent=rackDetailAccent();
+        const juce::Colour bright(0xffe6e9ec),muted(0xffaeb8c0);
+        const char *names[5]={"DRIVE / PREAMP","MODULATION","DUAL DELAY","REVERB","CABINET / IR"};
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff30343b),0,0,
+            juce::Colour(0xff080a0d),1280,720,false));
+        g.fillRect(0,0,W,H);
+        drawDetailHardwarePanel({11,11,1258,695},juce::Colour(0xff292b2f),15);
+        // All clickable coordinates in the top strip match the old editor.
+        drawDetailHardwarePanel({20,18,333,50},juce::Colour(0xff1b1d22),7);
+        text(dc,23,22,128,"JERZY",24,RGB(226,229,232));
+        text(dc,153,22,186,"MULTIFX",24,RGB(246,167,54));
+        drawDetailHardwarePanel({365,28,322,36},juce::Colour(0xff1c2024),6);
+        const int preset=std::clamp(int(std::round(value(layout().factoryProgram)*7)),0,7);
+        char presetLabel[96];
+        snprintf(presetLabel,sizeof(presetLabel),"%02d  %s",preset+1,presetNames[preset]);
+        text(dc,365,9,322,"PRESET",11,RGB(181,189,200));
+        text(dc,371,34,18,"<",16,RGB(229,234,237));
+        text(dc,405,37,245,presetLabel,13,RGB(234,237,240));
+        text(dc,668,34,18,">",16,RGB(229,234,237));
+        drawDetailHardwarePanel({696,28,56,36},juce::Colour(0xff38302a),6);
+        text(dc,697,37,54,"SAVE",10,RGB(255,200,113));
+        drawDetailHardwarePanel({765,28,144,36},juce::Colour(0xff20262a),6);
+        bool mapped=false;
+        for(int i=0;i<128;++i)if(value(layout().midiMap+i)>0){mapped=true;break;}
+        text(dc,765,7,144,"MIDI MAPPING",10,RGB(192,200,209));
+        text(dc,774,37,126,mapped?"ACTIVE":"MIDI LEARN",12,RGB(115,232,192));
+        drawDetailHardwarePanel({920,28,162,36},juce::Colour(0xff22282c),6);
+        text(dc,923,36,156,globalSettings||view.advanced?"BASIC":"ADVANCED",12,RGB(221,232,235));
+        drawDetailHardwarePanel({1091,28,164,36},juce::Colour(0xff47321c),6);
+        text(dc,1094,35,158,"RACK HOME",14,RGB(255,190,90));
+        // Current block and serial order are visible on every submenu.
+        drawDetailHardwarePanel({12,79,1256,74},juce::Colour(0xff15191e),9);
+        const auto order=permutation(int(plain(layout().order,float(value(layout().order)))));
+        for(int slot=0;slot<5;++slot){
+            const int block=order[slot],x=20+slot*216;
+            const bool selected=block==view.block;
+            const juce::Colour colors[5]={juce::Colour(0xffe7a143),juce::Colour(0xff27ccdf),
+                juce::Colour(0xffed665e),juce::Colour(0xffaf88ed),juce::Colour(0xff9dc5cd)};
+            drawDetailHardwarePanel({float(x),87,201,58},
+                selected?juce::Colour(0xff343338):juce::Colour(0xff24262a),6);
+            g.setColour(selected?colors[block]:juce::Colour(0xff555c64));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+3,89,195,3),1);
+            const bool bypass=value(layout().blockBypass[block])>=.5;
+            g.setColour(bypass?juce::Colour(0xffcc4b4e):colors[block]);
+            g.fillEllipse(x+169.0f,108,12,12);
+            text(dc,x+7,106,30,std::to_string(slot+1).c_str(),17,RGB(222,227,232));
+            text(dc,x+32,100,148,names[block],12,
+                selected?RGB(245,247,249):RGB(177,187,195));
+            text(dc,x+34,123,128,bypass?"BYPASS":"ON / ACTIVE",11,
+                bypass?RGB(232,107,110):RGB(142,220,174));
+        }
+        drawDetailHardwarePanel({1109,87,151,58},juce::Colour(0xff1d2428),6);
+        const float levels[2]={needleIn,needleOut};
+        for(int i=0;i<2;++i){
+            const int y=98+i*22;
+            text(dc,1116,y,27,i?"OUT":"IN",9,RGB(225,229,233));
+            miniVu(1140,y-6,111,21,levels[i]);
+        }
+        // Standard section panel and footer match Rack Home graphite/aluminium.
+        drawDetailHardwarePanel({13,157,1254,468},juce::Colour(0xff202328),11);
+        g.setColour(accent);g.fillRoundedRectangle(juce::Rectangle<float>(26,160,1228,3),1.5f);
+        if(!referenceDelay()){
+            text(dc,30,155,377,names[std::clamp(view.block,0,4)],20,RGB(241,243,245));
+            text(dc,409,161,430,view.advanced?"ADVANCED EDITOR":"PARAMETER EDITOR",11,RGB(168,176,187));
+        }
+        drawDetailHardwarePanel({20,631,1240,60},juce::Colour(0xff1a1d22),9);
+        const char *buttons[4]={"LOAD IR WAV","LOAD PRESET","SAVE PRESET",
+            value(layout().bypass)>=.5?"MASTER OFF":"MASTER ON"};
+        for(int i=0;i<4;++i){
+            const int x=28+i*250;
+            drawDetailHardwarePanel({float(x),638,238,38},juce::Colour(0xff292e35),5);
+            text(dc,x,646,238,buttons[i],12,RGB(224,230,234));
+        }
+    }
+#endif
     void chrome(HDC dc) {
 #ifdef MULTIFX_JUCE_GUI
+        if(!rackHome){paintDetailChrome(dc);return;}
         JerzyAudioUI::paintChassis(*juceGraphics,juce::Rectangle<float>(0,0,float(W),float(H)),juceLook.getTheme());
 #else
         fill(dc,0,0,W,H,RGB(7,17,27));
