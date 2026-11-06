@@ -1145,7 +1145,8 @@ class Editor final : public Steinberg::CPluginView {
         const auto &definition=layout().parameters[c.id];
         if(radius==40){
             char display[32];
-            if(std::string_view(label)=="CZAS DELAYA")
+            if(std::string_view(label)=="CZAS DELAYA"||
+               std::string_view(label)=="DELAY TIME")
                 snprintf(display,sizeof(display),"%.0f ms",plain(c.id,float(value(c.id))));
             else
                 snprintf(display,sizeof(display),"%.0f %%",100*plain(c.id,float(value(c.id))));
@@ -1258,9 +1259,8 @@ class Editor final : public Steinberg::CPluginView {
             referenceKnob(dc,c,labels[std::clamp(type,0,4)][i],featureCount<=2?34:26,i<2?RGB(64,212,231):RGB(173,126,236));break;
         }
         line(dc,28,607,1251,607,RGB(96,99,105));
-        text(dc,35,621,676,"PRAWY KLIK: MIDI LEARN     •     PEŁNA LISTA PARAMETRÓW: USTAWIENIA",10,RGB(123,171,191));
         char status[96];snprintf(status,sizeof(status),"GR %.1f dB   /   PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
-        text(dc,948,621,273,status,10,RGB(166,208,222));
+        text(dc,948,591,273,status,11,RGB(195,204,212));
         if(engineMenuOpen){
             metalPanel(dc,35,241,206,210,false);fill(dc,38,244,200,204,RGB(8,21,32));
             for(int i=0;i<8;++i){const int y=245+i*25;const bool selected=std::string_view(engine)==names[i];
