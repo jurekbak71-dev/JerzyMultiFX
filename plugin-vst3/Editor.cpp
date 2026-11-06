@@ -343,8 +343,74 @@ class Editor final : public Steinberg::CPluginView {
                 owner.change(layout().delayMode, double(route) / 2.0);
         }
     };
+    // Native JUCE overlay: the popup must be a child above all knobs.
+    // Merely drawing it in JuceCanvas is not enough in FL Studio hosts.
+    class JuceEnginePopup final : public juce::Component {
+        Editor &owner;
+    public:
+        explicit JuceEnginePopup(Editor &editor):owner(editor){
+            setOpaque(true);
+            setInterceptsMouseClicks(true,false);
+        }
+        void fit(float scaleX,float scaleY){
+            setBounds(int(std::lround(delayMenuX*scaleX)),
+                      int(std::lround(delayMenuY*scaleY)),
+                      std::max(1,int(std::lround(delayMenuWidth*scaleX))),
+                      std::max(1,int(std::lround(delayMenuHeight*scaleY))));
+        }
+        void paint(juce::Graphics &g) override {
+            g.fillAll(juce::Colour(0xff10151c));
+            const float sx=float(getWidth())/delayMenuWidth;
+            const float sy=float(getHeight())/delayMenuHeight;
+            g.addTransform(juce::AffineTransform::scale(sx,sy));
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xff303137),0,0,
+                juce::Colour(0xff0d1116),float(delayMenuWidth),float(delayMenuHeight),false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(0,0,delayMenuWidth,delayMenuHeight),6.f);
+            g.setColour(juce::Colour(0xffad8550));
+            g.drawRoundedRectangle(juce::Rectangle<float>(1,1,delayMenuWidth-2,delayMenuHeight-2),6.f,1.4f);
+            const int bank=std::clamp(owner.view.section,0,1);
+            const int family=int(std::lround(owner.value(layout().delayType[bank])*4));
+            const int algorithm=int(std::lround(owner.value(layout().mxAlgorithms[bank][0])*8));
+            const auto engines=delayEngineChoices();
+            for(int i=0;i<int(engines.size());++i){
+                const int col=i/7,row=i%7;
+                const int xx=7+col*delayMenuColWidth,yy=8+row*delayMenuRowHeight;
+                const bool selected=family==engines[i].family &&
+                    (engines[i].algorithm<0||algorithm==engines[i].algorithm);
+                if(selected){
+                    g.setColour(juce::Colour(0xff654a27));
+                    g.fillRoundedRectangle(juce::Rectangle<float>(xx+2,yy+2,delayMenuColWidth-6,delayMenuRowHeight-3),3.f);
+                }
+                g.setColour(selected?juce::Colour(0xffffdda2):juce::Colour(0xffe6ebef));
+                g.setFont(juce::Font(juce::FontOptions(12.f).withStyle("Bold")));
+                g.drawFittedText(engines[i].label,xx+9,yy+3,delayMenuColWidth-17,24,
+                                 juce::Justification::centredLeft,1,0.8f);
+            }
+        }
+        void mouseDown(const juce::MouseEvent &e) override {
+            if(e.mods.isRightButtonDown())return;
+            const int x=delayMenuX+int(float(e.x)*delayMenuWidth/std::max(1,getWidth()));
+            const int y=delayMenuY+int(float(e.y)*delayMenuHeight/std::max(1,getHeight()));
+            const int selected=delayMenuChoiceAt(x,y);
+            owner.engineMenuOpen=false;
+            setVisible(false);
+            for(auto &slider:owner.juceParameterSliders)slider->setVisible(true);
+            if(selected>=0){
+                const auto engine=delayEngineChoices()[selected];
+                const int bank=std::clamp(owner.view.section,0,1);
+                owner.change(layout().delayType[bank],double(engine.family)/4);
+                if(engine.algorithm>=0)
+                    owner.change(layout().mxAlgorithms[bank][0],double(engine.algorithm)/8);
+                if(owner.value(layout().digital[bank]+2)<.01)
+                    owner.change(layout().digital[bank]+2,.5);
+                // Avoid deleting the active popup during this JUCE callback.
+                PostMessage(owner.window,WM_APP+33,0,0);
+            }else owner.requestRepaint();
+        }
+    };
     std::unique_ptr<juce::ScopedJuceInitialiser_GUI> juceInitialiser;
     std::unique_ptr<JuceCanvas> juceCanvas;
+    std::unique_ptr<JuceEnginePopup> juceEnginePopup;
     std::vector<std::unique_ptr<JuceParameterSlider>> juceParameterSliders;
     std::vector<std::unique_ptr<JuceRoutingButton>> juceRoutingButtons;
     juce::Graphics *juceGraphics=nullptr;
@@ -360,6 +426,7 @@ class Editor final : public Steinberg::CPluginView {
         juceCanvas->setBounds(0,0,width,height);
         const float scaleX=float(width)/W,scaleY=float(height)/H;
         for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+        if(juceEnginePopup)juceEnginePopup->fit(scaleX,scaleY);
         for(int i=0;i<int(juceRoutingButtons.size());++i)
             juceRoutingButtons[i]->setBounds(int(std::lround(1007*scaleX)),
                                              int(std::lround((282+i*44)*scaleY)),
@@ -373,6 +440,11 @@ class Editor final : public Steinberg::CPluginView {
         // Do NOT delete the page button receiving this click. JUCE maintains
         // capture and drag bookkeeping until mouseUp, even after callbacks.
         if(!juceCanvas)return;
+        if(!juceEnginePopup){
+            juceEnginePopup=std::make_unique<JuceEnginePopup>(*this);
+            juceCanvas->addChildComponent(*juceEnginePopup);
+        }
+        juceEnginePopup->setVisible(engineMenuOpen&&referenceDelay());
         auto add=[&](int id,bool horizontal,juce::Rectangle<int> bounds){
             if(id<0)return;
             auto slider=std::make_unique<JuceParameterSlider>(*this,id,horizontal,bounds);
@@ -399,6 +471,10 @@ class Editor final : public Steinberg::CPluginView {
             // An open engine menu is the mouse modal layer of this panel.
             // Otherwise hidden rotary children intercept the popup choices.
             slider->setVisible(!engineMenuOpen);
+        }
+        if(juceEnginePopup){
+            juceEnginePopup->fit(scaleX,scaleY);
+            if(juceEnginePopup->isVisible())juceEnginePopup->toFront(false);
         }
         if(referenceDelay()){
             for(int i=0;i<3;++i){
@@ -1331,6 +1407,7 @@ class Editor final : public Steinberg::CPluginView {
         line(dc,28,607,1251,607,RGB(96,99,105));
         char status[96];snprintf(status,sizeof(status),"GR %.1f dB   /   PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
         text(dc,948,591,273,status,11,RGB(195,204,212));
+#ifndef MULTIFX_JUCE_GUI
         if(engineMenuOpen){
             // Text operations for the underlying controls are deferred until
             // frame end. Flush them BEFORE painting the opaque popup, otherwise
@@ -1363,6 +1440,7 @@ class Editor final : public Steinberg::CPluginView {
                      selected?RGB(255,211,144):RGB(226,231,235));
             }
         }
+#endif
     }
 
     void rebuild() {
@@ -1887,6 +1965,10 @@ class Editor final : public Steinberg::CPluginView {
         case WM_APP + 31:
             // Test-only, read-only window diagnostics.
             return MAKELRESULT(controlPage,controlPages);
+        case WM_APP + 33:
+            // Rebuild only after JUCE releases the popup mouse capture.
+            rebuild();
+            return 0;
         case WM_APP + 32:
             // Test-only current section: low word block ID, high word
             // reference-delay flag plus section index.
@@ -2029,6 +2111,7 @@ class Editor final : public Steinberg::CPluginView {
                     const int index=delayMenuChoiceAt(x,y);
                     engineMenuOpen=false;
 #ifdef MULTIFX_JUCE_GUI
+                    if(juceEnginePopup)juceEnginePopup->setVisible(false);
                     for(auto &slider:juceParameterSliders)slider->setVisible(true);
 #endif
                     if(index>=0){
@@ -2047,6 +2130,11 @@ class Editor final : public Steinberg::CPluginView {
                         engineMenuOpen=true;
 #ifdef MULTIFX_JUCE_GUI
                         for(auto &slider:juceParameterSliders)slider->setVisible(false);
+                        if(juceEnginePopup){
+                            juceEnginePopup->setVisible(true);
+                            juceEnginePopup->toFront(false);
+                            juceEnginePopup->repaint();
+                        }
 #endif
                         requestRepaint();return 0;
                     }
