@@ -704,7 +704,6 @@ class Editor final : public Steinberg::CPluginView {
     }
 #endif
 
-#ifdef MULTIFX_JUCE_GUI
     int rackParameter(int block,int column) const {
         static constexpr const char *keys[5][3]={
             {"drive.gain","drive.tone","drive.level"},
@@ -716,6 +715,7 @@ class Editor final : public Steinberg::CPluginView {
         if(block==2 && column<2) return delayControl(0,column);
         return parameterId(keys[std::clamp(block,0,4)][column]);
     }
+#ifdef MULTIFX_JUCE_GUI
     void paintRackHome() {
         auto &g=*juceGraphics;
         auto &a=Gui3DAssets::get();
