@@ -901,10 +901,11 @@ class Editor final : public Steinberg::CPluginView {
 
 #ifdef MULTIFX_JUCE_GUI
     juce::Colour rackDetailAccent() const {
+        // Same color per engine on Home and in all detail/advanced pages.
         static const juce::Colour colors[5]={
-            juce::Colour(0xffffaa35),juce::Colour(0xff28d6e8),
-            juce::Colour(0xfff56a59),juce::Colour(0xffb48afa),
-            juce::Colour(0xffa2c8cf)};
+            juce::Colour(0xfff05b57),juce::Colour(0xff26d3ee),
+            juce::Colour(0xfff4a02c),juce::Colour(0xffb778ed),
+            juce::Colour(0xffa4c6cb)};
         return colors[std::clamp(view.block,0,4)];
     }
     void drawDetailHardwarePanel(juce::Rectangle<float> r,juce::Colour color,int radius=8) {
@@ -916,8 +917,21 @@ class Editor final : public Steinberg::CPluginView {
         g.fillRoundedRectangle(r,float(radius));
         g.setColour(juce::Colour(0xff6c7177));
         g.drawRoundedRectangle(r,float(radius),1.0f);
-        g.setColour(juce::Colours::white.withAlpha(.075f));
+        g.setColour(juce::Colours::white.withAlpha(.10f));
         g.drawHorizontalLine(int(r.getY()+2),r.getX()+8,r.getRight()-8);
+        // Fine milled metal edge and corner fasteners, independent of controls.
+        if(r.getWidth()>160.f&&r.getHeight()>90.f){
+            g.setColour(juce::Colours::black.withAlpha(.25f));
+            g.drawRoundedRectangle(r.reduced(4.f),float(std::max(2,radius-2)),.65f);
+            for(auto p:{juce::Point<float>(r.getX()+11,r.getY()+11),
+                        juce::Point<float>(r.getRight()-11,r.getY()+11),
+                        juce::Point<float>(r.getX()+11,r.getBottom()-11),
+                        juce::Point<float>(r.getRight()-11,r.getBottom()-11)}){
+                g.setColour(juce::Colour(0xff090b0e));g.fillEllipse(p.x-4,p.y-4,8,8);
+                g.setColour(juce::Colour(0xff888d93));g.drawEllipse(p.x-3,p.y-3,6,6,1);
+                g.setColour(juce::Colour(0xff17191c));g.drawLine(p.x-2,p.y+2,p.x+2,p.y-2,1);
+            }
+        }
     }
     // The same hardware language as Rack Home is applied to every editor page.
     // Hit boxes and parameter IDs are deliberately unchanged.
@@ -962,8 +976,8 @@ class Editor final : public Steinberg::CPluginView {
         for(int slot=0;slot<5;++slot){
             const int block=order[slot],x=20+slot*216;
             const bool selected=block==view.block;
-            const juce::Colour colors[5]={juce::Colour(0xffe7a143),juce::Colour(0xff27ccdf),
-                juce::Colour(0xffed665e),juce::Colour(0xffaf88ed),juce::Colour(0xff9dc5cd)};
+            const juce::Colour colors[5]={juce::Colour(0xfff05b57),juce::Colour(0xff26d3ee),
+                juce::Colour(0xfff4a02c),juce::Colour(0xffb778ed),juce::Colour(0xffa4c6cb)};
             drawDetailHardwarePanel({float(x),87,201,58},
                 selected?juce::Colour(0xff343338):juce::Colour(0xff24262a),6);
             g.setColour(selected?colors[block]:juce::Colour(0xff555c64));
@@ -987,10 +1001,16 @@ class Editor final : public Steinberg::CPluginView {
         // Standard section panel and footer match Rack Home graphite/aluminium.
         drawDetailHardwarePanel({13,157,1254,468},juce::Colour(0xff202328),11);
         g.setColour(accent);g.fillRoundedRectangle(juce::Rectangle<float>(26,160,1228,3),1.5f);
+        // Dedicated engraved module identification on every subpage.
         if(!referenceDelay()){
-            text(dc,30,155,377,names[std::clamp(view.block,0,4)],20,RGB(241,243,245));
-            text(dc,409,161,430,globalSettings?"GLOBAL PARAMETERS":
-                (view.advanced?"ADVANCED EDITOR":"PARAMETER EDITOR"),11,RGB(168,176,187));
+            const auto sections=sectionNames(view.block);
+            const std::string section=globalSettings?"GLOBAL / MASTER":
+                sections.empty()?std::string("MODULE PARAMETERS"):
+                sections[std::clamp(view.section,0,int(sections.size())-1)];
+            text(dc,30,155,377,names[std::clamp(view.block,0,4)],19,RGB(241,243,245));
+            text(dc,409,161,436,section.c_str(),12,RGB(183,192,203));
+            g.setColour(accent.withAlpha(.85f));
+            g.fillRoundedRectangle(juce::Rectangle<float>(862,169,192,3),1.5f);
         }
         drawDetailHardwarePanel({20,631,1240,60},juce::Colour(0xff1a1d22),9);
         // The generic editor draws its own live footer buttons. The basic
@@ -1572,20 +1592,32 @@ class Editor final : public Steinberg::CPluginView {
             const auto label = controlTitle(c.id);
             if (c.compact) {
 #ifdef MULTIFX_JUCE_GUI
-                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),55},juce::Colour(0xff292d33),5);
-                juceGraphics->setColour(rackDetailAccent().withAlpha(.7f));
-                juceGraphics->fillRect(c.x+9,y+20,c.w-18,2);
+                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),55},
+                    juce::Colour(0xff27292d),6);
+                juceGraphics->setColour(rackDetailAccent().withAlpha(.90f));
+                juceGraphics->fillRoundedRectangle(
+                    juce::Rectangle<float>(float(c.x+9),float(y+20),float(c.w-18),2.f),1.f);
 #else
                 fill(dc,c.x+2,y+1,c.w-4,19,RGB(45,50,55));
 #endif
                 text(dc,c.x+3,y+2,c.w-6,label.c_str(),13,RGB(230,234,239));
                 if (!p.choices.empty() || (p.steps > 1 && p.steps <= 64)) {
+#ifdef MULTIFX_JUCE_GUI
+                    drawDetailHardwarePanel({float(c.x+7),float(y+25),float(c.w-14),26.f},
+                        juce::Colour(0xff13191e),4);
+#else
                     bevel(dc,c.x,y+23,c.w,29,RGB(20,44,59));
+#endif
                     text(dc,c.x+10,y+28,c.w-40,formatted(c.id).c_str(),14,RGB(229,247,250));
                     text(dc,c.x+c.w-32,y+27,22,"▼",13,accent());
                     continue;
                 }
+#ifdef MULTIFX_JUCE_GUI
+                drawDetailHardwarePanel({float(c.x+7),float(y+25),float(c.w-14),26.f},
+                    juce::Colour(0xff13191e),4);
+#else
                 bevel(dc, c.x, y + 23, c.w, 29, RGB(26,51,68));
+#endif
                 if (view.block == 2 && p.steps == 0 && !isToggle(c.id)) {
                     fill(dc,c.x+9,y+39,c.w-18,4,RGB(8,23,36));
                     fill(dc,c.x+9,y+39,int((c.w-18)*value(c.id)),4,accent());
@@ -1607,7 +1639,11 @@ class Editor final : public Steinberg::CPluginView {
                 }
             } else {
 #ifdef MULTIFX_JUCE_GUI
-                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),float(c.h)},juce::Colour(0xff272b30),6);
+                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),float(c.h)},
+                    juce::Colour(0xff292b30),8);
+                juceGraphics->setColour(rackDetailAccent().withMultipliedAlpha(.8f));
+                juceGraphics->fillRoundedRectangle(
+                    juce::Rectangle<float>(float(c.x+17),float(y+3),float(c.w-34),2.f),1.f);
 #else
                 fill(dc,c.x+2,y+1,c.w-4,20,RGB(45,50,55));
 #endif
