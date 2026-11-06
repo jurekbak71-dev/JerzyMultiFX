@@ -48,7 +48,9 @@ static void movePointer(HWND h, int x, int y) {
     // CI can have a desktop narrower than the 1280px design test surface:
     // SetCursorPos silently clamps coordinates beyond the screen, making the
     // far-right page arrow (x=1210) unclickable while routing (x=1100) works.
-    POINT screen{x, y};
+    RECT viewport{};
+    check(GetClientRect(h,&viewport)!=0,"measure actual JUCE viewport");
+    POINT screen{MulDiv(x,viewport.right,1280),MulDiv(y,viewport.bottom,720)};
     check(ClientToScreen(h, &screen) != 0, "convert editor pointer to screen");
     const int left=GetSystemMetrics(SM_XVIRTUALSCREEN);
     const int top=GetSystemMetrics(SM_YVIRTUALSCREEN);
@@ -56,8 +58,8 @@ static void movePointer(HWND h, int x, int y) {
     const int bottom=top+GetSystemMetrics(SM_CYVIRTUALSCREEN);
     // JUCE unbounded mouse movement can be clipped at monitor edges.
     // Always move off-safe-area click targets toward the visible desktop center.
-    const int safeX=std::min(200,(right-left)/4);
-    const int safeY=std::min(100,(bottom-top)/4);
+    const int safeX=12;
+    const int safeY=12;
     const int shiftX=(screen.x<left+safeX || screen.x>=right-safeX)
                      ?(left+(right-left)/2-screen.x):0;
     const int shiftY=(screen.y<top+safeY || screen.y>=bottom-safeY)
@@ -74,7 +76,7 @@ static void movePointer(HWND h, int x, int y) {
               "bring native VST3 host to front while moving click target");
         BringWindowToTop(topLevel);
         SetForegroundWindow(topLevel);
-        screen={x,y};
+        screen={MulDiv(x,viewport.right,1280),MulDiv(y,viewport.bottom,720)};
         check(ClientToScreen(h,&screen)!=0,"recalculate moved editor point");
         std::cerr<<"Reposition host for physical click: "<<x<<","<<y
                  <<" screen="<<screen.x<<","<<screen.y
@@ -159,10 +161,14 @@ static void drag(HWND h, int x, int y, int endX, int endY) {
     // Rotary sliders enable JUCE's unbounded mouse mode, which may warp the
     // cursor back to its origin. Real relative SendInput motion supplies the
     // same deltas as a physical mouse even while that mode is active.
+    RECT viewport{};
+    check(GetClientRect(h,&viewport)!=0,"scale actual JUCE drag distance");
+    const int totalDx=MulDiv(endX-x,viewport.right,1280);
+    const int totalDy=MulDiv(endY-y,viewport.bottom,720);
     const int steps=4;
     int movedX=0,movedY=0;
     for(int step=1;step<=steps;++step){
-        const int targetX=(endX-x)*step/steps,targetY=(endY-y)*step/steps;
+        const int targetX=totalDx*step/steps,targetY=totalDy*step/steps;
         relativeMouseMove(targetX-movedX,targetY-movedY);
         movedX=targetX;movedY=targetY;
     }
@@ -225,11 +231,19 @@ static void screenshot(HWND h, const char *path) {
 }
 static unsigned long long meterPixels(HWND h, int x, int top) {
     RedrawWindow(h,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW);
+    RECT viewport{};
+    check(GetClientRect(h,&viewport)!=0,"read physical meter viewport");
+    const int width=viewport.right,height=viewport.bottom;
     HDC screen=GetDC(h),dc=CreateCompatibleDC(screen);
-    auto bitmap=CreateCompatibleBitmap(screen,1280,720);auto old=SelectObject(dc,bitmap);
+    auto bitmap=CreateCompatibleBitmap(screen,width,height);auto old=SelectObject(dc,bitmap);
     SendMessage(h,WM_PRINTCLIENT,reinterpret_cast<WPARAM>(dc),PRF_CLIENT);
     unsigned long long hash=1469598103934665603ULL;
-    for(int y=top;y<top+14;++y)for(int xx=x;xx<x+60;++xx) hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
+    const int startX=MulDiv(x,width,1280),startY=MulDiv(top,height,720);
+    const int sampleW=std::max(1,MulDiv(60,width,1280));
+    const int sampleH=std::max(1,MulDiv(14,height,720));
+    for(int y=startY;y<startY+sampleH;++y)
+        for(int xx=startX;xx<startX+sampleW;++xx)
+            hash=(hash^GetPixel(dc,xx,y))*1099511628211ULL;
     SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);ReleaseDC(h,screen);return hash;
 }
 int main(int argc, char **argv) try {
@@ -264,7 +278,12 @@ int main(int argc, char **argv) try {
                                       0, 0, 1320, 920, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
         check(parent, "create test host window");
         check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "attach custom GUI");
-        ViewRect testSize(0, 0, 1280, 720);
+        // CI's real 1024x768 desktop cannot accept physical SendInput at
+        // x=1210 of a 1280x720 editor. Keep the entire interactive surface
+        // visible; retain logical 1280x720 hit-test coordinates above.
+        const bool onCi=std::getenv("GITHUB_ACTIONS")!=nullptr;
+        const int testW=onCi?960:1280,testH=onCi?540:720;
+        ViewRect testSize(0, 0, testW, testH);
         check(view->onSize(&testSize) == kResultOk, "set deterministic GUI test size");
         pump();
         HWND child = FindWindowExA(parent, nullptr, "JerzyMultiFXEditor010", nullptr);
@@ -390,7 +409,7 @@ int main(int argc, char **argv) try {
         checkSurfaceBounds(child,vectorSurface,"JUCE surface follows 150 percent host bounds");
 #endif
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-large.bmp").c_str());
-        ViewRect normal(0, 0, 1280, 720);
+        ViewRect normal(0, 0, testW, testH);
         check(view->onSize(&normal) == kResultOk, "GUI restore scale");
         click(pointerTarget, 330, 110); // Three separate effect panels in block two.
         pump();
