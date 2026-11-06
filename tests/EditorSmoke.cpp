@@ -573,7 +573,8 @@ int main(int argc, char **argv) try {
             const int block=LOWORD(selected);
             check(block>=0 && block<5,"Rack Hybrid detail selected a valid FX block");
             coveredBlocks|=(1<<block);
-            const std::string tag=std::string(argv[2])+"-detail-block"+std::to_string(block);
+            const std::string tag=(argc>=3?std::string(argv[2]):std::string("rack"))+
+                "-detail-block"+std::to_string(block);
             if(argc>=3 && cycle==0) screenshot(child,(tag+".bmp").c_str());
             const int sectionCount=block==0?4:block==1?3:0;
             for(int section=0;section<sectionCount;++section){
