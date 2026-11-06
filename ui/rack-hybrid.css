@@ -66,3 +66,13 @@ button.toggle.off,button.foot.off{background:linear-gradient(#8e4543,#4b2228);bo
 .block[data-block="2"] .rack-quick .needle{background:#f4c371}
 .block[data-block="3"] .rack-quick .needle{background:#cbace9}
 @media(max-width:610px){.rack-quick{max-width:360px;margin-left:auto;margin-right:auto}.rack-quick .rotary{width:68px;height:68px}.rack-quick .needle{left:27px;top:5px;height:19px;transform-origin:1.5px 27px}}
+
+/* Rack ordering and progressive disclosure: IR always follows the four main cards.
+   Their small serial numbers still report the real DSP chain position. */
+.chain{align-items:stretch;grid-auto-flow:row}
+.chain .block[data-block="4"]{grid-column:1/-1}
+.rack-editor-bar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:12px 0;padding:10px 14px;border:1px solid #59626e;border-radius:6px;background:linear-gradient(#323c49,#181f29)}
+.rack-editor-bar .hint{margin:0;font-size:12px;line-height:1.35;color:#c8c7c2}
+.rack-editor-toggle{background:linear-gradient(#7f6138,#3d3020);color:#ffedca;border:1px solid #d4a35d;border-radius:4px;min-height:40px;font-weight:750;letter-spacing:.04em}
+#subtabs[hidden],#controls[hidden]{display:none!important}
+@media(min-width:981px){.chain{grid-template-columns:repeat(4,minmax(0,1fr))}.chain>.block:not([data-block="4"]){min-height:288px}}
