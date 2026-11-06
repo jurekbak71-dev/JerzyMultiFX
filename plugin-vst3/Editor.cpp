@@ -394,7 +394,12 @@ class Editor final : public Steinberg::CPluginView {
         RECT client{};GetClientRect(window,&client);
         const float scaleX=float(std::max(1L,client.right))/W;
         const float scaleY=float(std::max(1L,client.bottom))/H;
-        for(auto &slider:juceParameterSliders)slider->fit(scaleX,scaleY);
+        for(auto &slider:juceParameterSliders){
+            slider->fit(scaleX,scaleY);
+            // An open engine menu is the mouse modal layer of this panel.
+            // Otherwise hidden rotary children intercept the popup choices.
+            slider->setVisible(!engineMenuOpen);
+        }
         if(referenceDelay()){
             for(int i=0;i<3;++i){
                 auto button=std::make_unique<JuceRoutingButton>(*this,i);
@@ -2023,6 +2028,9 @@ class Editor final : public Steinberg::CPluginView {
                 if(engineMenuOpen){
                     const int index=delayMenuChoiceAt(x,y);
                     engineMenuOpen=false;
+#ifdef MULTIFX_JUCE_GUI
+                    for(auto &slider:juceParameterSliders)slider->setVisible(true);
+#endif
                     if(index>=0){
                         const auto choice=delayEngineChoices()[index];
                         change(layout().delayType[bank],double(choice.family)/4);
@@ -2035,7 +2043,13 @@ class Editor final : public Steinberg::CPluginView {
                     return 0; // Clicking outside dismisses, never edits a hidden knob.
                 }
                 if(y>=207&&y<242){
-                    if(x>=35&&x<241){engineMenuOpen=true;requestRepaint();return 0;}
+                    if(x>=35&&x<241){
+                        engineMenuOpen=true;
+#ifdef MULTIFX_JUCE_GUI
+                        for(auto &slider:juceParameterSliders)slider->setVisible(false);
+#endif
+                        requestRepaint();return 0;
+                    }
                     if(x>=412&&x<670){view.section=x<538?0:1;rebuild();return 0;}
                     if(x>=1007&&x<1214){const int id=layout().slotBypass[bank];change(id,value(id)>=.5?0:1);return 0;}
                 }
