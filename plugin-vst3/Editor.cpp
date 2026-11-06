@@ -566,6 +566,23 @@ class Editor final : public Steinberg::CPluginView {
 #endif
     }
     void bevel(HDC dc, int x, int y, int w, int h, COLORREF tint) {
+#ifdef MULTIFX_JUCE_GUI
+        if(!rackHome){
+            auto r=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
+            auto tintColor=juceColor(tint);
+            // Keep each legacy control's size and hit target but give its
+            // native JUCE face the same chamfered graphite rack material.
+            auto base=juce::Colour(0xff292c31).interpolatedWith(tintColor,.14f);
+            juceGraphics->setColour(juce::Colours::black.withAlpha(.76f));
+            juceGraphics->fillRoundedRectangle(r.translated(1,2),4);
+            juceGraphics->setGradientFill(juce::ColourGradient(base.brighter(.20f),
+                r.getTopLeft(),base.darker(.62f),r.getBottomRight(),false));
+            juceGraphics->fillRoundedRectangle(r,4);
+            juceGraphics->setColour(juce::Colour(0xff71777f));
+            juceGraphics->drawRoundedRectangle(r,4,.9f);
+            return;
+        }
+#endif
         fill(dc, x, y, w, h, tint);
         line(dc, x, y, x+w-1, y, RGB(69,88,103));
         line(dc, x, y, x, y+h-1, RGB(51,69,84));
@@ -575,6 +592,17 @@ class Editor final : public Steinberg::CPluginView {
     void metalPanel(HDC dc, int x, int y, int w, int h, bool raised = true) {
 #ifdef MULTIFX_JUCE_GUI
         auto area=juce::Rectangle<float>(float(x),float(y),float(w),float(h));
+        if(!rackHome){
+            juceGraphics->setColour(juce::Colours::black.withAlpha(.65f));
+            juceGraphics->fillRoundedRectangle(area.translated(1,3),6);
+            const auto metal=raised?juce::Colour(0xff35373c):juce::Colour(0xff23262c);
+            juceGraphics->setGradientFill(juce::ColourGradient(metal.brighter(.17f),
+                area.getTopLeft(),metal.darker(.65f),area.getBottomRight(),false));
+            juceGraphics->fillRoundedRectangle(area,6);
+            juceGraphics->setColour(juce::Colour(0xff73787f));
+            juceGraphics->drawRoundedRectangle(area,6,1);
+            return;
+        }
         if(raised){
             JerzyAudioUI::paintPanel(*juceGraphics,area,juceLook.getTheme(),4.0f);
             auto &texture=Gui3DAssets::get().module[Gui3DAssets::neutral];
