@@ -44,13 +44,45 @@ static void pump() {
     }
 }
 static void movePointer(HWND h, int x, int y) {
-    // Native JUCE mouse dispatch can inspect the operating-system cursor
-    // position as well as the coordinates of WM_MOUSEMOVE. Match both.
+    // Real SendInput events require the target to be on the virtual monitor.
+    // CI can have a desktop narrower than the 1280px design test surface:
+    // SetCursorPos silently clamps coordinates beyond the screen, making the
+    // far-right page arrow (x=1210) unclickable while routing (x=1100) works.
     POINT screen{x, y};
     check(ClientToScreen(h, &screen) != 0, "convert editor pointer to screen");
+    const int left=GetSystemMetrics(SM_XVIRTUALSCREEN);
+    const int top=GetSystemMetrics(SM_YVIRTUALSCREEN);
+    const int right=left+GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    const int bottom=top+GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    const int margin=12;
+    const int shiftX=screen.x<left+margin?(left+margin-screen.x):
+                     screen.x>=right-margin?(right-margin-1-screen.x):0;
+    const int shiftY=screen.y<top+margin?(top+margin-screen.y):
+                     screen.y>=bottom-margin?(bottom-margin-1-screen.y):0;
+    if(shiftX||shiftY){
+        const HWND topLevel=GetAncestor(h,GA_ROOT);
+        check(topLevel!=nullptr,"resolve top-level VST3 test host");
+        RECT bounds{};
+        check(GetWindowRect(topLevel,&bounds)!=0,"read test host window position");
+        check(SetWindowPos(topLevel,nullptr,bounds.left+shiftX,bounds.top+shiftY,0,0,
+                           SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOZORDER)!=0,
+              "shift test host so clicked control remains on virtual desktop");
+        screen={x,y};
+        check(ClientToScreen(h,&screen)!=0,"recalculate moved editor point");
+        std::cerr<<"Reposition host for physical click: "<<x<<","<<y
+                 <<" screen="<<screen.x<<","<<screen.y
+                 <<" desktop="<<left<<","<<top<<".."<<right<<","<<bottom<<"\n";
+    }
     check(SetCursorPos(screen.x, screen.y) != 0, "position OS pointer over the editor");
     Sleep(8);
     pump();
+    POINT actual{};
+    check(GetCursorPos(&actual)!=0,"read actual OS pointer location");
+    if(actual.x!=screen.x||actual.y!=screen.y){
+        std::cerr<<"Unreachable physical mouse target: requested="<<screen.x<<","<<screen.y
+                 <<" actual="<<actual.x<<","<<actual.y<<"\n";
+        throw std::runtime_error("Windows clamped native pointer before JUCE mouse dispatch");
+    }
 }
 static void mouseInput(DWORD flags) {
     INPUT input{};
