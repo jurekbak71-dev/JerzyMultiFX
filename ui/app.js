@@ -2,9 +2,12 @@
 const $=id=>document.getElementById(id);
 let parameters=window.MF_META.parameters,values=parameters.map(p=>p.default??0),connected=false;
 let tab='Efekty',selected=0,section=0,mxSlot=0,advanced=false,order=[0,1,2,3,4],snapshot={},renderSerial=0,lastSignature='',hardwareSnapshot={},selectedPan='',connectionFailed=false;
+let detailsExpanded=false,liveRestore=null;
 let controllerLayout={},controllerProfile='hotone',selectedControl='F1',midiCapture=null,midiMapOpen=false,lastMidiMapSignature='';
 const mdChoices=['Digital','Volante / MultiHead Reel','El Capistan / Tape Echo','Olivera / Oil Can','EC-1 / Tube Echo','Brig / BBD','Deco / Doubletrack','DIG / Dual Digital','Space Echo 202','DM-101','Memory Delay','Reel Echo','Oil Drum Echo'];
 const blockNames=['ANALOG','CHORUS / ATTACK / ATOMIC','MD MULTIDELAY','REVERB','IR LOADER'];
+// Four Rack Hybrid performance strips use the same live normalized parameters as the detailed pages.
+const rackQuickKeys=[['cpd.gain','drive.gain','comp.input'],['clone.rate','clone.depth','clone.mix'],['delayA.time','delayA.feedback','delayA.mix'],['reverb.decay','reverb.size','reverb.mix'],[]];
 const sections=[['PREAMP','TAPE DRIVE','DRIVE','COMPRESSOR'],['CHORUS','ATTACK DECAY','ATOMIC CLUSTER'],['DELAY A','DELAY B'],[],[]];
 function el(tag,text,cls){let x=document.createElement(tag);if(text!==undefined)x.textContent=text;if(cls)x.className=cls;return x}
 function error(e){$('error').textContent=e.message||String(e)}
@@ -77,10 +80,39 @@ function updateControls(){
 }
 function renderShell(){let tabs=$('tabs');tabs.replaceChildren(...['Efekty','Ustawienia','MIDI i Bluetooth','Presety'].map(t=>button(t,()=>{tab=t;if(t!=='Ustawienia'){midiMapOpen=false;midiCapture=null}lastSignature='';render()},t===tab?'active':'')));}
 async function reorder(from,to){const a=[...order],x=a.indexOf(from),y=a.indexOf(to);[a[x],a[y]]=[a[y],a[x]];for(let i=0;i<120;i++)if(permutation(i).every((v,n)=>a[n]===v)){await set(find('chain.order'),i/119);break}await render()}
+function activeDSP(key){const id=find(key);return id!==undefined&&(values[id]??0)<.5}
+function dspLatencyDetails(){
+ const rate=snapshot.sampleRate||48000;
+ const ms=samples=>(samples*1000/rate).toFixed(2)+' ms';
+ const enabled=activeDSP('master.bypass');
+ const analog=enabled&&activeDSP('block.0.bypass');
+ const mod=enabled&&activeDSP('block.1.bypass');
+ const ir=enabled&&activeDSP('block.4.bypass')&&(values[find('ir.mix')]||0)>.00001;
+ const drive=analog&&activeDSP('drive.bypass')?16:0;
+ const attack=mod&&activeDSP('attack.bypass')?((values[find('attack.poly')]||0)>=.5?2064:16):0;
+ const atomic=mod&&activeDSP('atomic.bypass')?2048:0;
+ const irDelay=ir?128:0;
+ return {rate,ms,drive,attack,atomic,irDelay,reported:snapshot.latencySamples||0};
+}
+async function enableLiveMode(){
+ if(liveRestore)return;
+ const keys=['atomic.bypass','attack.poly'];
+ liveRestore=keys.map(key=>({key,id:find(key),value:values[find(key)]}));
+ try{for(const {key,id} of liveRestore)if(id!==undefined)await set(id,key==='atomic.bypass'?1:0);
+ await poll();await render();
+ }catch(e){const old=liveRestore;liveRestore=null;for(const x of old)if(x.id!==undefined)await set(x.id,x.value).catch(()=>{});throw e}
+}
+async function restoreLiveMode(){
+ if(!liveRestore)return;
+ const saved=liveRestore;for(const x of saved)if(x.id!==undefined)await set(x.id,x.value);
+ liveRestore=null;await poll();await render();
+}
 async function render(){renderShell();let main=$('main');main.replaceChildren();if(!connected){main.append(el('p','Łączenie z MultiFX…','empty'));return}if(tab==='Efekty'){
  order=permutation(Math.round((values[find('chain.order')]||0)*119));let chain=el('nav',undefined,'chain');chain.id='blocks';
- order.forEach((n,i)=>{const off=values[find('block.'+n+'.bypass')]>=.5,card=el('article',undefined,'block'+(n===selected?' selected':'')+(off?' off':''));card.dataset.block=n;card.draggable=true;card.ondragstart=e=>e.dataTransfer.setData('text/plain',String(n));card.ondragover=e=>e.preventDefault();card.ondrop=e=>{e.preventDefault();reorder(Number(e.dataTransfer.getData('text/plain')),n).catch(error)};card.append(el('small',String(i+1).padStart(2,'0')),button(blockNames[n],()=>{selected=n;section=0;advanced=false;lastSignature='';render()},'choose'),toggleControl(parameters.find(p=>p.key==='block.'+n+'.bypass')),learnButton(find('block.'+n+'.bypass')));chain.append(card)});main.append(chain);
- let subs=el('nav',undefined,'subtabs');sections[selected].forEach((n,i)=>subs.append(button(n,()=>{section=i;advanced=false;renderPanel()},i===section?'active':'')));subs.id='subtabs';main.append(subs,el('section',undefined,'pedal'));main.lastElementChild.id='controls';await renderPanel();
+ order.filter(n=>n!==4).concat(order.includes(4)?[4]:[]).forEach(n=>{const i=order.indexOf(n),off=values[find('block.'+n+'.bypass')]>=.5,card=el('article',undefined,'block'+(n===selected?' selected':'')+(off?' off':''));card.dataset.block=n;card.draggable=true;card.ondragstart=e=>e.dataTransfer.setData('text/plain',String(n));card.ondragover=e=>e.preventDefault();card.ondrop=e=>{e.preventDefault();reorder(Number(e.dataTransfer.getData('text/plain')),n).catch(error)};card.append(el('small',String(i+1).padStart(2,'0')),button(blockNames[n],()=>{selected=n;section=0;advanced=false;detailsExpanded=true;lastSignature='';render()},'choose'),toggleControl(parameters.find(p=>p.key==='block.'+n+'.bypass')),learnButton(find('block.'+n+'.bypass')));if(n<4){const quick=el('div',undefined,'rack-quick');for(const key of rackQuickKeys[n]){const p=parameters.find(p=>p.key===key);if(p)quick.append(control(p))}card.append(quick)}chain.append(card)});main.append(chain);
+ let editBar=el('div',undefined,'rack-editor-bar');
+ editBar.append(button(liveRestore?'PRZYWRÓĆ BRZMIENIE':'LIVE · MNIEJSZA LATENCJA',()=>liveRestore?restoreLiveMode():enableLiveMode(),liveRestore?'rack-live-restore':'rack-live-enable'));
+ editBar.append(el('span','LIVE: czasowo wyłącza Atomic Cluster i przełącza Attack/Decay z POLY na MONO; brzmienie może się zmienić.','hint'));editBar.append(button(detailsExpanded?'ZWIŃ EDYTOR SZCZEGÓŁOWY':'OTWÓRZ EDYTOR SZCZEGÓŁOWY',()=>{detailsExpanded=!detailsExpanded;render()},'rack-editor-toggle'),el('span','Cztery moduły na górze to sterowanie na żywo. IR jest osobnym blokiem. Numer pokazuje rzeczywistą kolejność DSP.','hint'));main.append(editBar);let subs=el('nav',undefined,'subtabs');sections[selected].forEach((n,i)=>subs.append(button(n,()=>{section=i;advanced=false;renderPanel()},i===section?'active':'')));subs.id='subtabs';subs.hidden=!detailsExpanded;main.append(subs,el('section',undefined,'pedal'));main.lastElementChild.id='controls';main.lastElementChild.hidden=!detailsExpanded;await renderPanel();
  }else if(tab==='Ustawienia'){if(midiMapOpen)renderMidiMap();else renderSettings()}else if(tab==='MIDI i Bluetooth')await renderHardware();else renderPresets();lastSignature=signature();updateControls()}
 async function renderPanel(){if(tab!=='Efekty'||!$('controls'))return;const serial=++renderSerial;const result=await api('view',{block:selected,section,mxSlot,advanced:advanced?1:0});if(serial!==renderSerial)return;let panel=$('controls');panel.replaceChildren();panel.className='pedal '+(selected===1?['clone','attack','atomic'][section]:selected===2?'md':'');const heading=el('div',undefined,'pedalhead');heading.append(el('h2',sections[selected][section]||blockNames[selected]));let right=el('div',undefined,'row');const ownBypass=selected===1?find(['clone.bypass','attack.bypass','atomic.bypass'][section]):undefined;if(ownBypass!==undefined)right.append(toggleControl(parameters.find(p=>p.id===ownBypass)),learnButton(ownBypass));right.append(button(advanced?'Widok podstawowy':'Ustawienia efektu',()=>{advanced=!advanced;renderPanel()}));heading.append(right);const notice=el('p',undefined,'signal-status');notice.id='signal-status';panel.append(heading,notice);
  $('subtabs').querySelectorAll('button').forEach((b,i)=>b.className=i===section?'active':'');
@@ -194,8 +226,15 @@ async function resetAllMidi(){
 }
 function renderSettings(){const main=$('main'),audio=el('section',undefined,'box');audio.append(el('h2','Dźwięk i opóźnienie'));let inputMode=String(snapshot.inputMode||0);audio.append(row(selectControl('Wejście instrumentu ',[['0','STEREO — wejście L i R'],['1','MONO — tylko wejście L'],['2','MONO — tylko wejście R']],inputMode,v=>inputMode=v),button('Zastosuj wejście',async()=>{await api('hardware',{operation:'input-mode',mode:Number(inputMode)});await poll()})),el('p','Dla sygnału mono wybierz ten sam kanał co w VST. Nie sumujemy dwóch wejść ani nie dodajemy dodatkowego gainu.','hint'));
  const tempo=el('input');tempo.type='number';tempo.min=20;tempo.max=400;tempo.step=.1;tempo.value=snapshot.bpm||120;tempo.setAttribute('aria-label','Tempo BPM');audio.append(el('p','Dla opóźnień i modulacji zsynchronizowanych ustaw tempo takie samo jak w projekcie VST.','hint'),row(el('span','TEMPO BPM'),tempo,button('Zastosuj tempo',async()=>{await api('hardware',{operation:'tempo',bpm:Number(tempo.value)});await poll()})));
+ const ld=dspLatencyDetails();
+ audio.append(el('p','Opóźnienie samego DSP: '+ld.ms(ld.reported)+' · Drive '+ld.ms(ld.drive)+' · Attack/Decay '+ld.ms(ld.attack)+' · Atomic '+ld.ms(ld.atomic)+' · IR '+ld.ms(ld.irDelay),'hint'));
+ if(ld.attack>=2064||ld.atomic>=2048){
+  audio.append(el('p','WYSOKIE OPÓŹNIENIE ALGORYTMICZNE: tryb LIVE na ekranie Efekty może je zmniejszyć. Nie zastępuje to regulacji bufora JACK ani pomiaru całego toru USB.','warning'));
+ }
  audio.append(el('p',snapshot.realtime===true?'JACK: tryb czasu rzeczywistego aktywny':snapshot.realtime===false?'JACK: brak trybu czasu rzeczywistego — możliwe przerwy przy dużym obciążeniu':'JACK: tryb czasu rzeczywistego nie został zgłoszony','hint'));
- let chosen=snapshot.bufferSamples||128;audio.append(el('p',`${snapshot.sampleRate||0} Hz · bufor ${chosen} próbek · opóźnienie efektów ${((snapshot.latencySamples||0)*1000/(snapshot.sampleRate||48000)).toFixed(2)} ms`));audio.append(row(selectControl('Bufor ',[64,128,256,512,1024].map(v=>[v,v+' próbek']),chosen,v=>chosen=Number(v)),button('Zastosuj bufor',async()=>{await api('hardware',{operation:'buffer',buffer:chosen});await poll();render()},'primary')));audio.append(button('Uruchom / napraw audio',async()=>{await api('hardware',{operation:'repair-audio'});$('status').textContent='Ponowne uruchamianie audio…'}));audio.append(el('p','Mniejszy bufor zmniejsza opóźnienie, ale bardziej obciąża Raspberry Pi. Jeśli słychać trzaski i rośnie licznik PRZERWY, wybierz większy. 128 to punkt startowy, nie gwarancja.','hint'));audio.append(el('p','Opóźnienie efektów nie obejmuje bufora, USB i przetworników HeadRush. Zmiana bufora nie usuwa opóźnienia aktywnego Attack Decay lub Atomic.','hint'));main.append(audio);
+ let chosen=snapshot.bufferSamples||128;audio.append(el('p',`${snapshot.sampleRate||0} Hz · bufor ${chosen} próbek · opóźnienie efektów ${((snapshot.latencySamples||0)*1000/(snapshot.sampleRate||48000)).toFixed(2)} ms`));audio.append(row(selectControl('Bufor ',[64,128,256,512,1024].map(v=>[v,v+' próbek']),chosen,v=>chosen=Number(v)),button('Zastosuj bufor',async()=>{await api('hardware',{operation:'buffer',buffer:chosen});await poll();render()},'primary')));audio.append(row(button('PRÓBA 64 PRÓBEK · MNIEJSZA LATENCJA',async()=>{const before=snapshot.bufferSamples||128;try{await api('hardware',{operation:'buffer',buffer:64});await poll();await render()}catch(e){if(before!==64)await api('hardware',{operation:'buffer',buffer:before}).catch(()=>{});throw e}},'primary'),el('span','W razie trzasków lub wzrostu licznika PRZERWY przywróć 128 próbek. To zmienia bufor JACK, nie opóźnienie DSP.','hint')));
+ audio.append(el('p','HeadRush Core: sprawdź ustawienie USB Audio i tryb monitorowania. Równoległy dźwięk bezpośredni z HeadRush oraz opóźniony sygnał z Pi mogą powodować słyszalny dubel. Nie zmieniaj trybu USB bez sprawdzenia toru odsłuchowego.','hint'));
+ audio.append(button('Uruchom / napraw audio',async()=>{await api('hardware',{operation:'repair-audio'});$('status').textContent='Ponowne uruchamianie audio…'}));audio.append(el('p','Mniejszy bufor zmniejsza opóźnienie, ale bardziej obciąża Raspberry Pi. Jeśli słychać trzaski i rośnie licznik PRZERWY, wybierz większy. 128 to punkt startowy, nie gwarancja.','hint'));audio.append(el('p','Opóźnienie efektów nie obejmuje bufora, USB i przetworników HeadRush. Zmiana bufora nie usuwa opóźnienia aktywnego Attack Decay lub Atomic.','hint'));main.append(audio);
  const routing=el('section',undefined,'box');routing.append(el('h2','Wejścia i wyjścia HeadRush'),el('p','Domyślnie: wejścia 1–2 i wyjścia 1–2. Return to opcjonalny powrót zewnętrznego efektu dla Attack Decay.','hint'));main.append(routing);
  api('hardware').then(h=>{if(tab!=='Ustawienia')return;const a=h.audio_ports||{},grid=el('div',undefined,'common');['Wejście L','Wejście R','Wyjście L','Wyjście R','Return L','Return R'].forEach((name,index)=>{const ports=index<2||index>3?a.inputs||[]:a.outputs||[];grid.append(selectControl(name,[['',index>3?'Niepodłączony':'Domyślne'],...ports.map(p=>[p,p.replace('system:capture_','Wejście ').replace('system:playback_','Wyjście ')])],a.routing?.[index]||'',async v=>{try{await api('hardware',{operation:'audio-route',index,name:v})}catch(e){error(e)}}))});routing.append(grid)}).catch(error);
  const output=el('section',undefined,'box');output.append(el('h2','Poziom i ochrona wyjścia'));const grid=el('div',undefined,'common');for(const key of ['master.output','master.limiter']){const p=parameters.find(p=>p.key===key);if(p)grid.append(control(p))}output.append(grid,el('p','PRZESTER liczy przekroczenia przed zabezpieczeniem. Gdy rośnie, zmniejsz poziom efektu lub wyjścia.','hint'));main.append(output);
