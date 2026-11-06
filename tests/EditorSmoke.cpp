@@ -413,6 +413,20 @@ int main(int argc, char **argv) try {
         click(pointerTarget,1100,220);
         check(c->getParamNormalized(layout().slotBypass[0])==0,"reference bank bypass switches on");
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-delay.bmp").c_str());
+        // Regression: a 13-engine popup is an opaque topmost layer; labels
+        // from knobs below must not bleed through it. Pick the real DIG
+        // algorithm (MX slot 0, algorithm 6) using physical mouse input.
+        const double originalFamily=c->getParamNormalized(layout().delayType[0]);
+        const double originalAlgo=c->getParamNormalized(layout().mxAlgorithms[0][0]);
+        click(pointerTarget,120,222); // OPEN ENGINE
+        if(argc>=3)screenshot(child,(std::string(argv[2])+"-delay-engine-menu.bmp").c_str());
+        click(pointerTarget,349,267); // column 2, row 1: DIG / DUAL DIGITAL
+        check(std::abs(c->getParamNormalized(layout().delayType[0])-.25)<1e-6,
+              "13-engine Delay selector selects MX DSP family");
+        check(std::abs(c->getParamNormalized(layout().mxAlgorithms[0][0])-.75)<1e-6,
+              "DIG / DUAL DIGITAL maps to its actual MX algorithm 6");
+        c->setParamNormalized(layout().delayType[0],originalFamily);
+        c->setParamNormalized(layout().mxAlgorithms[0][0],originalAlgo);
         click(pointerTarget,100,110); // PREAMP / DRIVE in the horizontal chain.
         rightClick(pointerTarget,900,650);
         check(std::abs(c->getParamNormalized(layout().midiLearn)-double(layout().bypass+1)/layout().controlCount)<1e-6,"master bypass MIDI Learn");
