@@ -986,7 +986,7 @@ class Editor final : public Steinberg::CPluginView {
         auto &g=*juceGraphics;
         const auto accent=rackDetailAccent();
         const juce::Colour bright(0xffe6e9ec),muted(0xffaeb8c0);
-        const char *names[5]={"DRIVE / PREAMP","MODULATION","DUAL DELAY","REVERB","CABINET / IR"};
+        const char *names[5]={"DRIVE / PREAMP","MODULATION","MD MULTIDELAY","REVERB","CABINET / IR"};
         g.setGradientFill(juce::ColourGradient(juce::Colour(0xff30343b),0,0,
             juce::Colour(0xff080a0d),1280,720,false));
         g.fillRect(0,0,W,H);
