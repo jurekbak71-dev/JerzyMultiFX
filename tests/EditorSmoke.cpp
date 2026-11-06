@@ -450,9 +450,15 @@ int main(int argc, char **argv) try {
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
         click(pointerTarget, 100, 110);
         pump(); // Reordered MD block is now first.
+        const double midiBefore=c->getParamNormalized(layout().midiLearn);
         shiftRightClick(pointerTarget,120,330);
-        check(std::abs(c->getParamNormalized(layout().midiLearn) -
-                       double(parameterId("delayA.time") + 1) / layout().controlCount) < 1e-6,
+        const double midiExpected=double(parameterId("delayA.time")+1)/layout().controlCount;
+        const double midiActual=c->getParamNormalized(layout().midiLearn);
+        const LRESULT sectionInfo=SendMessage(child,WM_APP+32,0,0);
+        std::cerr<<"Delay MIDI learn: before="<<midiBefore
+                 <<" actual="<<midiActual<<" expected="<<midiExpected
+                 <<" block="<<LOWORD(sectionInfo)<<" sectionFlags="<<HIWORD(sectionInfo)<<"\n";
+        check(std::abs(midiActual-midiExpected)<1e-6,
               "reference DELAY TIME knob learns the common MIDI macro");
         click(pointerTarget,1000,45); // Full parameter list.
         HWND family = GetDlgItem(child, 10000 + layout().delayType[0]);
