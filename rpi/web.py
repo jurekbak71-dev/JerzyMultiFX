@@ -52,7 +52,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if self.path in ('/','/index.html'):
                 return self.send(200,(self.server.ui/'index.html').read_bytes(),'text/html; charset=utf-8',session=True)
-            if self.path in ('/metadata.js','/app.js','/style.css'):
+            if self.path in ('/metadata.js','/app.js','/style.css','/rack-hybrid.css'):
                 filename=self.path.removeprefix('/')
                 return self.send(200,(self.server.ui/filename).read_bytes(),'text/css; charset=utf-8' if filename.endswith('.css') else 'text/javascript; charset=utf-8')
             if self.path == '/metadata.js':
