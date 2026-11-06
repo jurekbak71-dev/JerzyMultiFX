@@ -1127,10 +1127,16 @@ class Editor final : public Steinberg::CPluginView {
              RGB(112,231,240));
     }
     void referenceDelayPanel(HDC dc) {
-        metalPanel(dc,11,160,1258,548); fill(dc,14,163,1252,542,RGB(11,25,36));
-        screw(dc,21,170); screw(dc,1259,170); screw(dc,21,699); screw(dc,1259,699);
-        text(dc,29,170,285,"DELAY A + B",26,RGB(230,250,252));
-        text(dc,321,178,390,"DWA NIEZALEŻNE SILNIKI OPÓŹNIENIA",11,RGB(132,178,195));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({14,161,1251,463},juce::Colour(0xff1e2126),9);
+        juceGraphics->setColour(juce::Colour(0xffed675a));
+        juceGraphics->fillRoundedRectangle(juce::Rectangle<float>(28,162,1215,3),1.5f);
+#else
+        metalPanel(dc,11,160,1258,548); fill(dc,14,163,1252,542,RGB(28,32,37));
+#endif
+        screw(dc,21,170); screw(dc,1259,170); screw(dc,21,614); screw(dc,1259,614);
+        text(dc,29,170,285,"DELAY A + B",26,RGB(240,242,244));
+        text(dc,321,178,390,"TWO INDEPENDENT DELAY ENGINES",11,RGB(175,184,191));
         const int bank=std::clamp(view.section,0,1),mix=layout().digital[bank]+2;
         text(dc,823,177,48,"MIX",13,RGB(225,245,249)); metalPanel(dc,866,180,298,14,false);
         fill(dc,868,184,294,6,RGB(2,9,15)); fill(dc,868,184,int(294*value(mix)),6,RGB(43,210,235));
@@ -1143,15 +1149,45 @@ class Editor final : public Steinberg::CPluginView {
         const int families[]{4,1,3,0,2,1,1,1},models[]{-1,-1,-1,-1,-1,0,2,4};
         const char* engine=names[0];
         for(int i=0;i<8;++i) if(type==families[i]&&(models[i]<0||model==models[i])&&(type!=1||i!=1||(model!=0&&model!=2&&model!=4))) engine=names[i];
-        bevel(dc,35,207,206,34,RGB(14,39,53)); text(dc,43,214,182,engine,12,RGB(88,229,244)); text(dc,219,213,18,"v",13,RGB(183,212,225));
-        text(dc,264,214,145,"AKTYWNY BANK",10,RGB(134,187,205));
-        for(int b=0;b<2;++b){const int bx=412+b*132;fill(dc,bx,207,126,34,bank==b?RGB(14,112,137):RGB(18,39,53));text(dc,bx,215,126,b==0?"A — AKTYWNY":"B — AKTYWNY",11,bank==b?RGB(230,251,255):RGB(154,186,202));}
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({35,207,206,34},juce::Colour(0xff343439),6);
+#else
+        bevel(dc,35,207,206,34,RGB(49,51,57));
+#endif
+        text(dc,43,214,182,engine,12,RGB(245,188,102));
+        text(dc,219,213,18,"v",13,RGB(222,225,227));
+        text(dc,264,214,145,"ACTIVE BANK",10,RGB(193,200,207));
+        for(int b=0;b<2;++b){
+            const int bx=412+b*132;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(bx),207,126,34},
+                bank==b?juce::Colour(0xff645040):juce::Colour(0xff2c3035),5);
+#else
+            bevel(dc,bx,207,126,34,bank==b?RGB(95,73,51):RGB(43,47,53));
+#endif
+            text(dc,bx,215,126,b==0?"A / ACTIVE":"B / ACTIVE",11,
+                bank==b?RGB(249,207,139):RGB(179,187,194));
+        }
         const bool bypass=value(layout().slotBypass[bank])>=.5;
-        fill(dc,1007,207,207,34,bypass?RGB(76,31,43):RGB(17,76,57)); text(dc,1007,215,207,bypass?"BYPASS / WYŁĄCZONY":"ON / AKTYWNY",11,RGB(226,247,244));
-        line(dc,28,250,1251,250,RGB(31,68,88));
-        const char* primaryLabels[]{"CZAS DELAYA","FEEDBACK","CZAS DELAYA","FEEDBACK"};
-        for(size_t i=0;i<controls.size();++i){const auto &c=controls[i];if(c.y==260)referenceKnob(dc,c,primaryLabels[i%4],40,i<2?RGB(53,215,236):RGB(174,128,247));}
-        text(dc,1010,263,211,"TRYB PRACY",13,RGB(217,236,243));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1007,207,207,34},
+            bypass?juce::Colour(0xff673d40):juce::Colour(0xff304d40),5);
+#else
+        bevel(dc,1007,207,207,34,bypass?RGB(90,50,53):RGB(46,77,60));
+#endif
+        text(dc,1007,215,207,bypass?"BYPASS / OFF":"ON / ACTIVE",11,RGB(234,239,237));
+        line(dc,28,250,1251,250,RGB(96,99,103));
+        const char* primaryLabels[]{"DELAY TIME","FEEDBACK","DELAY TIME","FEEDBACK"};
+        for(size_t i=0;i<controls.size();++i){
+            const auto &c=controls[i];
+            if(c.y!=260)continue;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(c.x+3),float(c.y-6),float(c.w-6),151},
+                juce::Colour(i<2?0xff30363a:0xff342e3b),7);
+#endif
+            referenceKnob(dc,c,primaryLabels[i%4],40,i<2?RGB(231,134,91):RGB(177,143,228));
+        }
+        text(dc,1010,263,211,"ROUTING",13,RGB(239,241,243));
         const char* routes[]{"SZEREGOWY A > B","RÓWNOLEGŁY","MIX A / B"};
         const int routing=int(plain(layout().delayMode,float(value(layout().delayMode))));
         for(int i=0;i<3;++i){
@@ -1165,21 +1201,31 @@ class Editor final : public Steinberg::CPluginView {
 #endif
             lamp(dc,1023,y+18,routing==i,RGB(75,231,246));text(dc,1035,y+9,168,routes[i],11,RGB(223,240,246));
         }
-        line(dc,28,415,1251,415,RGB(31,68,88));
+        line(dc,28,415,1251,415,RGB(96,99,105));
         int featureCount=0;for(int i=0;i<8&&delayFeature(i)>=0;++i)++featureCount;
         const int groupCount=(featureCount+1)/2,totalWidth=groupCount*298+std::max(0,groupCount-1)*8;
         const int groupStart=(W-totalWidth)/2;
         const char* groups[5][4]={{"DIGITAL TONE","","",""},{"INPUT / MACHINE","MODULATION","EFFECTS","STEREO / DUCK"},
           {"TONE / DEPTH","MODULATION","LEVEL / BLEND",""},{"WOW / FLUTTER","TAPE AGE","SATURATION","WIDTH / NOISE"},
           {"FILTRACJA","MODULACJA","SATURACJA","STEREO / MECHANIKA"}};
-        for(int group=0;group<groupCount;++group){const int gx=groupStart+group*306;metalPanel(dc,gx,422,298,159,false);fill(dc,gx+3,425,292,153,RGB(11,25,37));text(dc,gx+5,429,288,groups[std::clamp(type,0,4)][group],12,RGB(202,222,231));}
+        for(int group=0;group<groupCount;++group){
+            const int gx=groupStart+group*306;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(gx),422,298,159},juce::Colour(0xff292b30),8);
+            juceGraphics->setColour(juce::Colour(0xffb88963));
+            juceGraphics->fillRect(gx+9,446,280,2);
+#else
+            metalPanel(dc,gx,422,298,159,false);fill(dc,gx+3,425,292,153,RGB(34,37,41));
+#endif
+            text(dc,gx+5,429,288,groups[std::clamp(type,0,4)][group],12,RGB(226,230,233));
+        }
         const char* labels[5][8]={{"FILTER","LEVEL"},{"IN TRIM","OUT TRIM","MACHINE","PAN","FX AMOUNT","FX RATE","FX DEPTH","DUCK"},{"BOOST","SQUELCH","DEPTH","MOD RATE","LEVEL","BLEND"},{"WOW","FLUTTER","AGE","MOTOR","SATURATION","BIAS","WIDTH","HISS"},{"IN TONE","OUT TONE","DEPTH","SPEED","IN SAT","OUT SAT","WIDTH","DRIFT"}};
         for(const auto &stored:controls)if(stored.y==449)for(int i=0;i<featureCount;++i)if(delayFeature(i)==stored.id){
             const int group=i/2,local=i%2,gx=groupStart+group*306;
             Control c=stored;c.x=gx+27+local*135;c.w=130;
             referenceKnob(dc,c,labels[std::clamp(type,0,4)][i],featureCount<=2?34:26,i<2?RGB(64,212,231):RGB(173,126,236));break;
         }
-        line(dc,28,607,1251,607,RGB(31,68,88));
+        line(dc,28,607,1251,607,RGB(96,99,105));
         text(dc,35,621,676,"PRAWY KLIK: MIDI LEARN     •     PEŁNA LISTA PARAMETRÓW: USTAWIENIA",10,RGB(123,171,191));
         char status[96];snprintf(status,sizeof(status),"GR %.1f dB   /   PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
         text(dc,948,621,273,status,10,RGB(166,208,222));
