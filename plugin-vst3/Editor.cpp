@@ -122,6 +122,38 @@ class Editor final : public Steinberg::CPluginView {
     bool globalSettings = false;
     bool rackHome = true; // approved Rack Hybrid: detail editor stays available.
     bool engineMenuOpen = false;
+    struct DelayEngineChoice {
+        const char *label;
+        int family;    // existing delayA/B.type: 0 Digital, 1 MX, 2 Memory, 3 Reel, 4 Oil
+        int algorithm; // existing MX slot0 algorithm, -1 for a non-MX engine
+    };
+    static constexpr std::array<DelayEngineChoice,13> delayEngineChoices(){return {{
+        {"DIGITAL",0,-1},
+        {"VOLANTE / MULTIHEAD",1,0},
+        {"EL CAPISTAN / TAPE",1,1},
+        {"OLIVERA / OIL CAN",1,2},
+        {"EC-1 / TUBE",1,3},
+        {"BRIG / BBD",1,4},
+        {"DECO / DOUBLETRACK",1,5},
+        {"DIG / DUAL DIGITAL",1,6},
+        {"SPACE ECHO 202",1,7},
+        {"DM-101",1,8},
+        {"MEMORY DELAY",2,-1},
+        {"REEL ECHO",3,-1},
+        {"OIL DRUM",4,-1}
+    }}; }
+    static constexpr int delayMenuX=35,delayMenuY=246;
+    static constexpr int delayMenuWidth=493,delayMenuHeight=226;
+    static constexpr int delayMenuColWidth=244,delayMenuRowHeight=29;
+    static int delayMenuChoiceAt(int x,int y){
+        if(x<delayMenuX+7||x>=delayMenuX+delayMenuWidth-7||
+           y<delayMenuY+8||y>=delayMenuY+delayMenuHeight-7)return -1;
+        const int column=(x-(delayMenuX+7))/delayMenuColWidth;
+        const int row=(y-(delayMenuY+8))/delayMenuRowHeight;
+        if(column<0||column>=2||row<0||row>=7)return -1;
+        const int i=column*7+row;
+        return i<int(delayEngineChoices().size())?i:-1;
+    }
     bool referenceDelay() const { return !rackHome && view.block == 2 && !view.advanced && !globalSettings; }
     int delayControl(int bank, int kind) const {
         static const DelayMidiRoutes routes;
@@ -1198,8 +1230,8 @@ class Editor final : public Steinberg::CPluginView {
         metalPanel(dc,11,160,1258,548); fill(dc,14,163,1252,542,RGB(28,32,37));
 #endif
         screw(dc,21,170); screw(dc,1259,170); screw(dc,21,614); screw(dc,1259,614);
-        text(dc,29,170,285,"DELAY A + B",26,RGB(240,242,244));
-        text(dc,321,178,390,"TWO INDEPENDENT DELAY ENGINES",11,RGB(175,184,191));
+        text(dc,29,170,285,"MD MULTIDELAY",25,RGB(240,242,244));
+        text(dc,321,178,390,"BANK A / BANK B  -  SERIAL / PARALLEL",11,RGB(175,184,191));
         const int bank=std::clamp(view.section,0,1),mix=layout().digital[bank]+2;
         text(dc,823,177,48,"MIX",13,RGB(225,245,249)); metalPanel(dc,866,180,298,14,false);
         fill(dc,868,184,294,6,RGB(2,9,15)); fill(dc,868,184,int(294*value(mix)),6,RGB(43,210,235));
@@ -1208,10 +1240,12 @@ class Editor final : public Steinberg::CPluginView {
         char mixText[24]; snprintf(mixText,sizeof(mixText),"%d%%",int(std::round(value(mix)*100))); text(dc,1170,174,70,mixText,14,RGB(232,248,250));
         const int type=int(plain(layout().delayType[bank],float(value(layout().delayType[bank]))));
         const int model=int(std::round(value(layout().mxAlgorithms[bank][0])*8));
-        const char* names[]{"OIL DRUM","MX ANALOG","REEL / TAPE","DIGITAL","MEMORY","VOLANTE","OLIVERA","BRIG / BBD"};
-        const int families[]{4,1,3,0,2,1,1,1},models[]{-1,-1,-1,-1,-1,0,2,4};
-        const char* engine=names[0];
-        for(int i=0;i<8;++i) if(type==families[i]&&(models[i]<0||model==models[i])&&(type!=1||i!=1||(model!=0&&model!=2&&model!=4))) engine=names[i];
+        const auto engines=delayEngineChoices();
+        const char* engine="DIGITAL";
+        for(const auto& choice:engines)
+            if(type==choice.family && (choice.algorithm<0 || choice.algorithm==model)){
+                engine=choice.label;break;
+            }
 #ifdef MULTIFX_JUCE_GUI
         drawDetailHardwarePanel({35,207,206,34},juce::Colour(0xff343439),6);
 #else
@@ -1293,10 +1327,35 @@ class Editor final : public Steinberg::CPluginView {
         char status[96];snprintf(status,sizeof(status),"GR %.1f dB   /   PDC %d smp",controller->meterGR.load(),controller->meterLatency.load());
         text(dc,948,591,273,status,11,RGB(195,204,212));
         if(engineMenuOpen){
-            metalPanel(dc,35,241,206,210,false);fill(dc,38,244,200,204,RGB(8,21,32));
-            for(int i=0;i<8;++i){const int y=245+i*25;const bool selected=std::string_view(engine)==names[i];
-                if(selected)fill(dc,39,y,198,24,RGB(14,84,104));
-                text(dc,48,y+5,184,names[i],11,selected?RGB(104,236,247):RGB(202,222,231));
+            // Text operations for the underlying controls are deferred until
+            // frame end. Flush them BEFORE painting the opaque popup, otherwise
+            // knob labels show straight through the dropdown (observed in FL).
+            drawTextPass(dc);
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(delayMenuX),float(delayMenuY),
+                float(delayMenuWidth),float(delayMenuHeight)},juce::Colour(0xff181b20),7);
+            juceGraphics->setColour(juce::Colour(0xff0d1116));
+            juceGraphics->fillRoundedRectangle(juce::Rectangle<float>(
+                float(delayMenuX+5),float(delayMenuY+5),float(delayMenuWidth-10),
+                float(delayMenuHeight-10)),5.f);
+            juceGraphics->setColour(juce::Colour(0xffae7f3e));
+            juceGraphics->drawRoundedRectangle(juce::Rectangle<float>(
+                float(delayMenuX+1),float(delayMenuY+1),float(delayMenuWidth-2),
+                float(delayMenuHeight-2)),6.f,1.5f);
+#else
+            metalPanel(dc,delayMenuX,delayMenuY,delayMenuWidth,delayMenuHeight,false);
+            fill(dc,delayMenuX+5,delayMenuY+5,delayMenuWidth-10,delayMenuHeight-10,RGB(13,17,22));
+#endif
+            for(int i=0;i<int(engines.size());++i){
+                const int col=i/7,row=i%7;
+                const int x=delayMenuX+7+col*delayMenuColWidth;
+                const int y=delayMenuY+8+row*delayMenuRowHeight;
+                const bool selected=type==engines[i].family &&
+                    (engines[i].algorithm<0 || engines[i].algorithm==model);
+                if(selected)fill(dc,x+2,y+2,delayMenuColWidth-6,delayMenuRowHeight-3,
+                                  RGB(93,63,28));
+                text(dc,x+6,y+3,delayMenuColWidth-14,engines[i].label,12,
+                     selected?RGB(255,211,144):RGB(226,231,235));
             }
         }
     }
@@ -1962,15 +2021,18 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 if(y>=180&&y<197&&x>=866&&x<1163){const int id=layout().digital[bank]+2;change(id,double(x-868)/294);drag=id;startX=x;startY=y;startValue=value(id);capturePointer();return 0;}
                 if(engineMenuOpen){
-                    if(x>=35&&x<241&&y>=245&&y<445){
-                        const int choice=std::clamp((y-245)/25,0,7);
-                        const int fam[]{4,1,3,0,2,1,1,1},mod[]{-1,-1,-1,-1,-1,0,2,4};
-                        change(layout().delayType[bank],double(fam[choice])/4);
-                        if(mod[choice]>=0)change(layout().mxAlgorithms[bank][0],double(mod[choice])/8);
-                        if(value(layout().digital[bank]+2)<.01)change(layout().digital[bank]+2,.5);
-                        engineMenuOpen=false;rebuild();return 0;
-                    }
-                    engineMenuOpen=false;requestRepaint();
+                    const int index=delayMenuChoiceAt(x,y);
+                    engineMenuOpen=false;
+                    if(index>=0){
+                        const auto choice=delayEngineChoices()[index];
+                        change(layout().delayType[bank],double(choice.family)/4);
+                        if(choice.algorithm>=0)
+                            change(layout().mxAlgorithms[bank][0],double(choice.algorithm)/8);
+                        if(value(layout().digital[bank]+2)<.01)
+                            change(layout().digital[bank]+2,.5);
+                        rebuild();
+                    }else requestRepaint();
+                    return 0; // Clicking outside dismisses, never edits a hidden knob.
                 }
                 if(y>=207&&y<242){
                     if(x>=35&&x<241){engineMenuOpen=true;requestRepaint();return 0;}
