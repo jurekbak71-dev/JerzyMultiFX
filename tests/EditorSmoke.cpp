@@ -508,7 +508,17 @@ int main(int argc, char **argv) try {
               "Oil original quarter-note enum displayed");
         RECT divisionRect{};GetWindowRect(divisions,&divisionRect);
         POINT divisionTop{divisionRect.left,divisionRect.top};ScreenToClient(child,&divisionTop);
-        check(divisionTop.x>=20 && divisionTop.y>=218 && divisionTop.y<520,
+        RECT editorClient{};check(GetClientRect(child,&editorClient)!=0,"read editor geometry for Oil enum row");
+        // Window child coordinates are physical, while all GUI layout bounds
+        // (20/218/520) are expressed in the 1280x720 design space. The CI
+        // run deliberately uses a 960x540 viewport to keep real mouse input
+        // inside the runner's 1024x768 desktop.
+        const int logicalX=MulDiv(divisionTop.x,1280,editorClient.right);
+        const int logicalY=MulDiv(divisionTop.y,720,editorClient.bottom);
+        std::cerr<<"Oil enum layout: physical="<<divisionTop.x<<","<<divisionTop.y
+                 <<" logical="<<logicalX<<","<<logicalY
+                 <<" viewport="<<editorClient.right<<"x"<<editorClient.bottom<<"\n";
+        check(logicalX>=20 && logicalY>=218 && logicalY<520,
               "continuous-tagged Oil enums occupy the compact selector row, never a knob");
         SendMessage(divisions, CB_SETCURSEL, 2, 0);
         SendMessage(child, WM_COMMAND, MAKEWPARAM(10000 + division, CBN_SELCHANGE),
