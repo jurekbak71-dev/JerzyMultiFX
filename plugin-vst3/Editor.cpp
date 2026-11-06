@@ -258,7 +258,13 @@ class Editor final : public Steinberg::CPluginView {
             if(e.mods.isRightButtonDown()){
                 // MX Delay convention: a plain right click restores the declared
                 // parameter default. Shift+right click keeps Jerzy MultiFX MIDI Learn.
-                if(e.mods.isShiftDown())owner.learnParameter(parameter);
+                // Some Windows hosts omit keyboard modifiers from JUCE's
+                // right-click snapshot while SHIFT is physically held.
+                // Honor both JUCE modifiers and actual Windows key state.
+                const bool learn=e.mods.isShiftDown() ||
+                                 (GetAsyncKeyState(VK_SHIFT)&0x8000)!=0 ||
+                                 (GetKeyState(VK_SHIFT)&0x8000)!=0;
+                if(learn)owner.learnParameter(parameter);
                 else{
                     const double initial=controlUI()[parameter].definition.initial;
                     owner.change(parameter,initial);
@@ -1353,9 +1359,12 @@ class Editor final : public Steinberg::CPluginView {
             return 0;
         }
         case WM_APP + 31:
-            // Test-only, read-only window diagnostics: low word is current page,
-            // high word is page count; no audio or parameter state is changed.
+            // Test-only, read-only window diagnostics.
             return MAKELRESULT(controlPage,controlPages);
+        case WM_APP + 32:
+            // Test-only current section: low word block ID, high word
+            // reference-delay flag plus section index.
+            return MAKELRESULT(view.block,(referenceDelay()?1:0)|(view.section<<1));
 #ifdef MULTIFX_JUCE_GUI
         case WM_APP + 29:
             if(juceCanvas)
