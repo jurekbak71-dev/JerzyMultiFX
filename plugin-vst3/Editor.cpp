@@ -1398,23 +1398,41 @@ class Editor final : public Steinberg::CPluginView {
         }
         HDC dc=target;
         chrome(dc);
-        text(dc,24,157,1190,"WYBIERZ BLOK I SEKCJĘ, POTEM USTAW PARAMETRY    •    PRAWY KLIK: MIDI LEARN",11,RGB(169,211,225));
+        text(dc,24,157,1190,"WYBIERZ SEKCJE I USTAW PARAMETRY  /  SHIFT+PRAWY KLIK: MIDI LEARN",10,RGB(188,196,204));
         auto sections = sectionNames(view.block);
         for (size_t i = 0; i < sections.size(); ++i) {
-            int x = 28 + int(i) * 214;
-            fill(dc, x, 177, 205, 34, int(i) == view.section ? RGB(32,106,125) : RGB(20,42,59));
-            text(dc, x, 184, 205, sections[i].c_str(), 14,
-                 int(i) == view.section ? RGB(238, 252, 255) : RGB(157, 187, 202));
+            const int x=28+int(i)*214;
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(x),177,205,34},
+                int(i)==view.section?juce::Colour(0xff394047):juce::Colour(0xff24292f),6);
+            if(int(i)==view.section) {
+                juceGraphics->setColour(rackDetailAccent());
+                juceGraphics->fillRect(x+8,208,189,3);
+            }
+#else
+            bevel(dc,x,177,205,34,int(i)==view.section?RGB(56,62,69):RGB(29,35,42));
+#endif
+            text(dc,x,184,205,sections[i].c_str(),13,
+                int(i)==view.section?RGB(244,246,248):RGB(173,182,192));
         }
-        if (view.block == 2 && view.advanced) {
-            fill(dc, 900, 177, 160, 34, RGB(28, 59, 77));
-            text(dc, 900, 184, 160, "MX A / B", 13, RGB(221,244,250));
+        if(view.block==2&&view.advanced){
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({900,177,160,34},juce::Colour(0xff2c3037),5);
+#else
+            bevel(dc,900,177,160,34,RGB(37,43,50));
+#endif
+            text(dc,900,184,160,"MX A / B",13,RGB(222,228,234));
         }
-        fill(dc, 1075, 177, 175, 34, RGB(28, 59, 77));
-        text(dc, 1075, 184, 175, view.advanced ? "BASIC" : "USTAWIENIA", 13, RGB(221,244,250));
-        fill(dc, 20, 218, 1240, 302, RGB(16,31,47));
-        line(dc,20,218,1260,218,RGB(37,85,105));
-        bevel(dc, 24, 528, 1232, 82, RGB(15,33,49));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1075,177,175,34},juce::Colour(0xff2f333a),5);
+        drawDetailHardwarePanel({20,218,1240,302},juce::Colour(0xff171a20),7);
+        drawDetailHardwarePanel({24,528,1232,82},juce::Colour(0xff24262b),8);
+#else
+        bevel(dc,1075,177,175,34,RGB(40,45,53));
+        fill(dc,20,218,1240,302,RGB(21,25,30));
+        bevel(dc,24,528,1232,82,RGB(37,40,45));
+#endif
+        text(dc,1075,184,175,view.advanced?"BASIC":"USTAWIENIA",13,RGB(224,230,234));
         if (view.block == 2 && !globalSettings) {
             const char *labels[]{"MIDI LEARN / TIME", "MIDI LEARN / FEEDBACK", "MIDI LEARN / MIX"};
             for (int i = 0; i < 3; ++i) {
@@ -1474,8 +1492,14 @@ class Editor final : public Steinberg::CPluginView {
             const auto &p = controlUI()[c.id].definition;
             const auto label = controlTitle(c.id);
             if (c.compact) {
-                fill(dc,c.x+2,y+1,c.w-4,19,RGB(31,64,78));
-                text(dc, c.x+3, y+2, c.w-6, label.c_str(), 13, RGB(227,243,248));
+#ifdef MULTIFX_JUCE_GUI
+                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),55},juce::Colour(0xff292d33),5);
+                juceGraphics->setColour(rackDetailAccent().withAlpha(.7f));
+                juceGraphics->fillRect(c.x+9,y+20,c.w-18,2);
+#else
+                fill(dc,c.x+2,y+1,c.w-4,19,RGB(45,50,55));
+#endif
+                text(dc,c.x+3,y+2,c.w-6,label.c_str(),13,RGB(230,234,239));
                 if (!p.choices.empty() || (p.steps > 1 && p.steps <= 64)) {
                     bevel(dc,c.x,y+23,c.w,29,RGB(20,44,59));
                     text(dc,c.x+10,y+28,c.w-40,formatted(c.id).c_str(),14,RGB(229,247,250));
@@ -1503,7 +1527,11 @@ class Editor final : public Steinberg::CPluginView {
                     fill(dc, c.x, y + 51, int(c.w * value(c.id)), 3, accent());
                 }
             } else {
-                fill(dc,c.x+2,y+1,c.w-4,20,RGB(31,64,78));
+#ifdef MULTIFX_JUCE_GUI
+                drawDetailHardwarePanel({float(c.x+1),float(y),float(c.w-2),float(c.h)},juce::Colour(0xff272b30),6);
+#else
+                fill(dc,c.x+2,y+1,c.w-4,20,RGB(45,50,55));
+#endif
                 referenceKnob(dc,c,label.c_str(),34,accent());
             }
         }
@@ -1512,18 +1540,31 @@ class Editor final : public Steinberg::CPluginView {
 #else
         canvas->PopAxisAlignedClip();
 #endif
-        bevel(dc,1031,532,48,22,RGB(21,51,67));
-        text(dc,1031,533,48,"<",14,controlPage>0?RGB(229,246,252):RGB(87,117,131));
-        bevel(dc,1083,532,100,22,RGB(15,36,50));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1031,532,48,22},juce::Colour(0xff34373b),4);
+        drawDetailHardwarePanel({1083,532,100,22},juce::Colour(0xff24292e),4);
+#else
+        bevel(dc,1031,532,48,22,RGB(46,50,56));
+        bevel(dc,1083,532,100,22,RGB(31,36,42));
+#endif
+        text(dc,1031,533,48,"<",14,controlPage>0?RGB(234,236,238):RGB(116,123,131));
         char pageLabel[32];snprintf(pageLabel,sizeof(pageLabel),"STRONA %d/%d",controlPage+1,controlPages);
         text(dc,1083,536,100,pageLabel,10,RGB(215,235,244));
-        bevel(dc,1187,532,48,22,RGB(21,51,67));
-        text(dc,1187,533,48,">",14,controlPage+1<controlPages?RGB(229,246,252):RGB(87,117,131));
+#ifdef MULTIFX_JUCE_GUI
+        drawDetailHardwarePanel({1187,532,48,22},juce::Colour(0xff34373b),4);
+#else
+        bevel(dc,1187,532,48,22,RGB(46,50,56));
+#endif
+        text(dc,1187,533,48,">",14,controlPage+1<controlPages?RGB(234,236,238):RGB(116,123,131));
         const char *buttons[]{"WCZYTAJ IR WAV", "WCZYTAJ PRESET", "ZAPISZ PRESET", "MASTER BYPASS"};
         buttons[3]=value(layout().bypass)>=.5 ? "MASTER WYŁĄCZONY" : "MASTER AKTYWNY";
         for (int i = 0; i < 4; ++i) {
-            fill(dc, 28 + i * 250, 638, 238, 38, RGB(26,53,72));
-            text(dc, 28 + i * 250, 648, 238, buttons[i], 12, RGB(226,248,252));
+#ifdef MULTIFX_JUCE_GUI
+            drawDetailHardwarePanel({float(28+i*250),638,238,38},juce::Colour(0xff30343a),5);
+#else
+            fill(dc,28+i*250,638,238,38,RGB(43,48,55));
+#endif
+            text(dc,28+i*250,648,238,buttons[i],12,RGB(231,233,236));
         }
         text(dc, 1028, 680, 225, "Prawy klik: MIDI Learn", 11, RGB(160, 191, 205));
         finish();
