@@ -316,7 +316,17 @@ int main(int argc, char **argv) try {
 #endif
         SetFocus(pointerTarget);
         pump();
-        if(argc>=3)screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
+        if(argc>=3){
+            screenshot(child,(std::string(argv[2])+"-initial.bmp").c_str());
+            // Capture the true 1280x720 Rack Hybrid without physical mouse
+            // input, then restore the fully visible 960x540 CI test viewport.
+            ViewRect rackFull(0,0,1280,720);
+            check(view->onSize(&rackFull)==kResultOk,"render full-res Rack Hybrid");
+            pump();
+            screenshot(child,(std::string(argv[2])+"-rack1280.bmp").c_str());
+            check(view->onSize(&testSize)==kResultOk,"restore physical mouse test viewport");
+            pump();
+        }
         if(std::getenv("MULTIFX_VISUAL_ONLY")) {
             check(argc>=3,"visual capture needs output path");
             screenshot(child,argv[2]);
