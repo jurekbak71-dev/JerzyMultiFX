@@ -993,12 +993,12 @@ class Editor final : public Steinberg::CPluginView {
                 (view.advanced?"ADVANCED EDITOR":"PARAMETER EDITOR"),11,RGB(168,176,187));
         }
         drawDetailHardwarePanel({20,631,1240,60},juce::Colour(0xff1a1d22),9);
-        const char *buttons[4]={"LOAD IR WAV","LOAD PRESET","SAVE PRESET",
-            value(layout().bypass)>=.5?"MASTER OFF":"MASTER ON"};
-        for(int i=0;i<4;++i){
-            const int x=28+i*250;
-            drawDetailHardwarePanel({float(x),638,238,38},juce::Colour(0xff292e35),5);
-            text(dc,x,646,238,buttons[i],12,RGB(224,230,234));
+        // The generic editor draws its own live footer buttons. The basic
+        // dual-delay editor returns early, so give only that view a footer
+        // legend here (without duplicate button labels).
+        if(referenceDelay()){
+            text(dc,34,641,609,"DELAY A / B  |  EDIT ENGINE  |  BANK ROUTING",12,RGB(228,231,235));
+            text(dc,668,641,570,"SHIFT + RIGHT CLICK: MIDI LEARN",12,RGB(182,191,201));
         }
     }
 #endif
@@ -1476,7 +1476,8 @@ class Editor final : public Steinberg::CPluginView {
         }
         HDC dc=target;
         chrome(dc);
-        text(dc,24,157,1190,"WYBIERZ SEKCJE I USTAW PARAMETRY  /  SHIFT+PRAWY KLIK: MIDI LEARN",10,RGB(188,196,204));
+        // The module header already identifies this section. The old helper
+        // subtitle overlapped the hardware title at y=155; keep help below.
         auto sections = sectionNames(view.block);
         for (size_t i = 0; i < sections.size(); ++i) {
             const int x=28+int(i)*214;
