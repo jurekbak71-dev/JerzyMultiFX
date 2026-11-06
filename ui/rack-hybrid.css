@@ -50,3 +50,19 @@ button.toggle.off,button.foot.off{background:linear-gradient(#8e4543,#4b2228);bo
 @media(max-width:980px){.chain{grid-template-columns:repeat(2,minmax(0,1fr))}.block[data-block="4"]{grid-column:1/-1}.top{flex-wrap:wrap}.connection{flex-wrap:wrap}body{padding-bottom:135px}}
 @media(max-width:610px){.chain{grid-template-columns:1fr}.block[data-block="4"]{grid-column:auto;display:block}.block[data-block="4"] .toggle,.block[data-block="4"] .learn{width:100%}.top,#main{padding-left:12px;padding-right:12px}.pedal{padding:15px}.block .choose{min-height:40px}body{padding-bottom:185px}#meters{gap:8px;padding:8px}#meters>span:first-child,#meters>span:nth-child(2){width:120px;padding:4px 8px}.rotary{width:76px;height:76px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+
+/* Main Rack Hybrid control rows: actual live DSP controls, not decorative knobs. */
+.rack-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:14px;padding-top:13px;border-top:1px solid #a0a6ad36}
+.rack-quick .control{overflow:hidden}
+.rack-quick .rotary{width:57px;height:57px;border-width:5px}
+.rack-quick .rotary:before{inset:5px}
+.rack-quick .needle{width:3px;height:15px;left:22px;top:4px;transform-origin:1.5px 22px}
+.rack-quick .control .label{font-size:9px;line-height:1.25;min-height:34px;letter-spacing:0;margin-top:8px;overflow-wrap:anywhere}
+.rack-quick .control .value{font-size:10px;white-space:nowrap}
+.rack-quick .learn{display:none}
+.rack-quick .rotary input{cursor:ns-resize}
+.block[data-block="0"] .rack-quick .needle{background:#e98b7a}
+.block[data-block="1"] .rack-quick .needle{background:#73d5e6}
+.block[data-block="2"] .rack-quick .needle{background:#f4c371}
+.block[data-block="3"] .rack-quick .needle{background:#cbace9}
+@media(max-width:610px){.rack-quick{max-width:360px;margin-left:auto;margin-right:auto}.rack-quick .rotary{width:68px;height:68px}.rack-quick .needle{left:27px;top:5px;height:19px;transform-origin:1.5px 27px}}
