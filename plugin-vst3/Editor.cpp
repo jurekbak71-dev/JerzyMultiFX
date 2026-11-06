@@ -950,7 +950,10 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,765,7,144,"MIDI MAPPING",10,RGB(192,200,209));
         text(dc,774,37,126,mapped?"ACTIVE":"MIDI LEARN",12,RGB(115,232,192));
         drawDetailHardwarePanel({920,28,162,36},juce::Colour(0xff22282c),6);
-        text(dc,923,36,156,globalSettings||view.advanced?"BASIC":"ADVANCED",12,RGB(221,232,235));
+        const char *modeLabel=view.block==2?
+            (view.advanced?"BASIC":"ADVANCED"):
+            (globalSettings?"BACK":"SETTINGS");
+        text(dc,923,36,156,modeLabel,12,RGB(221,232,235));
         drawDetailHardwarePanel({1091,28,164,36},juce::Colour(0xff47321c),6);
         text(dc,1094,35,158,"RACK HOME",14,RGB(255,190,90));
         // Current block and serial order are visible on every submenu.
@@ -986,7 +989,8 @@ class Editor final : public Steinberg::CPluginView {
         g.setColour(accent);g.fillRoundedRectangle(juce::Rectangle<float>(26,160,1228,3),1.5f);
         if(!referenceDelay()){
             text(dc,30,155,377,names[std::clamp(view.block,0,4)],20,RGB(241,243,245));
-            text(dc,409,161,430,view.advanced?"ADVANCED EDITOR":"PARAMETER EDITOR",11,RGB(168,176,187));
+            text(dc,409,161,430,globalSettings?"GLOBAL PARAMETERS":
+                (view.advanced?"ADVANCED EDITOR":"PARAMETER EDITOR"),11,RGB(168,176,187));
         }
         drawDetailHardwarePanel({20,631,1240,60},juce::Colour(0xff1a1d22),9);
         const char *buttons[4]={"LOAD IR WAV","LOAD PRESET","SAVE PRESET",
