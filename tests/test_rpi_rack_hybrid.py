@@ -23,6 +23,9 @@ class RaspberryPiRackHybridTests(unittest.TestCase):
         for semantic in ("await set(find('chain.order')", "function control(p",
                          "function renderPanel()", "learnButton("):
             self.assertIn(semantic, js)
+        self.assertIn('rackQuickKeys=', js)
+        self.assertIn('quick.append(control(p))', js)
+        self.assertIn('.rack-quick', css)
         self.assertNotIn('pointer-events:none!important', css)
 
 if __name__ == '__main__':
