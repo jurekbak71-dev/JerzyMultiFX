@@ -1619,7 +1619,8 @@ class Editor final : public Steinberg::CPluginView {
                             const auto &d=controlUI()[id].definition;
                             const int steps=std::max(1,!d.choices.empty()?
                                 int(std::count(d.choices.begin(),d.choices.end(),'|')):d.steps);
-                            change(id,std::fmod(value(id)+1.0/steps+1.e-5,1.0+1.0/steps));
+                            const int index=std::clamp(int(std::lround(value(id)*steps)),0,steps);
+                            change(id,double((index+1)%(steps+1))/steps);
                         }else{view.block=block;rackHome=false;rebuild();}
                         return 0;
                     }
@@ -1633,6 +1634,19 @@ class Editor final : public Steinberg::CPluginView {
                 }
                 if(y>=600&&y<=655&&x>=672&&x<1215){
                     const int slot=std::clamp((x-672)/138,0,3);
+                    // Arrows physically swap neighbouring blocks in the actual
+                    // five-block DSP permutation, not merely their labels.
+                    if(slot<3 && x>=672+slot*138+108){
+                        auto swapped=chain;
+                        std::swap(swapped[slot],swapped[slot+1]);
+                        auto current=std::array<int,5>{0,1,2,3,4};
+                        int rank=0;
+                        while(current!=swapped&&rank<119){
+                            std::next_permutation(current.begin(),current.end());++rank;
+                        }
+                        change(layout().order,double(rank)/119);
+                        rebuild();return 0;
+                    }
                     view.block=chain[slot];view.section=0;rackHome=false;
                     globalSettings=false;rebuild();return 0;
                 }
