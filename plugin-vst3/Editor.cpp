@@ -2401,6 +2401,7 @@ class Editor final : public Steinberg::CPluginView {
 #ifdef MULTIFX_JUCE_GUI
             juceParameterSliders.clear();
             juceRoutingButtons.clear();
+            juceEnginePopup.reset(); // Remove child before its JUCE parent HWND.
             if(juceCanvas){juceCanvas->removeFromDesktop();juceCanvas.reset();}
 #endif
             if (value(layout().attackTrigger) >= .5)
