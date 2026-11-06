@@ -448,8 +448,22 @@ int main(int argc, char **argv) try {
         click(pointerTarget, 555, 195);
         pump(); // Atomic page.
         if(argc>=3)screenshot(child,(std::string(argv[2])+"-atomic.bmp").c_str());
-        click(pointerTarget, 100, 110);
-        pump(); // Reordered MD block is now first.
+        // The drag-and-drop test above intentionally changes effect order.
+        // Never assume the delay block is now at slot zero: discover its real
+        // current slot via the editor's selected block readback, using physical
+        // Windows clicks instead of bypassing the GUI.
+        bool selectedDelay=false;
+        for(int slot=0;slot<5;++slot){
+            click(pointerTarget,100+216*slot,110);
+            pump();
+            const auto selected=SendMessage(child,WM_APP+32,0,0);
+            if(LOWORD(selected)==2 && (HIWORD(selected)&1)){
+                selectedDelay=true;
+                std::cerr<<"Reference DELAY selected at actual chain slot "<<slot<<"\n";
+                break;
+            }
+        }
+        check(selectedDelay,"select the reference DELAY block in reordered effects chain");
         const double midiBefore=c->getParamNormalized(layout().midiLearn);
         shiftRightClick(pointerTarget,120,330);
         const double midiExpected=double(parameterId("delayA.time")+1)/layout().controlCount;
