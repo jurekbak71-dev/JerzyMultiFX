@@ -1,0 +1,52 @@
+/* Raspberry Pi Rack Hybrid: presentation only. The existing DOM, API endpoints,
+   parameter ids, MIDI capture, reorder and audio control remain untouched. */
+:root{--bg:#0d1116;--panel:#202630;--ink:#e8e6df;--muted:#b6b7b5;--border:#59616b;--accent:#d8a55d}
+body{background:radial-gradient(ellipse 130% 48% at 50% -10%,#404852 0%,#151a22 56%,#090c10 100%);font-family:system-ui,"Segoe UI",sans-serif;min-height:100vh}
+.top{max-width:1460px;padding:16px 26px 12px;border-bottom:1px solid #9da6af30;background:linear-gradient(180deg,#4148515e,#11182100)}
+.top h1{font:700 24px/1.1 system-ui,sans-serif;letter-spacing:.09em;color:#f2eadb;text-transform:uppercase;text-shadow:0 2px 2px #000}
+.top small{color:#e0ae69;letter-spacing:.21em}
+#tabs,main{max-width:1460px}
+#tabs{padding-top:12px;gap:6px}
+#tabs button{border:1px solid #606b77;background:linear-gradient(#353c47,#191f28);border-radius:5px;color:#d9d9d7;box-shadow:inset 0 1px #ffffff1b,0 3px 5px #0007;padding:9px 18px;min-height:38px}
+#tabs button.active{border:1px solid #d7a257;background:linear-gradient(#63503a,#30281f);box-shadow:inset 0 1px #f6d8a84d,0 0 12px #d99f413f;color:#ffe1b0}
+#main{padding:0 26px}
+.chain{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;overflow:visible}
+.block{--fx:#d19a57;position:relative;padding:16px 16px 12px;border:2px solid #565f6b;border-radius:9px;background:linear-gradient(125deg,#ffffff0b 0 1%,transparent 30%),repeating-linear-gradient(0deg,#ffffff05 0 1px,#00000006 2px 4px),linear-gradient(145deg,#333b48,#171d27 70%,#252b34);box-shadow:inset 0 1px #b2b9bb50,inset 0 -4px #080c12,0 10px 15px #0008}
+.block:before{content:"";display:block;width:8px;height:8px;position:absolute;right:13px;top:13px;border:1px solid #bcb6a7;border-radius:50%;background:radial-gradient(circle at 35% 30%,#b5b9bb,#3d4249 63%,#141619);box-shadow:0 1px 2px #000}
+.block[data-block="0"]{--fx:#d66e62}
+.block[data-block="1"]{--fx:#62ccdf}
+.block[data-block="2"]{--fx:#e6b25c}
+.block[data-block="3"]{--fx:#b894e3}
+.block[data-block="4"]{--fx:#aeb9c8;grid-column:1/-1;display:flex;align-items:center;gap:18px;min-height:66px;padding:10px 18px}
+.block[data-block="4"] .choose{flex:1}
+.block[data-block="4"] .toggle{width:auto;min-width:180px}
+.block[data-block="4"] .learn{width:auto}
+.block.selected{border-color:var(--fx);box-shadow:inset 0 1px #fff4,inset 0 -3px #080b11,0 0 0 1px var(--fx),0 0 19px color-mix(in srgb,var(--fx) 27%,transparent)}
+.block small{font:600 11px/1.3 monospace;color:var(--fx);margin:0 0 8px;letter-spacing:.18em}
+.block .choose{font-weight:800;font-size:15px;letter-spacing:.075em;min-height:62px;text-align:left;color:#f2eee5;overflow-wrap:anywhere;text-shadow:0 2px #000}
+.block .toggle{border-radius:4px;min-height:38px;font-size:11px}
+.block .learn{min-height:30px;background:#161c24;border:1px solid #606873;border-radius:4px;color:#ded7ca}
+.subtabs{border:1px solid #525b66;border-radius:7px;padding:6px 9px;background:linear-gradient(#343e4a,#131922);box-shadow:inset 0 1px #ffffff26;gap:6px}
+.subtabs button{background:linear-gradient(#39424c,#141c23);border:1px solid #606a77;border-radius:4px;font-size:12px;letter-spacing:.075em;color:#d6d4cd}
+.subtabs button.active{background:linear-gradient(#6d5940,#312b23);border-color:#e0b46a;color:#ffe8be}
+.pedal,.pedal.clone,.pedal.attack,.pedal.atomic{--accent:#d8a55d;border:2px solid #6c737b;border-radius:10px;color:#e8e4dc;background:repeating-linear-gradient(90deg,#ffffff04 0 1px,#00000004 2px 4px),linear-gradient(135deg,#404855,#1a202a 55%,#303742);box-shadow:inset 0 1px #ffffff40,inset 0 0 0 5px #111820,0 15px 30px #000a;padding:24px}
+.pedal h2{font-weight:850;font-size:21px;letter-spacing:.11em;color:#f5e6cf}
+.common{border:1px solid #68707b;border-radius:5px;background:linear-gradient(#111720,#262d36);box-shadow:inset 0 2px 8px #0009}
+.common label{color:#e0ded6}
+.control .label,.attack .control .label{color:#e4e1d9;text-shadow:0 1px 1px #000}
+.control .value,.attack .control .value{color:#f0bf75;font-weight:750}
+.rotary{border:7px solid #8e9599;background:radial-gradient(circle at 34% 23%,#889299 0,#525c64 19%,#2a313b 46%,#141a20 79%);box-shadow:inset 0 2px 3px #f0f1e455,inset 0 -3px 5px #000b,0 7px 9px #0009,0 0 0 2px #171c23}
+.rotary:before{border-color:#a9adb4;box-shadow:inset 0 0 0 2px #1e2732}
+.needle{background:linear-gradient(90deg,#ffe4af,#d68d37);box-shadow:0 0 5px #f5a43a88}
+.pedal button,.pedal select,.pedal input:not([type=range]),.common button,.common select{border-radius:4px}
+button.toggle.on,button.foot.on{background:linear-gradient(#2a8154,#17462e);border:1px solid #7fba97;color:#e8ffeb}
+button.toggle.off,button.foot.off{background:linear-gradient(#8e4543,#4b2228);border:1px solid #d2867f;color:#fff0ed}
+#meters{background:linear-gradient(#414955,#111720);border-top:2px solid #7c858a;box-shadow:0 -6px 18px #0009;justify-content:space-around}
+#meters>span:first-child,#meters>span:nth-child(2){position:relative;background:linear-gradient(#b9aa87,#e5d2a1 55%,#a38b60);color:#30251b;border:3px solid #77705d;border-radius:6px;padding:6px 14px;width:155px;box-shadow:inset 0 0 8px #33281f,0 2px 7px #000a}
+#meters>span:first-child b,#meters>span:nth-child(2) b{color:#3a2b1e;text-shadow:0 1px #fff7}
+#meters .meterbar{width:100%;height:8px;background:#6b5334;border:1px solid #493a2b}
+#meters .meterbar i{background:linear-gradient(90deg,#59775f,#b78845,#c15140)}
+#meters b{font-variant-numeric:tabular-nums}
+@media(max-width:980px){.chain{grid-template-columns:repeat(2,minmax(0,1fr))}.block[data-block="4"]{grid-column:1/-1}.top{flex-wrap:wrap}.connection{flex-wrap:wrap}body{padding-bottom:135px}}
+@media(max-width:610px){.chain{grid-template-columns:1fr}.block[data-block="4"]{grid-column:auto;display:block}.block[data-block="4"] .toggle,.block[data-block="4"] .learn{width:100%}.top,#main{padding-left:12px;padding-right:12px}.pedal{padding:15px}.block .choose{min-height:40px}body{padding-bottom:185px}#meters{gap:8px;padding:8px}#meters>span:first-child,#meters>span:nth-child(2){width:120px;padding:4px 8px}.rotary{width:76px;height:76px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
