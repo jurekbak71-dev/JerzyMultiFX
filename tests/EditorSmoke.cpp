@@ -54,11 +54,14 @@ static void movePointer(HWND h, int x, int y) {
     const int top=GetSystemMetrics(SM_YVIRTUALSCREEN);
     const int right=left+GetSystemMetrics(SM_CXVIRTUALSCREEN);
     const int bottom=top+GetSystemMetrics(SM_CYVIRTUALSCREEN);
-    const int margin=12;
-    const int shiftX=screen.x<left+margin?(left+margin-screen.x):
-                     screen.x>=right-margin?(right-margin-1-screen.x):0;
-    const int shiftY=screen.y<top+margin?(top+margin-screen.y):
-                     screen.y>=bottom-margin?(bottom-margin-1-screen.y):0;
+    // JUCE unbounded mouse movement can be clipped at monitor edges.
+    // Always move off-safe-area click targets toward the visible desktop center.
+    const int safeX=std::min(200,(right-left)/4);
+    const int safeY=std::min(100,(bottom-top)/4);
+    const int shiftX=(screen.x<left+safeX || screen.x>=right-safeX)
+                     ?(left+(right-left)/2-screen.x):0;
+    const int shiftY=(screen.y<top+safeY || screen.y>=bottom-safeY)
+                     ?(top+(bottom-top)/2-screen.y):0;
     if(shiftX||shiftY){
         const HWND topLevel=GetAncestor(h,GA_ROOT);
         check(topLevel!=nullptr,"resolve top-level VST3 test host");
@@ -82,6 +85,12 @@ static void movePointer(HWND h, int x, int y) {
         std::cerr<<"Unreachable physical mouse target: requested="<<screen.x<<","<<screen.y
                  <<" actual="<<actual.x<<","<<actual.y<<"\n";
         throw std::runtime_error("Windows clamped native pointer before JUCE mouse dispatch");
+    }
+    const HWND target=WindowFromPoint(screen);
+    if(!target || (target!=h && !IsChild(h,target))){
+        std::cerr<<"Physical hit-test intercepted: JUCE="<<h
+                 <<" actual window="<<target<<" at "<<screen.x<<","<<screen.y<<"\n";
+        throw std::runtime_error("Native mouse target is not the JUCE surface");
     }
 }
 static void mouseInput(DWORD flags) {
