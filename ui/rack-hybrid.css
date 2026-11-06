@@ -76,3 +76,8 @@ button.toggle.off,button.foot.off{background:linear-gradient(#8e4543,#4b2228);bo
 .rack-editor-toggle{background:linear-gradient(#7f6138,#3d3020);color:#ffedca;border:1px solid #d4a35d;border-radius:4px;min-height:40px;font-weight:750;letter-spacing:.04em}
 #subtabs[hidden],#controls[hidden]{display:none!important}
 @media(min-width:981px){.chain{grid-template-columns:repeat(4,minmax(0,1fr))}.chain>.block:not([data-block="4"]){min-height:288px}}
+
+.rack-live-enable{background:linear-gradient(#367c60,#194334);border:1px solid #8ed1ac;border-radius:4px;color:#f0fff2;min-height:40px;font-weight:800;letter-spacing:.06em}
+.rack-live-restore{background:linear-gradient(#a36d39,#5b3824);border:1px solid #e4b378;border-radius:4px;color:#fff6de;min-height:40px;font-weight:800}
+.rack-editor-bar{margin-top:14px;gap:9px}.rack-editor-toggle{margin-left:auto}
+@media(max-width:610px){.rack-editor-toggle{margin-left:0}.rack-editor-bar button{flex:1 1 180px}}
