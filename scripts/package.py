@@ -9,7 +9,7 @@ PRIVATE_NAMES={'REQUIREMENTS_PL.md','JERZY_MULTIFX_PROMPT_DO_CODEXA.md','Wklejon
 CACHE_PARTS={'.git','.build','build','dist','__pycache__','node_modules','.cache','references','attachments'}
 RUNTIME_SCRIPTS=('install.sh','uninstall.sh','rollback.sh','diagnostics.sh','collect_rpi_diagnostics.py')
 RUNTIME_RPI=('bluetooth_recovery.py','control.py','hardware.py','bluetooth_relay.py','web.py','ble.py','lcd.py','lcd_service.py','jerzy-multifx.service','jerzy-multifx-web.service','jerzy-multifx-jack.service','jerzy-multifx-ble.service')
-RUNTIME_UI=('index.html','metadata.js','app.js','style.css')
+RUNTIME_UI=('index.html','metadata.js','app.js','style.css','rack-hybrid.css')
 
 def architecture(path,expected):
     b=Path(path).read_bytes()
