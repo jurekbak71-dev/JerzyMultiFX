@@ -563,6 +563,44 @@ int main(int argc, char **argv) try {
                     reinterpret_cast<LPARAM>(divisions));
         check(std::abs(c->getParamNormalized(division) - 2. / 7) < 1e-6,
               "Oil enum normalized by real choice count");
+        // Full-screen proof: visit every DSP block and its detail sections
+        // through native Windows clicks, using the current (reordered) chain.
+        // Save real plugin DLL captures, not generated mockups.
+        int coveredBlocks=0,coveredSections=0;
+        for(int slot=0;slot<5;++slot) {
+            click(pointerTarget,100+slot*216,110);
+            const auto selected=SendMessage(child,WM_APP+32,0,0);
+            const int block=LOWORD(selected);
+            check(block>=0 && block<5,"Rack Hybrid detail selected a valid FX block");
+            coveredBlocks|=(1<<block);
+            const std::string tag=std::string(argv[2])+"-detail-block"+std::to_string(block);
+            if(argc>=3 && cycle==0) screenshot(child,(tag+".bmp").c_str());
+            const int sectionCount=block==0?4:block==1?3:0;
+            for(int section=0;section<sectionCount;++section){
+                click(pointerTarget,78+section*214,195);
+                check((HIWORD(SendMessage(child,WM_APP+32,0,0))>>1)==section,
+                      "Rack Hybrid detail section tab navigates to requested page");
+                ++coveredSections;
+                if(argc>=3 && cycle==0)
+                    screenshot(child,(tag+"-section"+std::to_string(section)+".bmp").c_str());
+            }
+            if(block==2) {
+                // Basic Delay uses the separate dual-bank hardware layout.
+                click(pointerTarget,1000,45); // Full / advanced parameter editor.
+                check((HIWORD(SendMessage(child,WM_APP+32,0,0))&1)==0,
+                      "Delay settings opens complete advanced parameter editor");
+                if(argc>=3 && cycle==0)
+                    screenshot(child,(tag+"-advanced.bmp").c_str());
+            }
+        }
+        check(coveredBlocks==31 && coveredSections==7,
+              "all five Rack Hybrid detail blocks and seven subgroup pages covered");
+        click(pointerTarget,100,110); // Enter a non-delay block for settings.
+        if(LOWORD(SendMessage(child,WM_APP+32,0,0))==2)
+            click(pointerTarget,320,110);
+        click(pointerTarget,1000,45); // Global parameters for selected non-delay block.
+        if(argc>=3 && cycle==0)
+            screenshot(child,(std::string(argv[2])+"-global-settings.bmp").c_str());
         if (argc >= 3)
             screenshot(child, argv[2]);
         check(view->removed() == kResultOk, "detach GUI");
