@@ -122,7 +122,7 @@ class Editor final : public Steinberg::CPluginView {
     bool globalSettings = false;
     bool rackHome = true; // approved Rack Hybrid: detail editor stays available.
     bool engineMenuOpen = false;
-    bool referenceDelay() const { return view.block == 2 && !view.advanced && !globalSettings; }
+    bool referenceDelay() const { return !rackHome && view.block == 2 && !view.advanced && !globalSettings; }
     int delayControl(int bank, int kind) const {
         static const DelayMidiRoutes routes;
         const State s = state();
