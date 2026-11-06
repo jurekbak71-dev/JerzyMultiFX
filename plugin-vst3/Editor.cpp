@@ -681,7 +681,17 @@ class Editor final : public Steinberg::CPluginView {
         text(dc,x+7,46,58,label,12,RGB(238,248,250));
         text(dc,x+126,47,59,"PEAK VU",9,RGB(160,191,206));
     }
-    COLORREF accent() const { return view.block == 2 && view.section ? RGB(176,124,255) : RGB(60,213,231); }
+    COLORREF accent() const {
+        // The same effect-specific color drives both the engraved rack accents
+        // and the animated 101-frame physical knob sprites on every subpage.
+        switch(std::clamp(view.block,0,4)){
+        case 0: return RGB(240,91,87);    // DRIVE: red
+        case 1: return RGB(38,211,238);   // MODULATION: cyan
+        case 2: return view.section ? RGB(249,175,52) : RGB(244,160,44); // DELAY: amber
+        case 3: return RGB(183,120,237);  // REVERB: purple
+        default:return RGB(164,198,203);  // CAB/IR: neutral steel
+        }
+    }
     std::string formatted(int id) const {
         return parameterText(id, float(value(id)), value(parameterId("attack.poly")) >= .5);
     }
