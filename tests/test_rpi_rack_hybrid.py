@@ -26,6 +26,12 @@ class RaspberryPiRackHybridTests(unittest.TestCase):
         self.assertIn('rackQuickKeys=', js)
         self.assertIn('quick.append(control(p))', js)
         self.assertIn('.rack-quick', css)
+        self.assertIn("order.filter(n=>n!==4).concat(order.includes(4)?[4]:[])", js)
+        self.assertIn("detailsExpanded=false", js)
+        self.assertIn("function dspLatencyDetails()", js)
+        self.assertIn("async function enableLiveMode()", js)
+        self.assertIn("async function restoreLiveMode()", js)
+        self.assertIn("#controls[hidden]", css)
         self.assertNotIn('pointer-events:none!important', css)
 
 if __name__ == '__main__':
