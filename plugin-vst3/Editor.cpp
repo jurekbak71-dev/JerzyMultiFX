@@ -720,8 +720,10 @@ class Editor final : public Steinberg::CPluginView {
         auto &g=*juceGraphics;
         auto &a=Gui3DAssets::get();
         const juce::Colour ink(0xffe4e5e7),muted(0xffa0a9b0),gold(0xfff9ac33);
-        const juce::Colour accents[5]={juce::Colour(0xfff4a02c),juce::Colour(0xff26d3ee),
-            juce::Colour(0xfff05b57),juce::Colour(0xffb778ed),juce::Colour(0xffa4c6cb)};
+        // Hardware colour codes follow the *effect*, not its mutable chain slot:
+        // amber = delay, cyan = modulation, red = drive, violet = reverb.
+        const juce::Colour accents[5]={juce::Colour(0xfff05b57),juce::Colour(0xff26d3ee),
+            juce::Colour(0xfff4a02c),juce::Colour(0xffb778ed),juce::Colour(0xffa4c6cb)};
         const char *names[5]={"DRIVE","CHORUS","DELAY","REVERB","CAB / IR"};
         const char *labels[5][3]={{"GAIN","TONE","LEVEL"},{"RATE","DEPTH","MIX"},
             {"TIME","FEEDBACK","MIX"},{"SIZE","DAMP","MIX"},{"MIX","OUTPUT","MIX"}};
@@ -779,7 +781,16 @@ class Editor final : public Steinberg::CPluginView {
                 g.drawLine(cx+std::sin(angle)*90,cy-std::cos(angle)*90,
                            cx+std::sin(angle)*79,cy-std::cos(angle)*79,1.25f);
             }
+            static const char *vuDb[11]={"-20","-10","-7","-5","-3","-1","0","+1","+2","+3","+4"};
+            for(int n=0;n<=10;++n) {
+                const float t=juce::degreesToRadians(-68.0f+13.6f*n);
+                const int px=int(cx+std::sin(t)*64-10),py=int(cy-std::cos(t)*64-9);
+                title(vuDb[n],px,py,20,16,10,n>=8?juce::Colour(0xffa1381d):juce::Colour(0xff49331f));
+            }
             title("VU",x+45,197,70,27,19,juce::Colour(0xff4e2912));
+            g.setGradientFill(juce::ColourGradient(juce::Colours::white.withAlpha(.22f),
+                float(x+18),135,juce::Colours::white.withAlpha(0.f),float(x+137),217,false));
+            g.fillRoundedRectangle(juce::Rectangle<float>(x+20,134,118,54),8);
             const float db=20*std::log10(std::max(v,1.e-6f));
             const float needle=juce::degreesToRadians(-68.0f+136.0f*std::clamp((db+48)/48,0.0f,1.0f));
             g.setColour(juce::Colour(0xff562118));
@@ -806,6 +817,11 @@ class Editor final : public Steinberg::CPluginView {
             g.fillRoundedRectangle(juce::Rectangle<float>(x+8,121,197,77),7);
             g.setColour(accent);
             g.drawRoundedRectangle(juce::Rectangle<float>(x+6,120,201,424),8,1.8f);
+            g.setColour(juce::Colour(0xffcbd4d5).withAlpha(.045f));
+            for(int line=208;line<526;line+=9)
+                g.drawLine(float(x+12),float(line),float(x+201),float(line),.55f);
+            g.setColour(accent.withAlpha(.30f));
+            g.drawLine(x+12.0f,203,x+201.0f,203,1.0f);
             title("FX "+juce::String(slot+1),x+9,132,49,29,17,accent);
             title(names[block],x+55,130,142,32,19,ink);
             g.setColour(value(layout().blockBypass[block])>=.5?juce::Colour(0xff743c40):accent);
@@ -819,13 +835,15 @@ class Editor final : public Steinberg::CPluginView {
                 const auto &strip=a.knobs[Gui3DAssets::fx][Gui3DAssets::closestAccent(accent)];
                 if(strip.isValid()){
                     const int fw=strip.getHeight(),frame=std::clamp(int(std::round(value(id)*100)),0,100);
-                    g.drawImage(strip,xx,287,62,62,frame*fw,0,fw,strip.getHeight());
+                    g.drawImage(strip,xx,252,62,62,frame*fw,0,fw,strip.getHeight());
                 }
-                title(labels[block][k],xx-3,351,69,25,12,ink);
-                title(juce::String(formatted(id)),xx-4,380,70,23,11,muted);
+                title(labels[block][k],xx-3,316,69,25,12,ink);
+                title(juce::String(formatted(id)),xx-4,346,70,23,11,muted);
             }
-            g.setColour(juce::Colour(0xff464c51));g.drawLine(x+17.0f,412,x+196.0f,412,1);
-            panel({float(x+14),428,185,47},juce::Colour(0xff1e2124),6);
+            g.setColour(juce::Colour(0xff464c51));g.drawLine(x+17.0f,397,x+196.0f,397,1);
+            const auto &selectorImage=a.buttons[Gui3DAssets::closestAccent(accent)][0];
+            if(selectorImage.isValid())g.drawImage(selectorImage,juce::Rectangle<float>(x+14.0f,428,185,47));
+            else panel({float(x+14),428,185,47},juce::Colour(0xff1e2124),6);
             const int selector=block==0?parameterId("drive.type"):block==1?parameterId("clone.model"):
                 block==2?layout().delayType[0]:block==3?parameterId("reverb.engine"):-1;
             title(selector>=0?juce::String(formatted(selector)):"CAB / IR",x+18,435,178,31,14,ink);
@@ -837,7 +855,9 @@ class Editor final : public Steinberg::CPluginView {
         const int route=std::clamp(int(std::round(value(layout().delayMode)*2)),0,2);
         for(int i=0;i<2;++i) {
             const int bx=202+i*166;
-            panel({float(bx),603,155,51},route==i?juce::Colour(0xff71471b):juce::Colour(0xff1e2023),7);
+            const auto &routeImage=a.buttons[Gui3DAssets::amber][route==i?1:0];
+            if(routeImage.isValid())g.drawImage(routeImage,juce::Rectangle<float>(float(bx),603,155,51));
+            else panel({float(bx),603,155,51},route==i?juce::Colour(0xff71471b):juce::Colour(0xff1e2023),7);
             title(i==0?"SERIAL":"PARALLEL",bx+7,609,142,37,15,route==i?gold:ink);
         }
         title("CHAIN",556,608,111,29,16,muted);
@@ -1082,7 +1102,7 @@ class Editor final : public Steinberg::CPluginView {
             for(int slot=0;slot<4;++slot)
                 for(int k=0;k<3;++k) {
                     const int id=rackParameter(chain[slot],k);
-                    if(id>=0)controls.push_back({id,210+slot*220+k*65,287,62,62,false});
+                    if(id>=0)controls.push_back({id,210+slot*220+k*65,252,62,62,false});
                 }
             const int input=parameterId("comp.input");
             if(input>=0)controls.push_back({input,56,344,108,108,false});
